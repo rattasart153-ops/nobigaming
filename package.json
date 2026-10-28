@@ -1,0 +1,22 @@
+{
+  "name": "nobi-topup-fullstack",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nobi Topup full-stack game top-up storefront and admin dashboard",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "dev": "node --watch server.js" },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-sqlite3": "^0.9.15",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1",
+    "helmet": "^8.0.0",
+    "multer": "^1.4.5-lts.1",
+    "better-sqlite3": "^11.8.1",
+    "promptpay-qr": "^0.5.0",
+    "qrcode": "^1.5.4"
+  }
+}
