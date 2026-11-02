@@ -19,7 +19,7 @@ This is the first backend foundation for the agreed zero-budget direction: Googl
 3. Replace the starter `Code.gs` with the repository's `google-apps-script/Code.gs` contents.
 4. In Project Settings, enable showing the `appsscript.json` manifest; replace it with `google-apps-script/appsscript.json`.
 5. Save, select `setupNobiDatabase`, and click **Run**. Review and approve the Google permissions. This creates a spreadsheet and a Drive folder, and stores their IDs in Script Properties.
-6. Select `initializeAdmin` and click **Run**. Enter a unique admin username and a strong password of at least 14 characters in the prompts. Do not use the old demo password.
+6. In **Project Settings → Script Properties**, add `NOBI_ADMIN_USERNAME` and `NOBI_ADMIN_PASSWORD` (14+ characters), save, then run `initializeAdmin` once. The bootstrap password property is deleted after the admin is created. Never put the password in source code or chat.
 7. Do not deploy a public web app yet. First finish the frontend bridge, upload encoding, auth/session storage and end-to-end checks.
 8. After those checks pass, deploy as a Web App using the narrowest viable execution/access settings. Recheck that the slip folder and spreadsheet remain private. Do not share either with “Anyone”.
 
