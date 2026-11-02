@@ -2019,7 +2019,7 @@ body {
     if (!code) { currentDiscount = 0; if (selected) modalTotal.textContent = money(selected.price); return false; }
     if (!selected || !currentGameId) return false;
     try {
-      const res = await fetch("/api/public/coupons/validate", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code,gameId:currentGameId,subtotal:selected.price}) });
+      const res = await fetch("/api/public/coupons/validate", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code,gameId:currentGameId,subtotal:selected.price,playerId:playerId.value.trim()}) });
       const data = await res.json();
       const msg = $("#couponMessage"); msg.textContent = data.message || (data.ok ? "ใช้โค้ดได้" : "ใช้โค้ดไม่ได้");
       msg.className = "coupon-message " + (data.ok ? "is-success" : "is-error");
@@ -2034,7 +2034,7 @@ body {
   async function suggestCoupon(subtotal) {
     const box = $("#couponSuggestion"); box.hidden = true;
     if (!currentGameId || $("#couponCode").value.trim()) return;
-    try { const r=await fetch(`/api/public/coupons/suggestions?gameId=${encodeURIComponent(currentGameId)}&subtotal=${encodeURIComponent(subtotal)}`); const d=await r.json(); if(!d.suggestion)return;
+    try { const r=await fetch(`/api/public/coupons/suggestions?gameId=${encodeURIComponent(currentGameId)}&subtotal=${encodeURIComponent(subtotal)}&playerId=${encodeURIComponent(playerId.value.trim())}`); const d=await r.json(); if(!d.suggestion)return;
       box.innerHTML = `<span>✨ แนะนำ <strong>${d.suggestion.code}</strong> · ${d.suggestion.message}</span><button type="button" id="useSuggestedCoupon">ใช้โค้ดนี้</button>`; box.hidden=false;
       $("#useSuggestedCoupon").onclick=()=>{ $("#couponCode").value=d.suggestion.code; validateCouponUi(); };
     } catch(e) {}
