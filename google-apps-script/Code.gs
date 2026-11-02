@@ -7,7 +7,7 @@ const NOBI = {
     admins: ['id','username','password_salt','password_hash','auth_version','active','created_at'],
     games: ['id','name','category','description','active','created_at'],
     packages: ['id','game_id','name','amount','unit','price','image_url','popular','active','created_at'],
-    coupons: ['id','code','discount_type','discount_value','min_spend','game_id','expires_at','usage_limit','used_count','active','created_at'],
+    coupons: ['id','code','discount_type','discount_value','min_spend','game_id','expires_at','usage_limit','used_count','active','created_at','allowed_player_ids','min_player_spend'],
     promotions: ['id','title','subtitle','image_url','link_url','active','sort_order','starts_at','ends_at','created_at'],
     orders: ['id','game_id','package_id','game_name','package_name','player_id','server_id','coupon_id','coupon_code','subtotal','discount','total','slip_file_id','status','created_at','updated_at','request_key'],
     sessions: ['id','admin_id','token_hash','auth_version','created_at','expires_at','revoked']
@@ -31,6 +31,7 @@ function setupNobiDatabase() {
     let sh = ss.getSheetByName(name) || ss.insertSheet(name);
     const headers = NOBI.SHEETS[name];
     if (sh.getLastRow() === 0) sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    else { const existing = sh.getRange(1,1,1,sh.getLastColumn()).getValues()[0].map(String); const missing = headers.filter(h => !existing.includes(h)); if (missing.length) sh.getRange(1,sh.getLastColumn()+1,1,missing.length).setValues([missing]); }
     sh.setFrozenRows(1);
   });
   const folderId = props.getProperty('NOBI_PRIVATE_DRIVE_FOLDER_ID');
@@ -68,7 +69,7 @@ function publicPromotions() {
   return rows_('promotions').filter(r => truth_(r.active) && (!r.starts_at || Date.parse(r.starts_at) <= now) && (!r.ends_at || Date.parse(r.ends_at) >= now)).sort((a,b) => Number(a.sort_order||0)-Number(b.sort_order||0)).map(clean_);
 }
 
-function validateCoupon(code, gameId, subtotal) {
+function validateCoupon(code, gameId, subtotal, playerId) {
   const normalized = String(code || '').trim().toUpperCase();
   const amount = Number(subtotal);
   if (!normalized || !Number.isFinite(amount) || amount < 0) return { valid:false, error:'ข้อมูลคูปองไม่ถูกต้อง' };
@@ -77,6 +78,15 @@ function validateCoupon(code, gameId, subtotal) {
   if (c.expires_at && Date.parse(c.expires_at) < Date.now()) return { valid:false, error:'คูปองหมดอายุแล้ว' };
   if (amount < Number(c.min_spend || 0)) return { valid:false, error:'ยอดซื้อไม่ถึงขั้นต่ำ' };
   if (c.game_id && String(c.game_id) !== String(gameId)) return { valid:false, error:'คูปองนี้ใช้กับเกมที่เลือกไม่ได้' };
+  const uid = String(playerId || '').trim();
+  const allowedIds = String(c.allowed_player_ids || '').split(/[\\n,;]+/).map(v => v.trim()).filter(Boolean);
+  if (allowedIds.length && !allowedIds.includes(uid)) return { valid:false, error:'คูปองนี้จำกัดเฉพาะ UID ที่แอดมินกำหนด' };
+  const minPlayerSpend = Number(c.min_player_spend || 0);
+  if (minPlayerSpend > 0) {
+    if (!uid) return { valid:false, error:'กรุณากรอก UID ก่อนตรวจสอบสิทธิ์คูปอง' };
+    const spent = rows_('orders').filter(o => String(o.game_id) === String(gameId) && String(o.player_id).trim() === uid && String(o.status) === 'Completed').reduce((sum,o)=>sum+Number(o.total||0),0);
+    if (spent < minPlayerSpend) return { valid:false, error:'ยอดเติมสะสมของ UID นี้ในเกมที่เลือกยังไม่ถึง ฿'+minPlayerSpend.toLocaleString('th-TH')+' (ปัจจุบัน ฿'+spent.toLocaleString('th-TH')+')' };
+  }
   if (c.usage_limit !== '' && c.usage_limit != null && Number(c.used_count || 0) >= Number(c.usage_limit)) return { valid:false, error:'คูปองถูกใช้ครบจำนวนแล้ว' };
   const discount = Math.min(amount, c.discount_type === 'percent' ? amount * Number(c.discount_value) / 100 : Number(c.discount_value));
   return { valid:true, code:c.code, coupon_id:c.id, discount:money_(discount), total:money_(amount-discount) };
@@ -104,7 +114,7 @@ function createOrder(payload) {
     if (!Number.isFinite(subtotal) || subtotal < 0) throw new Error('ราคาแพ็กเกจไม่ถูกต้อง');
     let coupon = null, discount = 0;
     if (payload.coupon_code) {
-      const checked = validateCoupon(payload.coupon_code, game.id, subtotal);
+      const checked = validateCoupon(payload.coupon_code, game.id, subtotal, playerId);
       if (!checked.valid) throw new Error(checked.error);
       coupon = rows_('coupons').find(c => String(c.id) === String(checked.coupon_id));
       discount = checked.discount;
@@ -249,6 +259,8 @@ function validateRecord_(tableName,r) {
   required.forEach(k=>{if(r[k]===undefined || r[k]===null || String(r[k]).trim()==='') throw new Error('ต้องระบุ '+k);});
   if (tableName==='packages' && (!Number.isFinite(Number(r.price)) || Number(r.price)<0)) throw new Error('ราคาไม่ถูกต้อง');
   if (tableName==='coupons' && (!['fixed','percent'].includes(String(r.discount_type)) || Number(r.discount_value)<=0)) throw new Error('ข้อมูลส่วนลดไม่ถูกต้อง');
+  if (tableName==='coupons' && (Number(r.min_player_spend||0)<0 || (Number(r.discount_value)>100 && String(r.discount_type)==='percent'))) throw new Error('เงื่อนไขคูปองไม่ถูกต้อง');
+  if (tableName==='coupons' && String(r.allowed_player_ids||'').trim() && !r.game_id) throw new Error('ต้องเลือกเกมเมื่อจำกัด UID เฉพาะ');
 }
 function publicOrder_(o) { const c=Object.assign({},o); delete c.slip_file_id; delete c.request_key; return c; }
 function passwordHash_(password,salt) { return sha256_(String(salt)+'|'+String(password)); }
