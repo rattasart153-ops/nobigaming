@@ -169,6 +169,7 @@ function createOrder(payload) {
     if (!slip || !slip.base64 || !/^image\/(png|jpeg|webp)$/.test(String(slip.mimeType || ''))) throw new Error('กรุณาแนบสลิป PNG/JPG/WebP');
     const bytes = Utilities.base64Decode(String(slip.base64).replace(/^data:[^,]+,/, ''));
     if (!bytes.length || bytes.length > NOBI.MAX_SLIP_BYTES) throw new Error('ไฟล์สลิปต้องมีขนาดไม่เกิน 5 MB');
+    if (!validImageSignature_(bytes, slip.mimeType)) throw new Error('ชนิดไฟล์ไม่ตรงกับเนื้อหาไฟล์ภาพ');
     const ext = slip.mimeType === 'image/png' ? 'png' : slip.mimeType === 'image/webp' ? 'webp' : 'jpg';
     const orderId = 'NBI-' + Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyyMMddHHmmss') + '-' + Utilities.getUuid().slice(0,8).toUpperCase();
     const folder = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_DRIVE_FOLDER_ID'));
@@ -248,6 +249,7 @@ function adminSetOrderStatus(token, orderId, status) {
   try {
     const order = rows_('orders').find(o=>String(o.id)===String(orderId));
     if (!order) throw new Error('ไม่พบออเดอร์');
+    if (String(order.status) !== 'Pending' && String(order.status) !== String(status)) throw new Error('ออเดอร์ที่ตรวจสอบแล้วไม่สามารถเปลี่ยนสถานะซ้ำได้');
     updateById_('orders',order.id,{status:status,updated_at:new Date().toISOString()});
     return {ok:true};
   } finally { lock.releaseLock(); }
@@ -307,6 +309,13 @@ function validateRecord_(tableName,r) {
   if (tableName==='coupons' && String(r.allowed_player_ids||'').trim() && !r.game_id) throw new Error('ต้องเลือกเกมเมื่อจำกัด UID เฉพาะ');
 }
 function publicOrder_(o) { const c=Object.assign({},o); delete c.slip_file_id; delete c.request_key; return c; }
+function validImageSignature_(bytes,mime) {
+  const b=bytes.map(x=>(x+256)%256);
+  if(mime==='image/png') return b.length>=8 && b.slice(0,8).join(',')==='137,80,78,71,13,10,26,10';
+  if(mime==='image/jpeg') return b.length>=3 && b[0]===255 && b[1]===216 && b[2]===255;
+  if(mime==='image/webp') return b.length>=12 && String.fromCharCode.apply(null,b.slice(0,4))==='RIFF' && String.fromCharCode.apply(null,b.slice(8,12))==='WEBP';
+  return false;
+}
 function passwordHash_(password,salt) { return sha256_(String(salt)+'|'+String(password)); }
 function sha256_(value) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(value),Utilities.Charset.UTF_8).map(b=>('0'+((b+256)%256).toString(16)).slice(-2)).join(''); }
 function money_(n) { return Math.round((Number(n)+Number.EPSILON)*100)/100; }
