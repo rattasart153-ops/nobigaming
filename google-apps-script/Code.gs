@@ -41,22 +41,20 @@ function setupNobiDatabase() {
   return { spreadsheetId: ss.getId(), message: 'Database sheets and private file folder prepared. Keep the spreadsheet and folder private.' };
 }
 
-/** Run manually once after setupNobiDatabase. Password is entered in the editor prompt, never in source code. */
+/** Set NOBI_ADMIN_USERNAME and NOBI_ADMIN_PASSWORD in Project Settings > Script Properties, then run once. */
 function initializeAdmin() {
-  const ui = SpreadsheetApp.getUi();
-  const userPrompt = ui.prompt('Create Nobi Topup admin', 'Enter the admin username', ui.ButtonSet.OK_CANCEL);
-  if (userPrompt.getSelectedButton() !== ui.Button.OK) return;
-  const passPrompt = ui.prompt('Create Nobi Topup admin', 'Enter a new strong admin password (minimum 14 characters)', ui.ButtonSet.OK_CANCEL);
-  if (passPrompt.getSelectedButton() !== ui.Button.OK) return;
-  const username = userPrompt.getResponseText().trim();
-  const password = passPrompt.getResponseText();
-  if (!username || password.length < 14) throw new Error('Username is required and password must be at least 14 characters.');
-  const sh = sheet_('admins');
-  if (rows_('admins').some(r => String(r.username).toLowerCase() === username.toLowerCase())) throw new Error('That username already exists.');
+  const props = PropertiesService.getScriptProperties();
+  const username = String(props.getProperty('NOBI_ADMIN_USERNAME') || '').trim();
+  const password = String(props.getProperty('NOBI_ADMIN_PASSWORD') || '');
+  if (!username || password.length < 14) throw new Error('Set NOBI_ADMIN_USERNAME and a strong NOBI_ADMIN_PASSWORD (14+ characters) in Script Properties first.');
+  const existing = rows_('admins').find(r => String(r.username).toLowerCase() === username.toLowerCase());
+  if (existing) throw new Error('That username already exists; no changes made.');
   const salt = Utilities.getUuid() + Utilities.getUuid();
   const id = Utilities.getUuid();
   append_('admins', {id:id, username:username, password_salt:salt, password_hash:passwordHash_(password,salt), auth_version:1, active:true, created_at:new Date().toISOString()});
-  ui.alert('Admin created. Store the password securely; it cannot be retrieved from the sheet.');
+  // Remove bootstrap credentials so they are not retained longer than necessary.
+  props.deleteProperty('NOBI_ADMIN_PASSWORD');
+  return {ok:true, message:'Admin created. Bootstrap password property removed.'};
 }
 
 function publicCatalog() {
