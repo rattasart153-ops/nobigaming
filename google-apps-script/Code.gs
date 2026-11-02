@@ -177,9 +177,17 @@ function createOrder(payload) {
     file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
     const now = new Date().toISOString();
     const order = {id:orderId,game_id:game.id,package_id:pack.id,game_name:game.name,package_name:pack.name,player_id:playerId,server_id:serverId,coupon_id:coupon?coupon.id:'',coupon_code:coupon?coupon.code:'',subtotal:subtotal,discount:discount,total:money_(subtotal-discount),slip_file_id:file.getId(),status:'Pending',created_at:now,updated_at:now,request_key:key};
-    append_('orders', order);
-    if (coupon) updateById_('coupons', coupon.id, {used_count:Number(coupon.used_count||0)+1});
-    return {ok:true,order:publicOrder_(order),duplicate:false};
+    let orderWritten = false;
+    try {
+      append_('orders', order);
+      orderWritten = true;
+      if (coupon) updateById_('coupons', coupon.id, {used_count:Number(coupon.used_count||0)+1});
+      return {ok:true,order:publicOrder_(order),duplicate:false};
+    } catch (writeError) {
+      if (orderWritten) { try { deleteById_('orders', order.id); } catch (ignored) {} }
+      try { file.setTrashed(true); } catch (ignored) {}
+      throw writeError;
+    }
   } finally {
     lock.releaseLock();
   }
@@ -339,6 +347,11 @@ function rows_(name) {
 function append_(name, record) {
   const sh=sheet_(name), headers=NOBI.SHEETS[name];
   sh.appendRow(headers.map(h=>record[h]===undefined ? '' : record[h]));
+}
+function deleteById_(name,id) {
+  const sh=sheet_(name), values=sh.getDataRange().getValues(), headers=values[0], idIndex=headers.indexOf('id');
+  for(let i=1;i<values.length;i++) if(String(values[i][idIndex])===String(id)) { sh.deleteRow(i+1); return true; }
+  return false;
 }
 function updateById_(name,id,patch) {
   const sh=sheet_(name), values=sh.getDataRange().getValues(), headers=values[0], idIndex=headers.indexOf('id');
