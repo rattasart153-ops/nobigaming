@@ -34,6 +34,7 @@ function rpc(action, args) {
     case 'paymentInfo': return paymentInfo_(args.amount);
     case 'createOrder': return createOrder(args);
     case 'adminLogin': return adminLogin(args.username, args.password);
+    case 'adminMe': try { requireAdmin_(args.token); return {authenticated:true}; } catch (e) { return {authenticated:false}; }
     case 'adminLogout': return adminLogout(args.token);
     case 'adminDashboard': return adminDashboard(args.token);
     case 'adminOrders': return adminOrders(args.token);
