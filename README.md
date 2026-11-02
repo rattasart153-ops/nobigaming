@@ -21,7 +21,7 @@
 
 The zero-budget migration foundation is in `google-apps-script/`. Setup notes: [Google Apps Script setup guide](docs/GOOGLE_APPS_SCRIPT_SETUP.md).
 
-**Important:** this is not yet a replacement for the Express/SQLite app and is not ready for production. The existing storefront and admin pages still call the Express `/api/...` routes. Do not deploy the GAS scaffold as a live shop until the frontend bridge, secure admin flow, PromptPay QR, private slip viewing, and end-to-end tests are complete.
+**Important:** the repository storefront/admin JavaScript has been connected to an Apps Script RPC bridge, but the two HTML files must still be copied manually into Apps Script as `Storefront` and `Admin` HtmlService files. PromptPay QR generation is not implemented in GAS, and no live deployment or end-to-end security test has been performed. Do not use this for real customer payments until the remaining checks in the setup guide pass.
 
 ## บัญชีแอดมินเริ่มต้น
 - Username: `NobiGaming`
