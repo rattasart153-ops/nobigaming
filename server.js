@@ -109,7 +109,7 @@ function validateCoupon(code, gameId, subtotal, playerId = '') {
   if (subtotal < c.min_spend) return { ok: false, message: `ยอดซื้อขั้นต่ำของโค้ดนี้คือ ฿${Number(c.min_spend).toLocaleString('th-TH')}`, coupon: c };
   if (c.game_id && Number(c.game_id) !== Number(gameId)) return { ok: false, message: `โค้ดนี้ใช้ได้เฉพาะเกม ${c.game_name}`, coupon: c };
   const uid = String(playerId || '').trim();
-  const allowedIds = String(c.allowed_player_ids || '').split(/[\\n,;]+/).map(v => v.trim()).filter(Boolean);
+  const allowedIds = String(c.allowed_player_ids || '').split(/[\n,;]+/).map(v => v.trim()).filter(Boolean);
   if (allowedIds.length && !allowedIds.includes(uid)) return { ok:false, message:'คูปองนี้จำกัดเฉพาะ UID ที่แอดมินกำหนด', coupon:c };
   const minPlayerSpend = Number(c.min_player_spend || 0);
   if (minPlayerSpend > 0) {
@@ -220,13 +220,13 @@ app.delete('/api/admin/packages/:id', requireAdmin, (req,res) => { try { const r
 app.get('/api/admin/coupons', requireAdmin, (req,res) => res.json(db.prepare('SELECT c.*,g.name game_name FROM coupons c LEFT JOIN games g ON g.id=c.game_id ORDER BY c.id DESC').all()));
 app.post('/api/admin/coupons', requireAdmin, (req,res) => {
   const {code,discount_type='fixed',discount_value,min_spend=0,game_id=null,expires_at=null,usage_limit=null,allowed_player_ids='',min_player_spend=0,active=true}=req.body||{};
-  if(!String(code||'').trim()||!['fixed','percent'].includes(discount_type)||!Number.isFinite(Number(discount_value))||Number(discount_value)<=0||Number(min_spend)<0||!Number.isFinite(Number(min_player_spend))||Number(min_player_spend)<0||(discount_type==='percent'&&Number(discount_value)>100)||!validDate(expires_at)) return res.status(400).json({error:'ข้อมูลคูปองไม่ถูกต้อง'});
+  if(!String(code||'').trim()||!['fixed','percent'].includes(discount_type)||!Number.isFinite(Number(discount_value))||Number(discount_value)<=0||Number(min_spend)<0||!Number.isFinite(Number(min_player_spend))||Number(min_player_spend)<0||(String(allowed_player_ids||'').trim()&&!game_id)||(discount_type==='percent'&&Number(discount_value)>100)||!validDate(expires_at)) return res.status(400).json({error:'ข้อมูลคูปองไม่ถูกต้อง'});
   try { const r=db.prepare('INSERT INTO coupons(code,discount_type,discount_value,min_spend,game_id,expires_at,usage_limit,active,allowed_player_ids,min_player_spend) VALUES(?,?,?,?,?,?,?,?,?,?)').run(String(code).trim().toUpperCase(),discount_type,Number(discount_value),Number(min_spend),game_id?Number(game_id):null,expires_at||null,usage_limit?Number(usage_limit):null,bool(active),String(allowed_player_ids||'').trim(),Number(min_player_spend)); res.status(201).json(db.prepare('SELECT * FROM coupons WHERE id=?').get(r.lastInsertRowid)); }
   catch(e) { res.status(409).json({error:'โค้ดนี้มีอยู่แล้ว หรือข้อมูลอ้างอิงไม่ถูกต้อง'}); }
 });
 app.put('/api/admin/coupons/:id', requireAdmin, (req,res) => {
   const {code,discount_type='fixed',discount_value,min_spend=0,game_id=null,expires_at=null,usage_limit=null,allowed_player_ids='',min_player_spend=0,active=true}=req.body||{};
-  if(!String(code||'').trim()||!['fixed','percent'].includes(discount_type)||!Number.isFinite(Number(discount_value))||Number(discount_value)<=0||Number(min_spend)<0||!Number.isFinite(Number(min_player_spend))||Number(min_player_spend)<0||(discount_type==='percent'&&Number(discount_value)>100)||!validDate(expires_at)) return res.status(400).json({error:'ข้อมูลคูปองไม่ถูกต้อง'});
+  if(!String(code||'').trim()||!['fixed','percent'].includes(discount_type)||!Number.isFinite(Number(discount_value))||Number(discount_value)<=0||Number(min_spend)<0||!Number.isFinite(Number(min_player_spend))||Number(min_player_spend)<0||(String(allowed_player_ids||'').trim()&&!game_id)||(discount_type==='percent'&&Number(discount_value)>100)||!validDate(expires_at)) return res.status(400).json({error:'ข้อมูลคูปองไม่ถูกต้อง'});
   try { const r=db.prepare('UPDATE coupons SET code=?,discount_type=?,discount_value=?,min_spend=?,game_id=?,expires_at=?,usage_limit=?,active=?,allowed_player_ids=?,min_player_spend=? WHERE id=?').run(String(code).trim().toUpperCase(),discount_type,Number(discount_value),Number(min_spend),game_id?Number(game_id):null,expires_at||null,usage_limit?Number(usage_limit):null,bool(active),String(allowed_player_ids||'').trim(),Number(min_player_spend),Number(req.params.id)); if(!r.changes)return res.status(404).json({error:'ไม่พบคูปอง'}); res.json(db.prepare('SELECT * FROM coupons WHERE id=?').get(Number(req.params.id))); }
   catch(e) { res.status(409).json({error:'โค้ดนี้มีอยู่แล้ว หรือข้อมูลอ้างอิงไม่ถูกต้อง'}); }
 });
