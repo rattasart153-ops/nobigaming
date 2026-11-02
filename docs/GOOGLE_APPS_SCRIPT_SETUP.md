@@ -23,6 +23,20 @@ This is the first backend foundation for the agreed zero-budget direction: Googl
 7. Do not deploy a public web app yet. First finish the frontend bridge, upload encoding, auth/session storage and end-to-end checks.
 8. After those checks pass, deploy as a Web App using the narrowest viable execution/access settings. Recheck that the slip folder and spreadsheet remain private. Do not share either with “Anyone”.
 
+
+## Import the HtmlService front end and connect it
+
+After copying `Code.gs` and the manifest into the Apps Script project:
+
+1. In the Apps Script editor, click **+ → HTML** and create a file named exactly `Storefront` (without `.html`). Copy the complete contents of [public/nobitopup.html](../public/nobitopup.html) into it.
+2. Create a second HTML file named exactly `Admin`. Copy [public/admin.html](../public/admin.html) into it.
+3. Save all files. The storefront is served by the web app URL; the admin login page is served by adding `?page=admin` to that URL.
+4. The pages now use the allowlisted `rpc()` bridge via `google.script.run`; do not expose Sheets or Drive IDs in browser code. Admin RPC calls require a server-issued session token. The order list returns only a Drive file ID; the image bytes are returned only by the separately authorized `adminSlipData` call.
+5. Run `setupNobiDatabase` and `initializeAdmin` as described above. Add game/package/coupon/promotion rows using the admin page after the web app is deployed for testing.
+6. Deploy a **test deployment** first. Check that the web app runs as the shop's Google account, that the spreadsheet and slip folder remain private, and that unauthenticated users cannot call any admin RPC successfully.
+
+**Important deployment caveat:** the storefront is intended to be public, so a Web App deployment may need “Anyone” access while executing as the owner. That makes every public RPC callable by the internet. The allowlist intentionally exposes only catalog, promotions, coupon validation/suggestions, payment-info status, and order creation without admin credentials. Do not add unrestricted Drive/Sheets methods to this allowlist. Admin authentication is a custom token layer and is not equivalent to Google-managed identity or an HttpOnly cookie.
+
 ## Implemented scaffold functions
 
 - `setupNobiDatabase()`: creates the Sheets and a private Drive folder.
@@ -35,13 +49,13 @@ These are Apps Script functions intended to be called by a trusted integration l
 
 ## Known work remaining before launch
 
-- Migrate the storefront and admin HTML from relative Express API calls to a secure Apps Script bridge.
-- Build safe admin-only slip viewing (avoid returning full base64 blobs in order lists).
+- Copy the updated storefront/admin HTML into the two HtmlService files exactly as described above; repository HTML files are not automatically imported into Apps Script.
+- Verify admin-only slip viewing end-to-end; the bridge returns slip bytes only after `requireAdmin_`, and never includes base64 in order-list responses.
 - Add stronger password hashing, session rotation/revocation UX, CSRF/origin strategy suitable for Apps Script, login throttling that survives quota/locking pressure, and admin password change/revoke-all.
 - Fix referential integrity/deletion behavior for games/packages and define coupon usage semantics for rejected/cancelled orders.
 - Validate image signatures, not only claimed MIME type; consider upload memory/runtime limits.
 - Add CRUD/data validation for all fields, uniqueness constraints and migration/seed strategy.
-- Add automated tests/manual test checklist for coupons, repeated requests, concurrent orders, uploads, private slip authorization, sessions, and all storefront/admin flows.
+- Run automated/manual tests for coupon limits under concurrent submissions, duplicate request keys, upload rollback, forged MIME/signatures, private slip authorization, session expiry/revocation, and all storefront/admin flows.
 - Confirm Google account quotas and expected traffic before live use.
 - Decide how PromptPay QR generation is retained in the GAS frontend (the existing `promptpay-qr` npm library cannot run inside Apps Script unchanged).
 
@@ -62,3 +76,11 @@ Sheets are created for `admins`, `games`, `packages`, `coupons`, `promotions`, `
 ตัวอย่าง: ตั้งเกม RoV, ยอดเติมสะสมขั้นต่ำ 500 บาท หมายถึง UID นั้นต้องมีออเดอร์ RoV ที่แอดมินอนุมัติสำเร็จรวมกันอย่างน้อย 500 บาทก่อนจึงใช้คูปองได้
 
 หมายเหตุ: กฎดังกล่าวถูกเพิ่มในโค้ดของระบบเดิมและโครงสร้าง GAS แล้ว แต่หน้าเว็บยังไม่ได้ย้ายจาก Express API ไปเชื่อม Apps Script โดยสมบูรณ์ การทดสอบปลายทางจริงยังจำเป็นก่อนใช้งานจริง.
+
+## Current integration status (2026-11-02)
+
+- The repository storefront JavaScript now calls the Apps Script RPC bridge for catalog, promotions, coupon validation/suggestions, and order submission. Slip files are converted to base64 in the browser and sent to Apps Script.
+- The admin JavaScript now calls the RPC bridge for login, session check, dashboard, orders, CRUD, status changes, and on-demand slip viewing. Admin tokens are kept in tab-scoped `sessionStorage`; this is not an HttpOnly cookie and XSS defenses remain important.
+- The GAS entry point serves `Storefront` and `Admin` HtmlService files. **You must create those two HTML files manually in the Apps Script editor and paste the matching repository files**; GitHub changes do not automatically update an existing Apps Script project.
+- PromptPay QR generation is not yet implemented in Apps Script. The payment-info bridge reports that it is not configured rather than pretending to return a QR.
+- No live Apps Script deployment, Google account permission check, end-to-end test, concurrency test, or unauthorized-slip test has been performed from this repository connection. Do not accept real customer payments or slips until those tests pass.
