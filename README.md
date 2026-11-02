@@ -17,6 +17,12 @@
    ```
 5. เปิดหน้าร้านที่ `http://localhost:3000/` และหลังบ้านที่ `http://localhost:3000/admin`
 
+## Google Apps Script migration (in progress)
+
+The zero-budget migration foundation is in `google-apps-script/`. Setup notes: [Google Apps Script setup guide](docs/GOOGLE_APPS_SCRIPT_SETUP.md).
+
+**Important:** this is not yet a replacement for the Express/SQLite app and is not ready for production. The existing storefront and admin pages still call the Express `/api/...` routes. Do not deploy the GAS scaffold as a live shop until the frontend bridge, secure admin flow, PromptPay QR, private slip viewing, and end-to-end tests are complete.
+
 ## บัญชีแอดมินเริ่มต้น
 - Username: `NobiGaming`
 - Password: `Nobi1534897`
