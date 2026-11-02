@@ -79,7 +79,7 @@ function validateCoupon(code, gameId, subtotal, playerId) {
   if (amount < Number(c.min_spend || 0)) return { valid:false, error:'ยอดซื้อไม่ถึงขั้นต่ำ' };
   if (c.game_id && String(c.game_id) !== String(gameId)) return { valid:false, error:'คูปองนี้ใช้กับเกมที่เลือกไม่ได้' };
   const uid = String(playerId || '').trim();
-  const allowedIds = String(c.allowed_player_ids || '').split(/[\\n,;]+/).map(v => v.trim()).filter(Boolean);
+  const allowedIds = String(c.allowed_player_ids || '').split(/[\n,;]+/).map(v => v.trim()).filter(Boolean);
   if (allowedIds.length && !allowedIds.includes(uid)) return { valid:false, error:'คูปองนี้จำกัดเฉพาะ UID ที่แอดมินกำหนด' };
   const minPlayerSpend = Number(c.min_player_spend || 0);
   if (minPlayerSpend > 0) {
