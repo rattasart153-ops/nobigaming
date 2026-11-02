@@ -234,7 +234,7 @@ function adminDashboard(token) {
 function adminOrders(token) {
   requireAdmin_(token);
   return rows_('orders').sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))).map(function(o) {
-    const safe = publicOrder_(o);
+    const safe = clean_(publicOrder_(o));
     safe.slip_file_id = o.slip_file_id; // ID only; use adminSlipData for authorized retrieval.
     return safe;
   });
