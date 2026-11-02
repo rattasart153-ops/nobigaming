@@ -84,3 +84,22 @@ Sheets are created for `admins`, `games`, `packages`, `coupons`, `promotions`, `
 - The GAS entry point serves `Storefront` and `Admin` HtmlService files. **You must create those two HTML files manually in the Apps Script editor and paste the matching repository files**; GitHub changes do not automatically update an existing Apps Script project.
 - PromptPay QR generation is not yet implemented in Apps Script. The payment-info bridge reports that it is not configured rather than pretending to return a QR.
 - No live Apps Script deployment, Google account permission check, end-to-end test, concurrency test, or unauthorized-slip test has been performed from this repository connection. Do not accept real customer payments or slips until those tests pass.
+
+
+## Security and correctness test cases (must pass before accepting payments)
+
+| Test | Procedure | Expected result |
+|---|---|---|
+| Duplicate order request | Submit the same `request_key` twice, including two near-simultaneous calls | One order row, one slip file, one coupon usage increment; the retry returns the original order |
+| Coupon usage limit | Set a coupon limit of 1 and submit two different requests concurrently | At most one order is accepted with that coupon |
+| UID/game restrictions | Try a whitelisted coupon with another UID or another game | Validation and final order creation both reject it |
+| Cumulative spend | Compare Pending, Rejected and Completed orders for the same UID/game | Only Completed order totals count |
+| Forged image MIME | Upload text or another file while claiming `image/png` | Signature check rejects it |
+| Oversized upload | Upload a file larger than 5 MB | Rejected before Drive persistence |
+| Anonymous slip access | Open the Drive file URL while signed out or in an unrelated Google account | Access denied; folder and files are not shared publicly |
+| Anonymous admin RPC | Call `adminOrders`, `adminSlipData`, `adminSetOrderStatus`, and CRUD RPC without a valid token | Every call fails authorization |
+| Invalid/expired token | Change a token, revoke a session, and test after expiry | Admin calls fail and UI returns to login |
+| Status replay | Approve/reject an already reviewed order and then try to reverse it | A reviewed order cannot be silently rewritten |
+| Persistence | Submit an order, then reload/reopen the web app | Order remains in Sheets and slip remains in private Drive |
+
+Record the test date, deployment version, test account, and observed result. Use synthetic orders and dummy image files only. Never use real customer slips for security testing.
