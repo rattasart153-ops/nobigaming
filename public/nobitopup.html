@@ -1646,6 +1646,9 @@ body {
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
+function gasRpc(action,args={}){return new Promise((resolve,reject)=>{if(!window.google||!google.script||!google.script.run)return reject(Error('กรุณาเปิดร้านผ่าน Apps Script Web App'));google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(Error(e&&e.message||'Apps Script error'))).rpc(action,args)})}
+async function fileToBase64(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=()=>reject(Error('อ่านไฟล์สลิปไม่สำเร็จ'));reader.readAsDataURL(file)})}
+
 /* =========================================================
    Nobi Topup — interactions
    ========================================================= */
@@ -2019,8 +2022,8 @@ body {
     if (!code) { currentDiscount = 0; if (selected) modalTotal.textContent = money(selected.price); return false; }
     if (!selected || !currentGameId) return false;
     try {
-      const res = await fetch("/api/public/coupons/validate", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({code,gameId:currentGameId,subtotal:selected.price,playerId:playerId.value.trim()}) });
-      const data = await res.json();
+      const raw = await gasRpc('coupon',{code,gameId:currentGameId,subtotal:selected.price,playerId:playerId.value.trim()});
+      const data = {ok:raw.valid,discount:raw.discount,message:raw.error||(raw.valid?'ใช้โค้ดได้':'ใช้โค้ดไม่ได้')};
       const msg = $("#couponMessage"); msg.textContent = data.message || (data.ok ? "ใช้โค้ดได้" : "ใช้โค้ดไม่ได้");
       msg.className = "coupon-message " + (data.ok ? "is-success" : "is-error");
       currentDiscount = data.ok ? Number(data.discount || 0) : 0;
@@ -2034,14 +2037,14 @@ body {
   async function suggestCoupon(subtotal) {
     const box = $("#couponSuggestion"); box.hidden = true;
     if (!currentGameId || $("#couponCode").value.trim()) return;
-    try { const r=await fetch(`/api/public/coupons/suggestions?gameId=${encodeURIComponent(currentGameId)}&subtotal=${encodeURIComponent(subtotal)}&playerId=${encodeURIComponent(playerId.value.trim())}`); const d=await r.json(); if(!d.suggestion)return;
+    try { const d=await gasRpc('couponSuggestions',{gameId:currentGameId,subtotal,playerId:playerId.value.trim()}); if(!d.suggestion)return;
       box.innerHTML = `<span>✨ แนะนำ <strong>${d.suggestion.code}</strong> · ${d.suggestion.message}</span><button type="button" id="useSuggestedCoupon">ใช้โค้ดนี้</button>`; box.hidden=false;
       $("#useSuggestedCoupon").onclick=()=>{ $("#couponCode").value=d.suggestion.code; validateCouponUi(); };
     } catch(e) {}
   }
   async function updatePaymentQr(amount) {
     const img=$("#paymentQr"), msg=$("#paymentMessage"); img.hidden=true; msg.textContent="กำลังโหลดข้อมูล PromptPay…";
-    try { const r=await fetch(`/api/public/payment-info?amount=${encodeURIComponent(amount||0)}`); const d=await r.json(); if(!d.configured){msg.textContent=d.message||"ยังไม่ได้ตั้งค่า PromptPay";return;} img.src=d.qrDataUrl; img.hidden=false; msg.textContent=`PromptPay ${d.promptpayId} · ${money(amount||0)}`; } catch(e){msg.textContent="ไม่สามารถโหลด QR Code ได้";}
+    try { const d=await gasRpc('paymentInfo',{amount:amount||0}); if(!d.configured){msg.textContent=d.message||"ยังไม่ได้ตั้งค่า PromptPay";return;} img.src=d.qrDataUrl; img.hidden=false; msg.textContent=`PromptPay ${d.promptpayId} · ${money(amount||0)}`; } catch(e){msg.textContent="ไม่สามารถโหลด QR Code ได้";}
   }
   confirmBtn.addEventListener("click", async () => {
     const uid = playerId.value.trim();
@@ -2049,9 +2052,9 @@ body {
     if (!selected || !selectedPackageId || !currentGameId) { showToast("แพ็กเกจนี้ยังไม่พร้อมสั่งซื้อ กรุณาลองใหม่", false); return; }
     const slip=$("#paymentSlip").files[0]; if(!slip){showToast("กรุณาแนบสลิปโอนเงินก่อนยืนยัน",false);$("#paymentSlip").focus();return;}
     if($("#couponCode").value.trim() && !(await validateCouponUi())) return;
-    const fd=new FormData(); fd.append("gameId",currentGameId);fd.append("packageId",selectedPackageId);fd.append("playerId",uid);fd.append("serverId",$("#serverId").value.trim());fd.append("couponCode",$("#couponCode").value.trim());fd.append("slip",slip);
+    const payload={game_id:currentGameId,package_id:selectedPackageId,player_id:uid,server_id:$("#serverId").value.trim(),coupon_code:$("#couponCode").value.trim(),request_key:(crypto.randomUUID?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(36).slice(2)),slip:{name:slip.name,mimeType:slip.type,base64:await fileToBase64(slip)}};
     confirmBtn.disabled=true; confirmBtn.style.opacity=".65";
-    try { const r=await fetch("/api/public/orders",{method:"POST",body:fd});const d=await r.json();if(!r.ok)throw Error(d.error||"ส่งออเดอร์ไม่สำเร็จ");closeModal();showToast(`${d.message} · เลขออเดอร์ ${d.order.id}`);playerId.value=""; }
+    try { const d=await gasRpc('createOrder',payload);if(!d.ok)throw Error('ส่งออเดอร์ไม่สำเร็จ');closeModal();showToast(`ส่งออเดอร์แล้ว · เลขออเดอร์ ${d.order.id}`);playerId.value=""; }
     catch(e){showToast(e.message,false)} finally{confirmBtn.disabled=false;confirmBtn.style.opacity=""}
   });
 
@@ -2060,14 +2063,14 @@ body {
 
   // Pull live catalog, popular flags and admin-managed promotions from backend.
   async function loadLiveCatalog() {
-    try { const r=await fetch("/api/public/catalog"); if(!r.ok)return; const data=await r.json(); catalogLoaded=true;
+    try { const data=await gasRpc('catalog'); catalogLoaded=true;
       const grouped={}; for(const p of data.packages){ if(!grouped[p.game_name]) grouped[p.game_name]={unit:p.unit,gameId:p.game_id,packs:[]}; grouped[p.game_name].packs.push({id:p.id,amount:p.amount,price:Number(p.price),popular:!!p.popular,image_url:p.image_url}); }
       for(const [name,d] of Object.entries(grouped)) PACKS[name]=d;
       $$(".game-card").forEach(card=>{const name=$(".card-name",card)?.textContent.trim();const d=PACKS[name];if(!d)return;const min=Math.min(...d.packs.map(x=>Array.isArray(x)?x[1]:x.price));const price=$(".card-price strong",card);if(price)price.textContent=money(min);const tag=$(".card-thumb .tag",card);if(tag){const popular=d.packs.some(x=>!Array.isArray(x)&&x.popular);tag.hidden=!popular;tag.innerHTML='<svg><use href="#ic-flame"/></svg>🔥 HOT';}});
     } catch(e) {}
   }
   async function loadPromotions() {
-    const box=$("#dynamicPromotions"); try{const r=await fetch("/api/public/promotions");const items=await r.json();if(!Array.isArray(items)||!items.length){box.hidden=true;return;}box.innerHTML=items.map(p=>`<a class="promo-dynamic" href="${String(p.link_url||'#games').replace(/\"/g,'&quot;')}" ${p.image_url?`style="background-image:linear-gradient(90deg,rgba(11,16,32,.92),rgba(11,16,32,.35)),url('${String(p.image_url).replace(/'/g,'%27')}')"`:''}><strong>${String(p.title).replace(/</g,'&lt;')}</strong><p>${String(p.subtitle||'').replace(/</g,'&lt;')}</p></a>`).join('');box.hidden=false;}catch(e){box.hidden=true;}
+    const box=$("#dynamicPromotions"); try{const items=await gasRpc('promotions');if(!Array.isArray(items)||!items.length){box.hidden=true;return;}box.innerHTML=items.map(p=>`<a class="promo-dynamic" href="${String(p.link_url||'#games').replace(/\"/g,'&quot;')}" ${p.image_url?`style="background-image:linear-gradient(90deg,rgba(11,16,32,.92),rgba(11,16,32,.35)),url('${String(p.image_url).replace(/'/g,'%27')}')"`:''}><strong>${String(p.title).replace(/</g,'&lt;')}</strong><p>${String(p.subtitle||'').replace(/</g,'&lt;')}</p></a>`).join('');box.hidden=false;}catch(e){box.hidden=true;}
   }
   loadLiveCatalog(); loadPromotions();
 
