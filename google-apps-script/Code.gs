@@ -16,9 +16,52 @@ const NOBI = {
   MAX_SLIP_BYTES: 5 * 1024 * 1024
 };
 
-function doGet() {
-  return ContentService.createTextOutput(JSON.stringify({ ok: true, service: 'Nobi Topup GAS backend', version: 1 }))
-    .setMimeType(ContentService.MimeType.JSON);
+function doGet(e) {
+  const page = e && e.parameter && e.parameter.page === 'admin' ? 'Admin' : 'Storefront';
+  return HtmlService.createTemplateFromFile(page).evaluate()
+    .setTitle(page === 'Admin' ? 'Nobi Topup · Admin' : 'Nobi Topup')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/** Server-side RPC allowlist. Never expose Drive or Sheets IDs to the browser. */
+function rpc(action, args) {
+  args = args || {};
+  switch (String(action || '')) {
+    case 'catalog': return publicCatalog();
+    case 'promotions': return publicPromotions();
+    case 'coupon': return validateCoupon(args.code, args.gameId, args.subtotal, args.playerId);
+    case 'couponSuggestions': return couponSuggestions_(args.gameId, args.subtotal, args.playerId);
+    case 'paymentInfo': return paymentInfo_(args.amount);
+    case 'createOrder': return createOrder(args);
+    case 'adminLogin': return adminLogin(args.username, args.password);
+    case 'adminLogout': return adminLogout(args.token);
+    case 'adminDashboard': return adminDashboard(args.token);
+    case 'adminOrders': return adminOrders(args.token);
+    case 'adminSlipData': return adminSlipData(args.token, args.orderId);
+    case 'adminSetOrderStatus': return adminSetOrderStatus(args.token, args.orderId, args.status);
+    case 'adminList': return adminList(args.token, args.tableName);
+    case 'adminUpsert': return adminUpsert(args.token, args.tableName, args.record);
+    case 'adminDelete': return adminDelete(args.token, args.tableName, args.id);
+    default: throw new Error('ไม่อนุญาตคำสั่งนี้');
+  }
+}
+
+/** Return only the best valid coupon suggestion; public data only. */
+function couponSuggestions_(gameId, subtotal, playerId) {
+  const amount = Number(subtotal);
+  if (!Number.isFinite(amount) || amount < 0) return {suggestion:null};
+  const candidates = rows_('coupons').filter(c => truth_(c.active)).map(c => validateCoupon(c.code, gameId, amount, playerId)).filter(c => c.valid);
+  candidates.sort((a,b) => Number(b.discount)-Number(a.discount));
+  return {suggestion:candidates.length ? {code:candidates[0].code, discount:candidates[0].discount, message:'ประหยัด '+money_(candidates[0].discount)+' บาท'} : null};
+}
+
+/** PromptPay config is kept in Script Properties; never hardcode merchant IDs. */
+function paymentInfo_(amount) {
+  const props = PropertiesService.getScriptProperties();
+  const promptpayId = String(props.getProperty('NOBI_PROMPTPAY_ID') || '').trim();
+  if (!promptpayId) return {configured:false,message:'ร้านยังไม่ได้ตั้งค่า PromptPay'};
+  // QR generation must be supplied by a vetted compatible library/service before launch.
+  return {configured:false,message:'ยังไม่ได้เปิดใช้ตัวสร้าง PromptPay QR ใน Apps Script'};
 }
 
 /** Run once manually from the Apps Script editor. Creates sheets and private Drive folder. */
@@ -295,3 +338,7 @@ function updateById_(name,id,patch) {
   }
   throw new Error('ไม่พบรายการที่ต้องการแก้ไข');
 }
+
+
+/** Helper used by HtmlService pages; included for future partial templates. */
+function include(filename) { return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
