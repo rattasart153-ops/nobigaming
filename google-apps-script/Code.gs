@@ -105,7 +105,7 @@ function initializeAdmin() {
 function publicCatalog() {
   const games = rows_('games').filter(r => truth_(r.active));
   const packages = rows_('packages').filter(r => truth_(r.active));
-  return { games: games.map(clean_), packages: packages.map(clean_) };
+  return { games: games.map(clean_), packages: packages.map(function(p) { const out=clean_(p); const g=games.find(x=>String(x.id)===String(p.game_id)); out.game_name=g?g.name:''; return out; }) };
 }
 
 function publicPromotions() {
