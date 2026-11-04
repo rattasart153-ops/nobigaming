@@ -223,7 +223,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   invalidCouponForm.append('packageId', String(pack.id));
   invalidCouponForm.append('playerId', 'CI-PLAYER-INVALID-COUPON');
   invalidCouponForm.append('couponCode', 'NOT-A-REAL-COUPON');
-  invalidCouponForm.append('slip', new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' }), 'invalid-coupon.png');
+  invalidCouponForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'invalid-coupon.png');
   const invalidCouponOrder = await fetch(`${baseUrl}/api/public/orders`, {
     method: 'POST',
     headers: { cookie: cookie.split(';')[0] },
@@ -238,7 +238,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   form.append('packageId', String(pack.id));
   form.append('playerId', 'CI-PLAYER-01');
   form.append('couponCode', coupon.code);
-  form.append('slip', new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' }), 'synthetic.png');
+  form.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'synthetic.png');
   const orderResponse = await fetch(`${baseUrl}/api/public/orders`, {
     method: 'POST',
     headers: { cookie: cookie.split(';')[0] },
@@ -286,6 +286,8 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   });
   assert.equal(rejectedDelete.status, 409);
 
+  const publicUploadCount = () => fs.readdirSync(path.join(process.env.NOBI_UPLOAD_DIR, 'public')).length;
+  const beforeForgedUpload = publicUploadCount();
   const forgedImageForm = new FormData();
   forgedImageForm.append('image', new Blob(['not a PNG'], { type: 'image/png' }), 'forged.png');
   const forgedImage = await fetch(`${baseUrl}/api/admin/upload`, {
@@ -294,6 +296,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
     body: forgedImageForm
   });
   assert.equal(forgedImage.status, 415);
+  assert.equal(publicUploadCount(), beforeForgedUpload, 'forged image should be deleted');
 
   const badUploadForm = new FormData();
   badUploadForm.append('image', new Blob(['not an image'], { type: 'text/plain' }), 'not-image.txt');
