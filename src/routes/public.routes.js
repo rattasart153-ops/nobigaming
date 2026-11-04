@@ -5,8 +5,9 @@ const fs = require('node:fs');
 const generatePayload = require('promptpay-qr');
 const QRCode = require('qrcode');
 const ENV = require('../config/env');
+const validateImageFile = require('../middleware/validate-image-file');
 
-function createPublicRouter({ db, upload, asyncRoute, validateCoupon, getCatalog, createPendingOrder }) {
+function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCatalog, createPendingOrder }) {
   const router = express.Router();
 
   router.get('/api/health', (req,res) => res.json({ ok: true, service: 'Nobi Topup API' }));
@@ -31,7 +32,7 @@ function createPublicRouter({ db, upload, asyncRoute, validateCoupon, getCatalog
     const payload = generatePayload(promptpayId, { amount: amount || undefined });
     res.json({ configured: true, promptpayId, amount, qrDataUrl: await QRCode.toDataURL(payload, { margin: 1, width: 260 }) });
   }));
-  router.post('/api/public/orders', upload.single('slip'), (req,res) => {
+  router.post('/api/public/orders', slipUpload.single('slip'), validateImageFile, (req,res) => {
     const { gameId, packageId, playerId, serverId = '', couponCode = '' } = req.body;
     const game = db.prepare('SELECT * FROM games WHERE id=? AND active=1').get(Number(gameId));
     const pack = db.prepare('SELECT * FROM packages WHERE id=? AND game_id=? AND active=1').get(Number(packageId), Number(gameId));
