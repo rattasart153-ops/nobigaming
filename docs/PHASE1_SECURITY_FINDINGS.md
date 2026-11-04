@@ -13,12 +13,12 @@ Status: findings recorded during structural refactoring and security hardening. 
 
 ## S-02 — Upload validation trusts the supplied MIME type
 
-- Status: Partially mitigated; full image decoding remains open.
+- Status: Mitigated in the Express baseline; durable private Drive storage remains a production release gate.
 - Severity: Medium.
 - Evidence: The previous upload handler trusted the client-supplied MIME type and original filename extension.
 - Remediation in current branch: Stored extensions are selected from the allowed MIME type, then the first bytes are checked against PNG/JPEG/WebP signatures. A mismatch is rejected with HTTP 415 and the uploaded file is deleted. The same validator is applied to checkout slips and Admin media uploads.
 - Verification: CI includes a forged PNG MIME upload and verifies the rejected file is removed.
-- Remaining work: Signature validation does not prove that the entire file is a well-formed image. Add decode/re-encode and pixel/dimension limits before production.
+- Additional remediation: Sharp now fully decodes and re-encodes PNG/JPEG/WebP uploads, checks the decoded format against the declared MIME type, strips source metadata through re-encoding, rejects animation/multiple pages, limits the longest edge to 8,192 pixels and total pixels to 25 megapixels, and rejects processed output above 5 MB. Decode failures and malformed/truncated images are rejected and removed. CI covers a truncated file with a valid signature and an over-dimension image.
 
 ## S-03 — Session and application data use local SQLite files
 
@@ -33,7 +33,7 @@ Status: findings recorded during structural refactoring and security hardening. 
 - Severity: Medium.
 - Evidence: `express-rate-limit` uses its default in-memory store.
 - Impact: Counters are not shared between serverless instances and can reset when an instance is replaced.
-- Required remediation: Use a shared store or enforce rate limits at a trusted edge/shared backend. Test multi-instance behavior. Do not add an external paid service without the user's approval.
+- Phase 1 disposition: Current local/single-process limiter is explicitly classified as development-only. A shared no-new-service strategy using a Sheets ledger guarded by Apps Script ScriptLock is documented in [PHASE1_ABUSE_CONTROL_DESIGN.md](./PHASE1_ABUSE_CONTROL_DESIGN.md). It must be implemented and load/quota-tested as part of the later persistence integration; do not represent the current limiter as globally enforced.
 
 ## S-05 — Cookie-authenticated mutation routes lack explicit CSRF tokens
 
@@ -84,4 +84,4 @@ Status: findings recorded during structural refactoring and security hardening. 
 
 ## Phase 1 scope note
 
-The Phase 1 changes are structural extractions and characterization tests. The mitigations above apply to the Express baseline only. The browser frontend still uses Apps Script RPC directly, and the Apps Script gateway/Sheets/Drive target architecture is not yet integrated. Do not enable production orders until the critical/high release gates are closed and the complete frontend-to-backend flow has been tested.
+The Phase 1 changes are structural extractions and characterization tests. The mitigations above apply to the Express baseline only. The browser frontend now uses the Express REST API; the signed Apps Script gateway is a transport scaffold only and is not wired into Express. Sheets/Drive persistence and private media proxy are not yet integrated. Do not enable production orders until the critical/high release gates are closed and the complete frontend-to-backend flow has been tested.
