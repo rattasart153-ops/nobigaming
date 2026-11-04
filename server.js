@@ -2,9 +2,6 @@ const ENV = require('./src/config/env');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
-const generatePayload = require('promptpay-qr');
-const QRCode = require('qrcode');
 
 const app = express();
 const PORT = Number(ENV.PORT || 3000);
