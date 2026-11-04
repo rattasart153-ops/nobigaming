@@ -57,7 +57,7 @@ function createAppsScriptClient({ url, secret, fetchImpl = globalThis.fetch, tim
     try {
       response = await fetchImpl(endpoint, {
         method: 'POST',
-        redirect: 'error',
+        redirect: 'follow',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify(envelope),
         signal: AbortSignal.timeout(timeoutMs)
@@ -69,6 +69,14 @@ function createAppsScriptClient({ url, secret, fetchImpl = globalThis.fetch, tim
         timeout ? 'GATEWAY_TIMEOUT' : 'GATEWAY_UNREACHABLE',
         502
       );
+    }
+
+    if (response.url) {
+      let finalHost = '';
+      try { finalHost = new URL(response.url).hostname.toLowerCase(); } catch (_) {}
+      if (finalHost && finalHost !== 'script.google.com' && !finalHost.endsWith('.googleusercontent.com')) {
+        throw new AppsScriptGatewayError('Apps Script gateway redirected to an untrusted host', 'UNTRUSTED_GATEWAY_REDIRECT', 502);
+      }
     }
 
     let data;
