@@ -15,7 +15,7 @@ Status: ordered plan; no deployment authorization.
 Exit: architecture and compatibility map reviewed; implementation-affecting decisions must be confirmed before the phase that depends on them.
 
 ## Phase 1 — Modularize and harden the Express baseline
-Progress: in progress. Modularization, security hardening, route characterization, and frontend contract inventory are complete for the current Express baseline; production persistence and frontend migration remain open.
+Progress: technical baseline work substantially complete; Phase 1 remains open only for explicit policy confirmations and final acceptance review. Production persistence and private Drive delivery are separate later release gates.
 
 Completed:
 - [x] Add Node.js API characterization smoke tests and `npm test`.
@@ -34,7 +34,7 @@ Completed:
 Remaining:
 - [x] Remove fixed development Admin credentials and default Session Secret; require explicit configuration in every environment.
 - [x] Separate public media uploads from private order slips and add Admin-only slip retrieval.
-- [x] Validate PNG/JPEG/WebP file signatures and reject MIME spoofing; full image decode/re-encode and dimension limits remain open.
+- [x] Fully decode and re-encode PNG/JPEG/WebP uploads; reject malformed/truncated images, MIME mismatches, animation, dimensions above 8,192 pixels per edge, more than 25 megapixels, and processed files above 5 MB.
 - [x] Require same-origin Origin headers for Admin mutations and reject cross-site Fetch Metadata.
 - [x] Enable CSP in Report-Only mode and verify the header.
 - [x] Extract security setup and environment configuration without changing existing runtime behavior.
@@ -49,16 +49,17 @@ Exit: existing API contracts are characterized, security changes are intentional
 
 ## Phase 1 security findings
 - See [PHASE1_SECURITY_FINDINGS.md](./PHASE1_SECURITY_FINDINGS.md) for evidence, remediation, and remaining release gates.
+- See [PHASE1_ABUSE_CONTROL_DESIGN.md](./PHASE1_ABUSE_CONTROL_DESIGN.md) for the documented no-new-service multi-instance limiter strategy.
 - Remaining material risks: local SQLite/session persistence on Vercel, process-local rate limiting, lack of full image decoding, CSP still Report-Only, and all uploaded images still need private Google Drive storage and application-proxy delivery.
 - Do not enable production orders until the critical/high findings are resolved and retested.
 
 ## Phase 0/1 exit blockers before Phase 2
 - [x] Frontend GAS RPC calls and current response contracts inventoried.
 - [x] Express route gaps and response-shape mismatches recorded.
-- [ ] User review/confirmation of remaining member, audit retention, and session policy decisions. Coupon reservation and payment deadline policy is confirmed.
+- [ ] User confirmation of remaining policy details: Login ID length (4–30 ASCII characters is proposed, not confirmed), audit/IP-log retention, and Admin/Member session lifetime and idle timeout. Coupon reservation and payment deadline policy is confirmed.
 - [x] Confirm image privacy requirement: slips and all other uploaded images remain private in Google Drive; storefront-visible assets must be served through an application proxy without public Drive sharing.
-- [ ] Complete full image decoding and multi-instance abuse-control strategy.
-- [ ] Do not begin live integration until the user approves unresolved policy decisions.
+- [x] Complete full image decoding and document the shared multi-instance abuse-control strategy in [PHASE1_ABUSE_CONTROL_DESIGN.md](./PHASE1_ABUSE_CONTROL_DESIGN.md); implementation/load testing is a production integration gate for the shared backend.
+- [ ] Do not begin the next implementation phase until the user confirms the remaining policy details and the Phase 1 exit checklist is signed off.
 
 ## Phase 2 — Apps Script gateway and storage
 Progress: gateway transport foundation added; repository adapter and Sheets/Drive migration remain open.
