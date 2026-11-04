@@ -59,11 +59,12 @@ Status: findings recorded during read-only review and structural refactoring. Th
 
 ## S-08 — Multer 1.x dependency is deprecated and has known security advisories
 
-- Severity: High until upgraded and retested
+- Status: Remediated in source; keep under dependency monitoring.
 - Evidence: `package.json` permits Multer 1.x (`^1.4.5-lts.1`); the CI install log resolved a 1.x LTS build and npm warned that Multer 1.x is affected by vulnerabilities patched in 2.x.
 - Impact: The upload parser is part of a public order-submission route and an Admin upload route, so parser vulnerabilities can expose the application to denial-of-service or other upload-handling risks.
-- Current action: Recorded; the existing Multer API is retained while upload behavior is characterized.
-- Required remediation: Upgrade to a maintained Multer 2.x release, review migration notes and transitive dependencies, then rerun valid upload, unsupported MIME, oversized upload, malformed multipart, and error-handler tests.
+- Remediation: Upgraded the dependency range to Multer `^2.5.0` and added multipart limits for one file, ten fields, twelve total parts, and nesting depth one. Valid synthetic PNG, unsupported MIME, and oversized-file cases are included in CI.
+- Verification: Multer upgrade CI run `41790235366` and multipart-limits CI run `41790242496` passed. The expanded oversized-upload test run `41790264334` also passed.
+- Ongoing requirement: Monitor upstream advisories and keep the patched version range current.
 
 ## Phase 1 scope note
 
