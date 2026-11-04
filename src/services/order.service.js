@@ -1,51 +1,79 @@
 'use strict';
 
-const fs = require('node:fs');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const PAYMENT_WINDOW_MS = 15 * 60 * 1000;
+
+function couponExpiryCutoff(expiresAt) {
+  const m = String(expiresAt || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? new Date(Date.UTC(Number(m[1]), Number(m[2])-1, Number(m[3])+1) - 7*60*60*1000) : null;
+}
+function safeUnlink(file) { if (file && file.path && fs.existsSync(file.path)) fs.unlinkSync(file.path); }
 
 function createOrderService({ db, validateCoupon }) {
-  return function createPendingOrder({ game, pack, playerId, serverId = '', couponCode = '', file }) {
-    let couponId = null;
-    let discount = 0;
-
-    if (String(couponCode).trim()) {
-      const validation = validateCoupon(couponCode, game.id, pack.price, playerId);
-      if (!validation.ok) {
-        fs.unlinkSync(file.path);
-        return { ok: false, message: validation.message };
+  function releaseReservation(orderId, at) {
+    const row=db.prepare("SELECT coupon_id FROM coupon_redemptions WHERE order_id=? AND state='Reserved'").get(orderId);
+    if(!row) return false;
+    const changed=db.prepare("UPDATE coupon_redemptions SET state='Released',released_at=? WHERE order_id=? AND state='Reserved'").run(at,orderId).changes;
+    if(changed) db.prepare('UPDATE coupons SET used_count=MAX(0,used_count-1) WHERE id=?').run(row.coupon_id);
+    return Boolean(changed);
+  }
+  function createPendingOrder({game,pack,playerId,serverId='',couponCode='',file=null,memberId=null}) {
+    const id=`NBI-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
+    const checkoutToken=crypto.randomBytes(32).toString('base64url');
+    const checkoutTokenHash=crypto.createHash('sha256').update(checkoutToken).digest('hex');
+    const createdAt=new Date();
+    const tx=db.transaction(()=>{
+      let couponId=null,discount=0,coupon=null;
+      if(String(couponCode).trim()){
+        const validation=validateCoupon(couponCode,game.id,pack.price,playerId);
+        if(!validation.ok) return {ok:false,message:validation.message};
+        coupon=validation.coupon; couponId=coupon.id; discount=validation.discount;
       }
-      couponId = validation.coupon.id;
-      discount = validation.discount;
-    }
-
-    const id = `NBI-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-    const total = Math.max(0, Math.round((pack.price - discount) * 100) / 100);
-    const transaction = db.transaction(() => {
-      db.prepare(`INSERT INTO orders(id,game_id,package_id,player_id,server_id,coupon_id,subtotal,discount,total,slip_path,status) VALUES(?,?,?,?,?,?,?,?,?,?, 'Pending')`)
-        .run(id, game.id, pack.id, playerId, String(serverId).trim(), couponId, pack.price, discount, total, file.filename);
-      if (couponId) db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').run(couponId);
+      const couponCutoff=coupon && coupon.expires_at ? couponExpiryCutoff(coupon.expires_at) : null;
+      const deadline=couponCutoff || new Date(createdAt.getTime()+PAYMENT_WINDOW_MS);
+      if(deadline.getTime()<=createdAt.getTime()) return {ok:false,message:'โค้ดนี้หมดอายุแล้ว'};
+      const total=Math.max(0,Math.round((pack.price-discount)*100)/100);
+      const slipSubmittedAt=file ? createdAt.toISOString() : null;
+      db.prepare(`INSERT INTO orders(id,game_id,package_id,player_id,server_id,coupon_id,subtotal,discount,total,slip_path,status,status_reason,payment_expires_at,slip_submitted_at,checkout_token_hash,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,'Pending',NULL,?,?,?,?,?)`)
+        .run(id,game.id,pack.id,playerId,String(serverId).trim(),couponId,pack.price,discount,total,file ? file.filename : null,deadline.toISOString(),slipSubmittedAt,checkoutTokenHash,createdAt.toISOString(),createdAt.toISOString());
+      if(couponId){
+        const reserved=db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=? AND active=1 AND (usage_limit IS NULL OR used_count<usage_limit)').run(couponId);
+        if(!reserved.changes) throw new Error('COUPON_CAPACITY_EXHAUSTED');
+        db.prepare("INSERT INTO coupon_redemptions(coupon_id,order_id,state,reserved_at,reserved_until) VALUES(?,?,'Reserved',?,?)").run(couponId,id,createdAt.toISOString(),deadline.toISOString());
+      }
+      return {ok:true,order:{id,game:game.name,package:pack.name,subtotal:pack.price,discount,total,status:'Pending',payment_expires_at:deadline.toISOString(),slip_submitted_at:slipSubmittedAt},checkoutToken};
     });
-
-    try {
-      transaction();
-    } catch (error) {
-      fs.unlinkSync(file.path);
-      throw error;
-    }
-
-    return {
-      ok: true,
-      order: {
-        id,
-        game: game.name,
-        package: pack.name,
-        subtotal: pack.price,
-        discount,
-        total,
-        status: 'Pending'
+    try { const result=tx.immediate(); if(!result.ok) safeUnlink(file); return result; }
+    catch(error){ safeUnlink(file); if(error.message==='COUPON_CAPACITY_EXHAUSTED') return {ok:false,message:'โค้ดนี้ถูกจองครบจำนวนแล้ว กรุณาเลือกโค้ดอื่น'}; throw error; }
+  }
+  function submitSlip({orderId,checkoutToken,file,now=new Date()}) {
+    const hash=crypto.createHash('sha256').update(String(checkoutToken||'')).digest('hex');
+    const tx=db.transaction(()=>{
+      const order=db.prepare('SELECT * FROM orders WHERE id=?').get(String(orderId));
+      if(!order||!order.checkout_token_hash||!crypto.timingSafeEqual(Buffer.from(order.checkout_token_hash),Buffer.from(hash))) return {ok:false,reason:'not_found'};
+      if(order.status!=='Pending'||order.slip_submitted_at) return {ok:false,reason:'already_submitted'};
+      if(!order.payment_expires_at||now.getTime()>=Date.parse(order.payment_expires_at)){
+        db.prepare("UPDATE orders SET status='Expired',status_reason='PAYMENT_TIMEOUT',updated_at=? WHERE id=? AND status='Pending'").run(now.toISOString(),order.id);
+        releaseReservation(order.id,now.toISOString()); return {ok:false,reason:'expired'};
       }
-    };
-  };
+      db.prepare("UPDATE orders SET slip_path=?,slip_submitted_at=?,updated_at=? WHERE id=? AND status='Pending' AND slip_submitted_at IS NULL").run(file.filename,now.toISOString(),now.toISOString(),order.id);
+      return {ok:true,orderId:order.id,slipSubmittedAt:now.toISOString()};
+    });
+    const result=tx.immediate(); if(!result.ok) safeUnlink(file); return result;
+  }
+  function expirePendingOrders(now=new Date()) {
+    const tx=db.transaction(()=>{
+      const rows=db.prepare("SELECT id FROM orders WHERE status='Pending' AND slip_submitted_at IS NULL AND payment_expires_at IS NOT NULL AND payment_expires_at<=?").all(now.toISOString());
+      for(const row of rows){
+        db.prepare("UPDATE orders SET status='Expired',status_reason='PAYMENT_TIMEOUT',updated_at=? WHERE id=? AND status='Pending' AND slip_submitted_at IS NULL").run(now.toISOString(),row.id);
+        releaseReservation(row.id,now.toISOString());
+      }
+      return rows.length;
+    });
+    return tx.immediate();
+  }
+  return {createPendingOrder,submitSlip,expirePendingOrders,releaseReservation};
 }
-
-module.exports = createOrderService;
+module.exports=createOrderService;
