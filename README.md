@@ -18,13 +18,13 @@
    ```
 6. API health check อยู่ที่ `http://localhost:3000/api/health`.
 
-**สถานะปัจจุบัน:** หน้า Storefront และ Admin ใน Branch นี้เชื่อมกับ Express REST API แล้ว (ไม่เรียก Google Apps Script RPC โดยตรง) โดย Checkout สร้าง Pending ก่อนและส่งสลิปผ่าน endpoint แยก ส่วน Admin ใช้ HttpOnly cookie และ endpoint ดูสลิปแบบ private อย่างไรก็ตาม Express ยังใช้ SQLite/ไฟล์ในเครื่องเป็นฐานชั่วคราว ยังไม่ได้เชื่อม Sheets/Drive และยังไม่พร้อม Deploy หรือรับเงินจริง
+**สถานะปัจจุบัน:** หน้า Storefront และ Admin ใน Branch นี้เชื่อมกับ Express REST API แล้ว (ไม่เรียก Google Apps Script RPC โดยตรง) โดย Checkout สร้าง Pending ก่อนและส่งสลิปผ่าน endpoint แยก ส่วน Admin ใช้ HttpOnly cookie และ endpoint ดูสลิปแบบ private; Checkout ใช้ HttpOnly cookie แบบจำกัด path และ Idempotency-Key ป้องกันคำขอซ้ำ อย่างไรก็ตาม Express ยังใช้ SQLite/ไฟล์ในเครื่องเป็นฐานชั่วคราว ยังไม่ได้เชื่อม Sheets/Drive และยังไม่พร้อม Deploy หรือรับเงินจริง
 
 ## Google Apps Script migration (in progress)
 
 The zero-budget migration foundation is in `google-apps-script/`. Setup notes: [Google Apps Script setup guide](docs/GOOGLE_APPS_SCRIPT_SETUP.md).
 
-**Important:** the repository HTML pages currently target the Express REST API. The Apps Script RPC implementation remains a separate legacy path and is not the active frontend adapter. The Google Sheets/Drive data adapter, private Drive media proxy, durable sessions/storage, approved member/coupon features, and full browser/device end-to-end tests are still incomplete. Do not use this for real customer payments.
+**Important:** the repository HTML pages currently target the Express REST API. The Apps Script RPC implementation remains a separate legacy path and is not the active frontend adapter. The signed version-1 Apps Script HTTP gateway and matching Node client are now present, with HMAC authentication, timestamp checks and a ScriptLock-protected nonce ledger. The client is not yet wired into Express. The Google Sheets repository adapter, private Drive media proxy, durable sessions/storage, approved member/coupon features, GAS runtime tests and full browser/device end-to-end tests are still incomplete. Do not use this for real customer payments.
 
 ## การตั้งค่าบัญชีแอดมินและ Session
 - ต้องกำหนด `ADMIN_USERNAME`, `ADMIN_PASSWORD` และ `SESSION_SECRET` ในไฟล์ `.env` ก่อนเริ่มระบบทุกสภาพแวดล้อม
