@@ -3,9 +3,10 @@
 const session = require('express-session');
 const SQLiteStore = require('connect-sqlite3')(session);
 const { DATA_DIR } = require('../config/paths');
+const ENV = require('../config/env');
 
-const sessionSecret = process.env.SESSION_SECRET || (
-  process.env.NODE_ENV === 'production'
+const sessionSecret = ENV.SESSION_SECRET || (
+  ENV.NODE_ENV === 'production'
     ? ''
     : 'dev-only-change-this-session-secret-before-deploying'
 );
@@ -21,7 +22,7 @@ module.exports = session({
   cookie: {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: ENV.NODE_ENV === 'production',
     maxAge: 1000 * 60 * 60 * 8
   }
 });
