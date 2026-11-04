@@ -18,13 +18,13 @@
    ```
 6. API health check อยู่ที่ `http://localhost:3000/api/health`.
 
-**ข้อจำกัดปัจจุบัน:** Express เสิร์ฟไฟล์ HTML ได้ แต่ JavaScript ของหน้าร้านและหน้า Admin ยังเรียก Google Apps Script RPC โดยตรง จึงต้องเปิดผ่าน Apps Script Web App ที่ตั้งค่าไว้จึงจะทำงานครบ หน้า HTML ที่เสิร์ฟจาก Express ยังไม่ถือว่าเชื่อมกับ Express API แล้ว
+**สถานะปัจจุบัน:** หน้า Storefront และ Admin ใน Branch นี้เชื่อมกับ Express REST API แล้ว (ไม่เรียก Google Apps Script RPC โดยตรง) โดย Checkout สร้าง Pending ก่อนและส่งสลิปผ่าน endpoint แยก ส่วน Admin ใช้ HttpOnly cookie และ endpoint ดูสลิปแบบ private อย่างไรก็ตาม Express ยังใช้ SQLite/ไฟล์ในเครื่องเป็นฐานชั่วคราว ยังไม่ได้เชื่อม Sheets/Drive และยังไม่พร้อม Deploy หรือรับเงินจริง
 
 ## Google Apps Script migration (in progress)
 
 The zero-budget migration foundation is in `google-apps-script/`. Setup notes: [Google Apps Script setup guide](docs/GOOGLE_APPS_SCRIPT_SETUP.md).
 
-**Important:** the repository storefront/admin JavaScript has been connected to an Apps Script RPC bridge, but the two HTML files must still be copied manually into Apps Script as `Storefront` and `Admin` HtmlService files. PromptPay QR generation is not implemented in GAS, and no live deployment or end-to-end security test has been performed. Do not use this for real customer payments until the remaining checks in the setup guide pass.
+**Important:** the repository HTML pages currently target the Express REST API. The Apps Script RPC implementation remains a separate legacy path and is not the active frontend adapter. The Google Sheets/Drive data adapter, private Drive media proxy, durable sessions/storage, approved member/coupon features, and full browser/device end-to-end tests are still incomplete. Do not use this for real customer payments.
 
 ## การตั้งค่าบัญชีแอดมินและ Session
 - ต้องกำหนด `ADMIN_USERNAME`, `ADMIN_PASSWORD` และ `SESSION_SECRET` ในไฟล์ `.env` ก่อนเริ่มระบบทุกสภาพแวดล้อม
