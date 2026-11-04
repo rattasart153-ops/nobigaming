@@ -23,6 +23,7 @@ Completed:
 - [x] Centralize runtime paths in `src/config/paths.js`.
 - [x] Move SQLite initialization, schema, migrations, seed data and Admin bootstrap to `src/db/sqlite.js`.
 - [x] Extract session, upload, error-handler and security middleware under `src/middleware/`.
+- [x] Extract public and Admin API route handlers into `src/routes/public.routes.js` and `src/routes/admin.routes.js`; keep `server.js` as composition/entry point.
 - [x] Centralize environment loading and runtime variables in `src/config/env.js` without changing existing defaults.
 - [x] Keep existing route declarations and `server.js` as the current app composition/entry point.
 - [x] Replace the literal example Admin password in `.env.example` with a placeholder.
@@ -30,11 +31,12 @@ Completed:
 
 Remaining:
 - [x] Extract security setup and environment configuration without changing existing runtime behavior.
-- [x] Expand characterization coverage for game/package/coupon/promotion CRUD, coupon validation, order creation/status, and unsupported upload MIME rejection.
-- [ ] Move service and route handlers in small groups while preserving exact contracts.
+- [x] Expand characterization coverage for game/package/coupon/promotion CRUD and lists, coupon suggestions/validation, order creation/status, payment configuration, and unsupported upload MIME rejection.
+- [x] Extract public and Admin route handlers in separate modules while preserving route paths and response bodies.
+- [ ] Extract catalog/coupon/order business logic into focused services and add unit-level coverage.
 - [ ] Keep SQLite until the replacement repository adapter passes tests.
 
-Latest verified CI runs: `41789499875` (security middleware extraction) and `41789588992` (expanded API characterization suite) — success. Environment centralization run `41789682979` is being verified separately.
+Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), and `41790115164` (expanded test suite) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
 
 Exit: local behavior remains equivalent; syntax and route smoke tests pass.
 
