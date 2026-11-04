@@ -99,6 +99,7 @@ Enable only actions required by an actual route. Public actions cannot invoke Ad
 - 403 authenticated but insufficient permission.
 - 404 resource not found, without leaking protected resource existence.
 - 409 idempotency conflict, duplicate key or invalid status transition.
+- 410 checkout payment window expired; late slip submissions are rejected.
 - 413 upload too large; 415 unsupported or forged media.
 - 429 rate limit.
 - 502/503 Apps Script unavailable or dependency failure.
