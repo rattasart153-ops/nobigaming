@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const vm = require('node:vm');
 const { createAppsScriptClient, AppsScriptGatewayError, canonicalEnvelope } = require('../src/clients/apps-script.client');
 
 const secret = 'test-shared-secret-that-is-long-enough-for-hmac';
@@ -85,18 +86,41 @@ test('Apps Script client does not retry a failed mutation implicitly', async () 
   assert.equal(calls, 1);
 });
 
-test('GAS gateway action allowlist matches the legacy rpc dispatcher and replay schema', () => {
-  const gateway = fs.readFileSync(path.join(__dirname, '..', 'google-apps-script', '13_HttpGateway.gs'), 'utf8');
-  const code = fs.readFileSync(path.join(__dirname, '..', 'google-apps-script', 'Code.gs'), 'utf8');
+test('GAS gateway allowlist matches the focused HTTP action dispatcher', () => {
+  const gasDir = path.join(__dirname, '..', 'google-apps-script');
+  const gateway = fs.readFileSync(path.join(gasDir, '13_HttpGateway.gs'), 'utf8');
+  const entry = fs.readFileSync(path.join(gasDir, 'Code.gs'), 'utf8');
+  const dispatcher = fs.readFileSync(path.join(gasDir, '01_HttpEntry.gs'), 'utf8');
   const allowlistBlock = gateway.match(/ALLOWED_ACTIONS:\s*\[([\s\S]*?)\]/);
   assert.ok(allowlistBlock, 'gateway action allowlist must exist');
   const allowed = Array.from(allowlistBlock[1].matchAll(/'([^']+)'/g), match => match[1]).sort();
-  const dispatched = Array.from(code.matchAll(/case '([^']+)'/g), match => match[1]).sort();
-  assert.deepEqual(allowed, dispatched, 'every gateway action must have an explicit rpc dispatcher case and vice versa');
-  assert.ok(gateway.includes('function doPost(e)'), 'GAS HTTP entry point must exist');
-  assert.ok(code.includes('function doGet()'), 'minimal gateway health endpoint must exist');
-  assert.equal(code.includes('HtmlService'), false, 'GAS project must not depend on HtmlService frontend files');
+  const dispatched = Array.from(dispatcher.matchAll(/case '([^']+)'/g), match => match[1]).sort();
+  assert.deepEqual(allowed, dispatched, 'every gateway action must have one explicit dispatcher case');
+  assert.ok(gateway.includes('function doPost(e)'), 'GAS HTTP POST entry point must exist');
+  assert.ok(gateway.includes('dispatchGatewayAction_('), 'signed requests must use the HTTP dispatcher');
+  assert.ok(entry.includes('function doGet()'), 'minimal JSON health endpoint must exist');
+  assert.equal(entry.includes('HtmlService'), false, 'GAS project must not depend on HtmlService');
+  assert.equal(entry.includes('rpc('), false, 'minimal entry point must not expose legacy RPC');
   assert.ok(gateway.includes('Utilities.computeHmacSha256Signature'), 'gateway must verify HMAC-SHA256');
   assert.ok(gateway.includes('LockService.getScriptLock'), 'nonce claims must be serialized');
-  assert.ok(code.includes("gateway_nonces: ['nonce_hash','created_at']"), 'database setup must create the nonce ledger');
+  const database = fs.readFileSync(path.join(gasDir, '02_Database.gs'), 'utf8');
+  assert.ok(database.includes("gateway_nonces: ['nonce_hash','created_at']"), 'database scaffold must include nonce ledger');
+});
+
+test('all Apps Script modules parse and define unique top-level functions', () => {
+  const gasDir = path.join(__dirname, '..', 'google-apps-script');
+  const files = fs.readdirSync(gasDir).filter(name => name.endsWith('.gs')).sort();
+  assert.ok(files.length >= 12, 'focused GAS modules must be present');
+  const definitions = new Map();
+  for (const file of files) {
+    const source = fs.readFileSync(path.join(gasDir, file), 'utf8');
+    assert.doesNotThrow(() => new vm.Script(source, { filename: file }), file + ' must parse as JavaScript');
+    assert.equal(/\bHtmlService\b|google\.script\.run/.test(source), false, file + ' must not contain browser HtmlService/RPC dependencies');
+    assert.equal(/\bfunction\s+rpc\s*\(/.test(source), false, file + ' must not define legacy rpc()');
+    for (const match of source.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
+      const name = match[1];
+      assert.equal(definitions.has(name), false, 'duplicate GAS global function: ' + name + ' (' + file + ' and ' + definitions.get(name) + ')');
+      definitions.set(name, file);
+    }
+  }
 });
