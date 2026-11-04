@@ -1940,6 +1940,11 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
     currentDiscount = 0;
     selected = null;
     activeCheckout = null; slipSubmitted = false; checkoutNotice.textContent = '';
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('nobi_active_checkout') || 'null');
+      if (saved && saved.gameId === currentGameId && Date.parse(saved.expiresAt) > Date.now()) activeCheckout = saved;
+      else if (saved) sessionStorage.removeItem('nobi_active_checkout');
+    } catch (_) { activeCheckout = null; }
     confirmBtn.textContent = 'สร้างออเดอร์และดำเนินการชำระเงิน';
     confirmBtn.disabled = false;
     $('.pack',packGrid).forEach(el=>el.disabled=false);
@@ -1990,6 +1995,12 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
     $("#serverId").value = ""; $("#couponCode").value = ""; $("#paymentSlip").value = "";
     $("#couponMessage").textContent = ""; $("#couponSuggestion").hidden = true;
     updatePaymentQr(selected ? selected.price : 0);
+    if (activeCheckout) {
+      checkoutNotice.textContent = 'ออเดอร์ ' + activeCheckout.id + ' กำลังรอส่งสลิป กรุณาชำระเงินและส่งสลิปภายใน ' + new Date(activeCheckout.expiresAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}) + ' (เวลาไทย)';
+      confirmBtn.textContent = 'ส่งสลิปการชำระเงิน';
+      $('.pack',packGrid).forEach(el=>el.disabled=true);
+      ['#playerId','#serverId','#couponCode','#applyCoupon'].forEach(sel=>$(sel).disabled=true);
+    }
     modal.hidden = false;
     document.body.style.overflow = "hidden";
     requestAnimationFrame(() => $(".modal-close", modal).focus());
@@ -2058,8 +2069,8 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
   }
   confirmBtn.addEventListener("click", async () => {
     const uid=playerId.value.trim();
-    if(!uid){showToast("กรุณากรอก UID หรือชื่อตัวละครก่อนยืนยัน",false);playerId.focus();return;}
-    if(!selected||!selectedPackageId||!currentGameId){showToast("กรุณาเลือกแพ็กเกจ",false);return;}
+    if(!activeCheckout && !uid){showToast("กรุณากรอก UID หรือชื่อตัวละครก่อนยืนยัน",false);playerId.focus();return;}
+    if(!activeCheckout && (!selected||!selectedPackageId||!currentGameId)){showToast("กรุณาเลือกแพ็กเกจ",false);return;}
     const slip=$("#paymentSlip").files[0];
     if(slip&&(!['image/png','image/jpeg','image/webp'].includes(slip.type)||slip.size>5*1024*1024)){showToast("ไฟล์สลิปต้องเป็น PNG/JPG/WebP และไม่เกิน 5 MB",false);return;}
     if(!activeCheckout&&$("#couponCode").value.trim()&&!(await validateCouponUi()))return;
@@ -2071,7 +2082,8 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
         form.append('playerId',uid);form.append('serverId',$("#serverId").value.trim());
         form.append('couponCode',$("#couponCode").value.trim());
         const created=await apiRequest('/api/public/orders',{method:'POST',body:form});
-        activeCheckout={id:created.order.id,token:created.checkout_token,expiresAt:created.order.payment_expires_at};
+        activeCheckout={id:created.order.id,gameId:currentGameId,expiresAt:created.order.payment_expires_at};
+        try { sessionStorage.setItem('nobi_active_checkout',JSON.stringify(activeCheckout)); } catch (_) {}
         checkoutNotice.textContent='สร้างออเดอร์ '+activeCheckout.id+' แล้ว กรุณาชำระเงินและส่งสลิปภายใน '+new Date(activeCheckout.expiresAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' (เวลาไทย)';
         confirmBtn.textContent='ส่งสลิปการชำระเงิน';
         $('.pack',packGrid).forEach(el=>el.disabled=true);
@@ -2080,9 +2092,10 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
       }
       if(!slip){confirmBtn.disabled=false;confirmBtn.style.opacity="";return;}
       const upload=new FormData();upload.append('slip',slip,slip.name);
-      await apiRequest('/api/public/orders/'+encodeURIComponent(activeCheckout.id)+'/slip',{method:'POST',headers:{Authorization:'Bearer '+activeCheckout.token},body:upload});
+      await apiRequest('/api/public/orders/'+encodeURIComponent(activeCheckout.id)+'/slip',{method:'POST',body:upload});
       slipSubmitted=true;checkoutNotice.textContent='ส่งสลิปของออเดอร์ '+activeCheckout.id+' เรียบร้อยแล้ว รอแอดมินตรวจสอบ';
       showToast('ส่งสลิปเรียบร้อย · '+activeCheckout.id);
+      try { sessionStorage.removeItem('nobi_active_checkout'); } catch (_) {}
       closeModal();playerId.value='';activeCheckout=null;slipSubmitted=false;
     }catch(e){showToast(e.message,false);}
     finally{confirmBtn.disabled=false;confirmBtn.style.opacity="";}
