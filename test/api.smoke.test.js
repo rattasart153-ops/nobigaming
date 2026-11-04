@@ -228,6 +228,16 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   });
   assert.equal(badUpload.status, 400);
 
+  const oversizedForm = new FormData();
+  oversizedForm.append('image', new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: 'image/png' }), 'oversized.png');
+  const oversizedUpload = await fetch(`${baseUrl}/api/admin/upload`, {
+    method: 'POST',
+    headers: { cookie: cookie.split(';')[0] },
+    body: oversizedForm
+  });
+  assert.equal(oversizedUpload.status, 400);
+  assert.match((await oversizedUpload.json()).error, /5 MB/);
+
   const deletePromotion = await fetch(`${baseUrl}/api/admin/promotions/${promotion.id}`, {
     method: 'DELETE',
     headers: { cookie: cookie.split(';')[0] }
