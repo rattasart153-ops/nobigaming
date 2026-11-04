@@ -1,13 +1,11 @@
 'use strict';
 
 const express = require('express');
-const fs = require('node:fs');
-const crypto = require('node:crypto');
 const generatePayload = require('promptpay-qr');
 const QRCode = require('qrcode');
 const ENV = require('../config/env');
 
-function createPublicRouter({ db, upload, asyncRoute, validateCoupon, getCatalog }) {
+function createPublicRouter({ db, upload, asyncRoute, validateCoupon, getCatalog, createPendingOrder }) {
   const router = express.Router();
 
   router.get('/api/health', (req,res) => res.json({ ok: true, service: 'Nobi Topup API' }));
@@ -39,21 +37,17 @@ function createPublicRouter({ db, upload, asyncRoute, validateCoupon, getCatalog
     if (!game || !pack) return res.status(400).json({ error: 'ไม่พบเกมหรือแพ็กเกจที่เลือก' });
     if (!String(playerId || '').trim() || String(playerId).trim().length > 100) return res.status(400).json({ error: 'กรุณากรอก UID ให้ถูกต้อง' });
     if (!req.file) return res.status(400).json({ error: 'กรุณาแนบสลิปการโอนเงิน (PNG/JPG/WebP ไม่เกิน 5 MB)' });
-    let couponId = null, discount = 0;
-    if (String(couponCode).trim()) {
-      const validation = validateCoupon(couponCode, game.id, pack.price, String(playerId).trim());
-      if (!validation.ok) { fs.unlinkSync(req.file.path); return res.status(422).json({ error: validation.message }); }
-      couponId = validation.coupon.id; discount = validation.discount;
-    }
-    const id = `NBI-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-    const total = Math.max(0, Math.round((pack.price - discount) * 100) / 100);
-    const tx = db.transaction(() => {
-      db.prepare(`INSERT INTO orders(id,game_id,package_id,player_id,server_id,coupon_id,subtotal,discount,total,slip_path,status) VALUES(?,?,?,?,?,?,?,?,?,?, 'Pending')`)
-        .run(id, game.id, pack.id, String(playerId).trim(), String(serverId).trim(), couponId, pack.price, discount, total, `/uploads/${req.file.filename}`);
-      if (couponId) db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').run(couponId);
+
+    const result = createPendingOrder({
+      game,
+      pack,
+      playerId: String(playerId).trim(),
+      serverId,
+      couponCode,
+      file: req.file
     });
-    try { tx(); } catch (e) { fs.unlinkSync(req.file.path); throw e; }
-    res.status(201).json({ message: 'รับออเดอร์แล้ว รอแอดมินตรวจสอบสลิป', order: { id, game: game.name, package: pack.name, subtotal: pack.price, discount, total, status: 'Pending' } });
+    if (!result.ok) return res.status(422).json({ error: result.message });
+    res.status(201).json({ message: 'รับออเดอร์แล้ว รอแอดมินตรวจสอบสลิป', order: result.order });
   });
 
   return router;
