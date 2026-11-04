@@ -9,6 +9,7 @@ const ENV = Object.freeze({
   VERCEL: process.env.VERCEL || '',
   NOBI_DATA_DIR: process.env.NOBI_DATA_DIR || '',
   NOBI_UPLOAD_DIR: process.env.NOBI_UPLOAD_DIR || '',
+  NOBI_PRIVATE_SLIP_DIR: process.env.NOBI_PRIVATE_SLIP_DIR || '',
   SESSION_SECRET: process.env.SESSION_SECRET || '',
   ADMIN_USERNAME: process.env.ADMIN_USERNAME || '',
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || '',
