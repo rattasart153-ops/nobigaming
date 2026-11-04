@@ -327,7 +327,15 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   prepaySlipForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'prepay.png');
   const prepaySlip = await fetch(`${baseUrl}/api/public/orders/${prepay.order.id}/slip`, { method: 'POST', headers: { cookie: replayCookiePair }, body: prepaySlipForm });
   assert.equal(prepaySlip.status, 201);
-  assert.match(prepaySlip.headers.get('set-cookie') || '', /Max-Age=0|Expires=/, 'checkout cookie should be cleared after slip submission');
+  const retryCookie = prepaySlip.headers.get('set-cookie') || '';
+  assert.match(retryCookie, /Expires=/, 'checkout cookie should be shortened after slip submission');
+  const retryCookieExpiry = Date.parse(retryCookie.match(/Expires=([^;]+)/)[1]);
+  assert.ok(retryCookieExpiry > Date.now() && retryCookieExpiry <= Date.now() + 6 * 60 * 1000);
+  const duplicateSlipForm = new FormData();
+  duplicateSlipForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'duplicate-prepay.png');
+  const duplicateSlip = await fetch(`${baseUrl}/api/public/orders/${prepay.order.id}/slip`, { method: 'POST', headers: { cookie: retryCookie.split(';')[0] }, body: duplicateSlipForm });
+  assert.equal(duplicateSlip.status, 409);
+  assert.equal((await duplicateSlip.json()).reason, 'already_submitted');
   const prepayCompleted = await fetch(`${baseUrl}/api/admin/orders/${prepay.order.id}/status`, { method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ status: 'Completed' }) });
   assert.equal(prepayCompleted.status, 200);
 
