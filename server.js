@@ -13,12 +13,13 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 // Keep path resolution centralized; preserve the existing locations and overrides.
 const { PUBLIC, DATA_DIR, UPLOADS, IS_VERCEL } = require('./src/config/paths');
-const sessionMiddleware = require('./src/middleware/session');
-const upload = require('./src/middleware/uploads');
-const errorHandler = require('./src/middleware/error-handler');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS, { recursive: true });
 if (IS_VERCEL) console.warn('[Nobi Topup] Vercel is using ephemeral /tmp storage. Orders, sessions, SQLite data and uploads will not persist across instance replacement. Do not use for production transactions.');
+// Initialize middleware only after its backing directories exist.
+const sessionMiddleware = require('./src/middleware/session');
+const upload = require('./src/middleware/uploads');
+const errorHandler = require('./src/middleware/error-handler');
 app.set('trust proxy', IS_VERCEL ? 1 : false);
 
 app.disable('x-powered-by');
