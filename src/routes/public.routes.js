@@ -98,11 +98,12 @@ function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCat
       const message = result.reason === 'expired' ? 'หมดเวลาชำระเงินและอัปโหลดสลิปแล้ว' : result.reason === 'already_submitted' ? 'ออเดอร์นี้มีการส่งสลิปแล้วหรือไม่สามารถแก้ไขได้' : 'ไม่พบออเดอร์หรือสิทธิ์อัปโหลดไม่ถูกต้อง';
       return res.status(status).json({ error: message, reason: result.reason });
     }
-    res.clearCookie(cookieName, {
+    res.cookie(cookieName, checkoutToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production' || req.secure,
       sameSite: 'strict',
-      path: '/api/public/orders/' + encodeURIComponent(req.params.id) + '/slip'
+      path: '/api/public/orders/' + encodeURIComponent(req.params.id) + '/slip',
+      expires: new Date(Date.now() + 5 * 60 * 1000)
     });
     return res.status(201).json({ ok: true, slip_submitted_at: result.slipSubmittedAt });
   });
