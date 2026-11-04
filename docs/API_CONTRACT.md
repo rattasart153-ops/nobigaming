@@ -74,11 +74,11 @@ Never expose stack traces, spreadsheet IDs, Drive IDs, password hashes, tokens o
 
 ## Current gateway action allowlist
 
-The initial gateway currently forwards only these legacy RPC action names through the existing `rpc()` switch:
+The gateway currently accepts this fixed transitional action allowlist and routes it through `dispatchGatewayAction_()` in `01_HttpEntry.gs`. These action names preserve the current server-side compatibility surface; they are not browser RPC and are not the final repository action contract:
 - `catalog`, `promotions`, `coupon`, `couponSuggestions`, `paymentInfo`, `createOrder`
 - `adminLogin`, `adminMe`, `adminLogout`, `adminDashboard`, `adminOrders`, `adminSlipData`, `adminSetOrderStatus`, `adminList`, `adminUpsert`, `adminDelete`
 
-This is a transport foundation, not the final business-action contract. Some legacy RPC handlers still use the older Sheets schema and do not implement the approved Member, reservation, payment-deadline, or private-media proxy behavior. Do not expose the Web App or connect production routes until each action has a reviewed adapter, authorization boundary and contract test. The target action names above remain design intent, not an assertion that those handlers already exist.
+This is a transport foundation, not the final business-action contract. The handlers still use the older Sheets schema and do not implement the approved Member, reservation, payment-deadline, or private-media proxy behavior. Do not expose the Web App or connect production routes until each action has a reviewed adapter, authorization boundary and contract test. The target action names above remain design intent, not an assertion that those handlers already exist.
 
 ## HTTP status mapping
 - 200 successful read/update; 201 created.
