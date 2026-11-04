@@ -49,6 +49,7 @@ function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCat
       file: req.file || null
     });
     if (!result.ok) return res.status(422).json({ error: result.message });
+    res.set('Cache-Control', 'no-store');
     res.status(201).json({ message: result.order.slip_submitted_at ? 'รับออเดอร์และสลิปแล้ว' : 'สร้างออเดอร์แล้ว กรุณาชำระเงินและอัปโหลดสลิปก่อนหมดเวลา', order: result.order, checkout_token: result.checkoutToken });
   });
 
