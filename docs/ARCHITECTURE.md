@@ -77,6 +77,7 @@ Use separate .gs files in one Apps Script project:
 - 08_Admin.gs — Admin dashboard, orders and CRUD
 - 09_Validation.gs — current legacy record validation
 - 10_Utilities.gs — shared hashing, money, row and serialization helpers
+- 11_Repositories.gs — schema-aware Sheets row access, key uniqueness and lock-aware writes
 - 13_HttpGateway.gs — signed POST verification, nonce replay protection and response envelope
 
 Numeric prefixes are for human reading order, not execution order. Apps Script files share a global namespace; avoid duplicate global names. The numbered module layout above reflects the current migration scaffold; repository adapters, Members and private file modules will be added only after the schema and contracts are implemented. The current Admin password helper is legacy SHA-256-only and must not be treated as production authentication.
