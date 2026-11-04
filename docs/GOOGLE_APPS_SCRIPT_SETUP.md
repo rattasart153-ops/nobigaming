@@ -10,17 +10,19 @@ This is the first backend foundation for the agreed zero-budget direction: Googl
 - Google Sheets is not SQL and offers no relational transactions. Locks help serialize critical writes but cannot make a multi-step Drive + Sheets operation fully transactional.
 - The current login password hash is SHA-256 with a per-user salt. Before production, replace it with a deliberately slow password KDF if a suitable implementation is available in Apps Script, or use Google identity/another established identity provider. Do not treat this scaffold as hardened production authentication.
 - GAS web apps have execution quotas and time limits. Measure actual call volume before relying on this for a live shop.
-- Existing HTML uses relative `fetch('/api/...')` calls and is not yet wired to `google.script.run`; frontend conversion and end-to-end testing remain outstanding.
+- The repository storefront and Admin now use the Express REST API. The signed GAS gateway exists as a separate server-to-server entry point, but the Express repository adapter is not yet wired and no Apps Script deployment has been tested.
 
 ## Create the Google backend
 
 1. Open Google Apps Script while signed in to the Google account you already use: https://script.google.com/
 2. Create a new project named **Nobi Topup Backend**.
 3. Replace the starter `Code.gs` with the repository's `google-apps-script/Code.gs` contents.
-4. In Project Settings, enable showing the `appsscript.json` manifest; replace it with `google-apps-script/appsscript.json`.
-5. Save, select `setupNobiDatabase`, and click **Run**. Review and approve the Google permissions. This creates a spreadsheet and a Drive folder, and stores their IDs in Script Properties.
-6. In **Project Settings → Script Properties**, add `NOBI_ADMIN_USERNAME` and `NOBI_ADMIN_PASSWORD` (14+ characters), save, then run `initializeAdmin` once. The bootstrap password property is deleted after the admin is created. Never put the password in source code or chat.
-7. Do not deploy a public web app yet. First finish the frontend bridge, upload encoding, auth/session storage and end-to-end checks.
+4. Add a script file named `13_HttpGateway.gs` and copy the repository file with that name into it. Apps Script combines top-level functions across files; keep function names unique.
+5. In Project Settings, enable showing the `appsscript.json` manifest; replace it with `google-apps-script/appsscript.json`.
+6. Save, select `setupNobiDatabase`, and click **Run**. Review and approve the Google permissions. This creates a spreadsheet and a Drive folder, and stores their IDs in Script Properties.
+7. In **Project Settings → Script Properties**, add `NOBI_ADMIN_USERNAME` and `NOBI_ADMIN_PASSWORD` (14+ characters), save, then run `initializeAdmin` once. The bootstrap password property is deleted after the admin is created. Never put the password in source code or chat.
+8. Add `NOBI_GATEWAY_SECRET` as a random secret of at least 32 characters. Configure the exact same value as Vercel's `APPS_SCRIPT_SHARED_SECRET`; never put it in Git or chat.
+9. Do not deploy a public web app yet. First finish the frontend bridge, upload encoding, auth/session storage and end-to-end checks.
 8. After those checks pass, deploy as a Web App using the narrowest viable execution/access settings. Recheck that the slip folder and spreadsheet remain private. Do not share either with “Anyone”.
 
 
@@ -36,6 +38,18 @@ After copying `Code.gs` and the manifest into the Apps Script project:
 6. Deploy a **test deployment** first. Check that the web app runs as the shop's Google account, that the spreadsheet and slip folder remain private, and that unauthenticated users cannot call any admin RPC successfully.
 
 **Important deployment caveat:** the storefront is intended to be public, so a Web App deployment may need “Anyone” access while executing as the owner. That makes every public RPC callable by the internet. The allowlist intentionally exposes only catalog, promotions, coupon validation/suggestions, payment-info status, and order creation without admin credentials. Do not add unrestricted Drive/Sheets methods to this allowlist. Admin authentication is a custom token layer and is not equivalent to Google-managed identity or an HttpOnly cookie.
+
+## Signed HTTP gateway foundation (not yet deployed)
+
+- `doPost(e)` accepts only a signed version-1 JSON envelope.
+- HMAC-SHA256 signature verification uses `NOBI_GATEWAY_SECRET` from Script Properties.
+- Timestamp freshness is limited to five minutes in either direction.
+- Nonce replay is checked and recorded under ScriptLock in the `gateway_nonces` sheet.
+- Actions are restricted to the explicit allowlist in `13_HttpGateway.gs`, then dispatched through the existing `rpc()` allowlist.
+- `src/clients/apps-script.client.js` creates the matching signed envelope from Vercel. It does not retry mutations implicitly.
+- Apps Script ContentService returns JSON with an application-level `ok` field; HTTP 200 alone must never be treated as success.
+
+This gateway foundation is not a completed persistence adapter. Existing RPC handlers still have legacy data shapes and business rules. Do not publish the Web App until the action mapping, schemas, auth model, and private media flows are migrated and tested.
 
 ## Implemented scaffold functions
 
