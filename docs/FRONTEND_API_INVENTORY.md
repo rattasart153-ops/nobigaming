@@ -59,7 +59,7 @@ The Admin UI's visible fields currently include games, packages, coupons (includ
 | Admin order list | `slip_file_id` | `has_slip`; filesystem path is intentionally omitted | Update render condition to `has_slip`; never return a Drive ID or local path to the browser. |
 | Slip retrieval | Base64 JSON via authorized GAS RPC | Binary response via Admin-only `GET /api/admin/orders/:id/slip` | Change view handler to fetch binary with cookie credentials and render an object URL; revoke it when no longer needed. |
 | CRUD upsert | `{ok,id}` | Created/updated record | UI currently refreshes after save; verify status/error handling and use returned record only if needed. |
-| Admin status transition | GAS prevents changing a reviewed order to another status | Express currently accepts any of Pending/Completed/Rejected for any existing order | Align Express transition rules with GAS and test Pending→Completed/Rejected plus forbidden reversals before integration. |
+| Admin status transition | GAS prevents changing a reviewed order to another status | Express now allows Pending→Completed/Rejected, permits a no-op same status, and rejects reversals with HTTP 409 | Behavior aligned and covered by API tests; preserve this rule in the Sheets repository implementation. |
 | Payment info | GAS currently returns configured=false (QR not implemented) | Express generates QR when `PROMPTPAY_ID` is configured | Decide which runtime owns PromptPay generation; do not expose real payment info during testing. |
 
 ## 4. Security and runtime notes
@@ -69,7 +69,7 @@ The Admin UI's visible fields currently include games, packages, coupons (includ
 - The Express Admin API now requires a same-origin `Origin` header for unsafe methods and rejects `Sec-Fetch-Site: cross-site`.
 - Express public images are served from a dedicated public upload subdirectory. Checkout slips are not mounted at `/uploads` and are available only through the authenticated Admin slip route.
 - Apps Script `paymentInfo` is a stub; Express QR generation must not be assumed to exist in the current GAS-hosted UI.
-- The Express backend still uses SQLite and local session storage. Vercel persistence is not production-ready.
+- The Express backend still uses SQLite and local session storage. Vercel persistence is not production-ready. Express PromptPay generation is now isolated in `src/services/payment-info.service.js`; GAS `paymentInfo` remains a stub until its runtime is selected.
 
 ## 5. Migration acceptance checklist
 
