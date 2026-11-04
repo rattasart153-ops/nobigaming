@@ -17,11 +17,15 @@ const NOBI = {
   MAX_SLIP_BYTES: 5 * 1024 * 1024
 };
 
-function doGet(e) {
-  const page = e && e.parameter && e.parameter.page === 'admin' ? 'Admin' : 'Storefront';
-  return HtmlService.createTemplateFromFile(page).evaluate()
-    .setTitle(page === 'Admin' ? 'Nobi Topup · Admin' : 'Nobi Topup')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+function doGet() {
+  // The browser frontend is hosted by Vercel. This public GET endpoint reveals
+  // only a minimal liveness response; all application calls use signed POST.
+  return ContentService.createTextOutput(JSON.stringify({
+    ok:true,
+    service:'Nobi Topup Apps Script Gateway',
+    version:1,
+    transport:'signed-post'
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 /** Server-side RPC allowlist. Never expose Drive or Sheets IDs to the browser. */
