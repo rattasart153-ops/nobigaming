@@ -10,7 +10,7 @@ const NOBI_REPOSITORY_UNIQUE_FIELDS = {
   coupons: ['code_normalized'],
   coupon_redemptions: ['order_id'],
   orders: ['request_key'],
-  idempotency_records: ['scope', 'request_key'],
+  idempotency_records: [['scope', 'request_key']],
   system_metadata: ['key'],
   gateway_nonces: ['nonce_hash']
 };
@@ -65,19 +65,27 @@ function repositoryFindByField_(tableName, field, value) {
 }
 
 function repositoryAssertUniqueLocked_(tableName, record, exceptId) {
-  const uniqueFields = NOBI_REPOSITORY_UNIQUE_FIELDS[tableName] || [];
-  if (!uniqueFields.length) return;
+  const uniqueConstraints = NOBI_REPOSITORY_UNIQUE_FIELDS[tableName] || [];
+  if (!uniqueConstraints.length) return;
   const headers = NOBI.SHEETS[tableName];
   const primaryKey = headers[0];
   const existing = repositoryRows_(tableName);
-  uniqueFields.forEach(function(field) {
-    const value = String(record[field] == null ? '' : record[field]).trim();
-    if (!value) return;
+  uniqueConstraints.forEach(function(constraint) {
+    const fields = Array.isArray(constraint) ? constraint : [constraint];
+    const values = fields.map(function(field) {
+      return String(record[field] == null ? '' : record[field]).trim();
+    });
+    if (values.every(function(value) { return !value; })) return;
+    if (values.some(function(value) { return !value; })) {
+      throw new Error('REPOSITORY_UNIQUE_KEY_INCOMPLETE: ' + tableName + '.' + fields.join('+'));
+    }
     const duplicate = existing.some(function(candidate) {
       if (exceptId && String(candidate[primaryKey]) === String(exceptId)) return false;
-      return String(candidate[field] == null ? '' : candidate[field]).trim() === value;
+      return fields.every(function(field, index) {
+        return String(candidate[field] == null ? '' : candidate[field]).trim() === values[index];
+      });
     });
-    if (duplicate) throw new Error('REPOSITORY_DUPLICATE: ' + tableName + '.' + field);
+    if (duplicate) throw new Error('REPOSITORY_DUPLICATE: ' + tableName + '.' + fields.join('+'));
   });
 }
 
