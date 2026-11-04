@@ -10,7 +10,7 @@ function createCouponService(db) {
     if (subtotal < c.min_spend) return { ok: false, message: `ยอดซื้อขั้นต่ำของโค้ดนี้คือ ฿${Number(c.min_spend).toLocaleString('th-TH')}`, coupon: c };
     if (c.game_id && Number(c.game_id) !== Number(gameId)) return { ok: false, message: `โค้ดนี้ใช้ได้เฉพาะเกม ${c.game_name}`, coupon: c };
     const uid = String(playerId || '').trim();
-    const allowedIds = String(c.allowed_player_ids || '').split(/[\\n,;]+/).map(v => v.trim()).filter(Boolean);
+    const allowedIds = String(c.allowed_player_ids || '').split(/[\n,;]+/).map(v => v.trim()).filter(Boolean);
     if (allowedIds.length && !allowedIds.includes(uid)) return { ok:false, message:'คูปองนี้จำกัดเฉพาะ UID ที่แอดมินกำหนด', coupon:c };
     const minPlayerSpend = Number(c.min_player_spend || 0);
     if (minPlayerSpend > 0) {
