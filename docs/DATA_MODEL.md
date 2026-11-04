@@ -72,6 +72,11 @@ key, value, updated_at
 
 Stores schema version and non-secret setup metadata. Secrets belong in Apps Script Script Properties.
 
+### gateway_nonces
+nonce_hash, created_at
+
+Stores SHA-256 hashes of recently accepted server-to-server request nonces. The gateway checks and appends under ScriptLock to reject replayed signed requests. Retain only a bounded recent window; this is transport replay protection and does not replace business idempotency records.
+
 ## Private Drive layout
 One private root folder referenced only through Script Properties:
 - Nobi Topup Private
