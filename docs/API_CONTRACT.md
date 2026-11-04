@@ -46,7 +46,7 @@ Member identity is derived from the verified session, never from a browser-suppl
 - Admin and Member cookies are separate.
 - Order creation carries an idempotency key generated once per checkout attempt and reused only for retries of the same payload.
 - Server derives identity, price, discount, totals and coupon eligibility.
-- Orders without a coupon, and orders using a coupon without an expiry date, have a 15-minute payment deadline. An order using a coupon with an expiry date may be paid and have its slip submitted until the exclusive cutoff at 00:00 Asia/Bangkok on the day after the coupon expiry date; do not impose an additional 15-minute cap. The coupon expiry date is inclusive. The server stores this immutable deadline as `payment_expires_at`. Order creation returns a one-time checkout token; store only its SHA-256 hash and require the raw token as a Bearer token when submitting the slip.
+- Orders without a coupon, and orders using a coupon without an expiry date, have a 15-minute payment deadline. An order using a coupon with an expiry date may be paid and have its slip submitted until the exclusive cutoff at 00:00 Asia/Bangkok on the day after the coupon expiry date; do not impose an additional 15-minute cap. The coupon expiry date is inclusive. The server stores this immutable deadline as `payment_expires_at`. Order creation generates a one-time checkout token; store only its SHA-256 hash. Return the raw token only in an HttpOnly, SameSite=Strict cookie scoped to that order's slip-upload path, expiring at payment_expires_at. Never return the token in JSON or store it in browser storage. Slip submission uses the scoped cookie; clear it after successful submission.
 
 ## Vercel-to-Apps-Script request envelope
 Proposed JSON body fields:
