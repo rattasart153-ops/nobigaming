@@ -2,9 +2,12 @@
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const fs = require('node:fs');
+const path = require('node:path');
+const validateImageFile = require('../middleware/validate-image-file');
 const requireSameOrigin = require('../middleware/require-same-origin');
 
-function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, validDate }) {
+function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, validDate, privateSlipsDir, legacyUploadsDir }) {
   const router = express.Router();
   router.use(requireSameOrigin);
 
@@ -84,12 +87,45 @@ function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, valid
     const r=db.prepare('UPDATE promotions SET title=?,subtitle=?,image_url=?,link_url=?,active=?,sort_order=?,starts_at=?,ends_at=? WHERE id=?').run(String(title).trim(),String(subtitle),String(image_url),String(link_url),bool(active),Number(sort_order)||0,starts_at||null,ends_at||null,Number(req.params.id)); if(!r.changes)return res.status(404).json({error:'ไม่พบโปรโมชั่น'}); res.json(db.prepare('SELECT * FROM promotions WHERE id=?').get(Number(req.params.id)));
   });
   router.delete('/api/admin/promotions/:id', requireAdmin, (req,res) => { const r=db.prepare('DELETE FROM promotions WHERE id=?').run(Number(req.params.id)); if(!r.changes)return res.status(404).json({error:'ไม่พบโปรโมชั่น'}); res.json({ok:true}); });
-  router.get('/api/admin/orders', requireAdmin, (req,res) => res.json(db.prepare(`SELECT o.*,g.name game_name,p.name package_name,c.code coupon_code FROM orders o JOIN games g ON g.id=o.game_id JOIN packages p ON p.id=o.package_id LEFT JOIN coupons c ON c.id=o.coupon_id ORDER BY o.created_at DESC`).all()));
+  router.get('/api/admin/orders', requireAdmin, (req,res) => {
+    const orders = db.prepare(`SELECT o.*,g.name game_name,p.name package_name,c.code coupon_code FROM orders o JOIN games g ON g.id=o.game_id JOIN packages p ON p.id=o.package_id LEFT JOIN coupons c ON c.id=o.coupon_id ORDER BY o.created_at DESC`).all();
+    res.json(orders.map(({ slip_path, ...order }) => ({ ...order, has_slip: Boolean(slip_path) })));
+  });
+  router.get('/api/admin/orders/:id/slip', requireAdmin, (req,res,next) => {
+    const order = db.prepare('SELECT slip_path FROM orders WHERE id=?').get(String(req.params.id));
+    if (!order || !order.slip_path) return res.status(404).json({ error: 'ไม่พบสลิป' });
+
+    const storedPath = String(order.slip_path);
+    let filePath = null;
+    if (/^[A-Za-z0-9._-]+$/.test(storedPath) && path.basename(storedPath) === storedPath) {
+      filePath = path.join(privateSlipsDir, storedPath);
+    } else {
+      const legacy = storedPath.match(/^\\/uploads\\/([A-Za-z0-9._-]+)$/);
+      if (legacy) filePath = path.join(legacyUploadsDir, legacy[1]);
+    }
+
+    if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+      return res.status(404).json({ error: 'ไม่พบไฟล์สลิป' });
+    }
+    const extension = path.extname(filePath).toLowerCase();
+    const mimeType = ({ '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp' })[extension];
+    if (!mimeType) return res.status(415).json({ error: 'ชนิดไฟล์สลิปไม่รองรับ' });
+
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Disposition': `inline; filename="slip-${String(req.params.id).replace(/[^A-Za-z0-9_-]/g, '')}${extension}"`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', error => res.headersSent ? res.destroy(error) : next(error));
+    stream.pipe(res);
+  });
   router.patch('/api/admin/orders/:id/status', requireAdmin, (req,res) => {
     const status=String((req.body||{}).status||''); if(!['Pending','Completed','Rejected'].includes(status))return res.status(400).json({error:'สถานะไม่ถูกต้อง'});
     const r=db.prepare('UPDATE orders SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(status,String(req.params.id)); if(!r.changes)return res.status(404).json({error:'ไม่พบออเดอร์'}); res.json({ok:true,status});
   });
-  router.post('/api/admin/upload', requireAdmin, upload.single('image'), (req,res) => { if(!req.file)return res.status(400).json({error:'กรุณาเลือกไฟล์ภาพ PNG/JPG/WebP ขนาดไม่เกิน 5 MB'}); res.status(201).json({url:`/uploads/${req.file.filename}`}); });
+  router.post('/api/admin/upload', requireAdmin, upload.single('image'), validateImageFile, (req,res) => { if(!req.file)return res.status(400).json({error:'กรุณาเลือกไฟล์ภาพ PNG/JPG/WebP ขนาดไม่เกิน 5 MB'}); res.status(201).json({url:`/uploads/${req.file.filename}`}); });
 
   return router;
 }
