@@ -22,20 +22,26 @@ Completed:
 - [x] Add GitHub Actions test workflow scoped to `vercel-drive-setup`.
 - [x] Centralize runtime paths in `src/config/paths.js`.
 - [x] Move SQLite initialization, schema, migrations, seed data and Admin bootstrap to `src/db/sqlite.js`.
-- [x] Extract session, upload and error-handler middleware under `src/middleware/`.
+- [x] Extract session, upload, error-handler and security middleware under `src/middleware/`.
+- [x] Centralize environment loading and runtime variables in `src/config/env.js` without changing existing defaults.
 - [x] Keep existing route declarations and `server.js` as the current app composition/entry point.
 - [x] Replace the literal example Admin password in `.env.example` with a placeholder.
 - [x] Verify API characterization tests after extraction.
 
 Remaining:
-- [ ] Extract security setup and environment configuration without changing behavior.
-- [ ] Expand characterization coverage for CRUD, order status and upload validation.
+- [x] Extract security setup and environment configuration without changing existing runtime behavior.
+- [x] Expand characterization coverage for game/package/coupon/promotion CRUD, coupon validation, order creation/status, and unsupported upload MIME rejection.
 - [ ] Move service and route handlers in small groups while preserving exact contracts.
 - [ ] Keep SQLite until the replacement repository adapter passes tests.
 
-Latest verified CI run: `41789068727` — success.
+Latest verified CI runs: `41789499875` (security middleware extraction) and `41789588992` (expanded API characterization suite) — success. Environment centralization run `41789682979` is being verified separately.
 
 Exit: local behavior remains equivalent; syntax and route smoke tests pass.
+
+## Phase 1 security findings
+- See [PHASE1_SECURITY_FINDINGS.md](./PHASE1_SECURITY_FINDINGS.md) for the evidence, impact, and remediation gates.
+- Publicly served upload paths, spoofable MIME validation, process-local rate limiting, local SQLite persistence, missing explicit CSRF controls, development Admin credential fallback, and disabled CSP remain documented risks.
+- Do not enable production orders until the critical/high findings are resolved and retested.
 
 ## Phase 2 — Apps Script gateway and storage
 - Split GAS code into focused files.
