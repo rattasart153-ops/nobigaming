@@ -100,7 +100,7 @@ function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, valid
     if (/^[A-Za-z0-9._-]+$/.test(storedPath) && path.basename(storedPath) === storedPath) {
       filePath = path.join(privateSlipsDir, storedPath);
     } else {
-      const legacy = storedPath.match(/^\\/uploads\\/([A-Za-z0-9._-]+)$/);
+      const legacy = storedPath.match(/^\/uploads\/([A-Za-z0-9._-]+)$/);
       if (legacy) filePath = path.join(legacyUploadsDir, legacy[1]);
     }
 
