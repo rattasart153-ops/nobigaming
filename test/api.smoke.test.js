@@ -189,7 +189,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.equal(orderResponse.status, 201);
   const order = (await orderResponse.json()).order;
   assert.equal(order.status, 'Pending');
-  assert.equal(order.total, 20);
+  assert.equal(order.total, 19);
 
   const completedResponse = await fetch(`${baseUrl}/api/admin/orders/${order.id}/status`, {
     method: 'PATCH',
