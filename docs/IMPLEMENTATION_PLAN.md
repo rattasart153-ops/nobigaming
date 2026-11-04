@@ -78,6 +78,7 @@ Exit: existing API contracts are characterized, security changes are intentional
 - Coupon suggestions and validation.
 - Guest and Member checkout.
 - Server-side pricing and eligibility.
+- Enforce a 15-minute payment deadline on every order; coupon orders use the earlier coupon expiry-day cutoff in Asia/Bangkok. Add idempotent expiry processing and synchronous deadline checks.
 - Idempotent order creation and private slip upload.
 - Reserve coupon capacity when a Pending order is created; consume on timely Completed; release on Rejected or payment expiry. Payment deadline is the earlier of 15 minutes after order creation or the coupon's expiry-day cutoff.
 
