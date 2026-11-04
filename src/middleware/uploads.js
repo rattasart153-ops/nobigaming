@@ -10,7 +10,7 @@ module.exports = multer({
     destination: UPLOADS,
     filename: (req, file, cb) => cb(
       null,
-      `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${path.extname(file.originalname).toLowerCase()}`
+      Date.now() + '-' + crypto.randomBytes(6).toString('hex') + path.extname(file.originalname).toLowerCase()
     )
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
