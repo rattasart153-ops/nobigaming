@@ -15,11 +15,25 @@ Status: ordered plan; no deployment authorization.
 Exit: architecture and compatibility map reviewed; no unresolved decision that could cause data loss or security regression.
 
 ## Phase 1 — Modularize without behavior changes
-- Create Vercel modules and keep server.js as a thin entry point.
-- Move existing routes in small groups, preserving endpoint names and response contracts.
-- Add centralized environment validation, request IDs, error handling and safe logging.
-- Add tests after each move.
-- Do not remove SQLite until the replacement repository adapter passes tests.
+Progress: in progress. The first extraction group is complete and its API smoke suite passes in GitHub Actions.
+
+Completed:
+- [x] Add Node.js API characterization smoke tests and `npm test`.
+- [x] Add GitHub Actions test workflow scoped to `vercel-drive-setup`.
+- [x] Centralize runtime paths in `src/config/paths.js`.
+- [x] Move SQLite initialization, schema, migrations, seed data and Admin bootstrap to `src/db/sqlite.js`.
+- [x] Extract session, upload and error-handler middleware under `src/middleware/`.
+- [x] Keep existing route declarations and `server.js` as the current app composition/entry point.
+- [x] Replace the literal example Admin password in `.env.example` with a placeholder.
+- [x] Verify API characterization tests after extraction.
+
+Remaining:
+- [ ] Extract security setup and environment configuration without changing behavior.
+- [ ] Expand characterization coverage for CRUD, order status and upload validation.
+- [ ] Move service and route handlers in small groups while preserving exact contracts.
+- [ ] Keep SQLite until the replacement repository adapter passes tests.
+
+Latest verified CI run: `41789068727` — success.
 
 Exit: local behavior remains equivalent; syntax and route smoke tests pass.
 
