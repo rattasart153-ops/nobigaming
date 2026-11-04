@@ -5,13 +5,9 @@ const SQLiteStore = require('connect-sqlite3')(session);
 const { DATA_DIR } = require('../config/paths');
 const ENV = require('../config/env');
 
-const sessionSecret = ENV.SESSION_SECRET || (
-  ENV.NODE_ENV === 'production'
-    ? ''
-    : 'dev-only-change-this-session-secret-before-deploying'
-);
+const sessionSecret = ENV.SESSION_SECRET;
 if (!sessionSecret) {
-  throw new Error('SESSION_SECRET must be configured in production.');
+  throw new Error('SESSION_SECRET must be configured before startup in every environment.');
 }
 
 module.exports = session({
