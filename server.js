@@ -39,7 +39,7 @@ const createPublicRouter = require('./src/routes/public.routes');
 app.use(createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCatalog, createPendingOrder }));
 
 const createAdminRouter = require('./src/routes/admin.routes');
-app.use(createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, validDate, privateSlipsDir: PRIVATE_SLIPS, legacyUploadsDir: UPLOADS }));
+app.use(createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, validDate, privateSlipsDir: PRIVATE_SLIPS, legacyUploadsDir: UPLOADS, setOrderStatus }));
 
 app.get('/admin', (req,res) => res.sendFile(path.join(PUBLIC,'admin.html')));
 app.get('/', (req,res) => res.sendFile(path.join(PUBLIC,'nobitopup.html')));
