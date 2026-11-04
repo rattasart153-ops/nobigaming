@@ -3,7 +3,7 @@
 Status: approved target schema baseline; version 1 headers are implemented in `google-apps-script/00_Config.gs` and initialized by `02_Database.gs`. Business repositories are still pending.
 
 ## Conventions
-- Row 1 contains exact headers; first column is a stable UUID string.
+- Row 1 contains exact headers; the first column is the stable string key (UUID for entity records, natural key for metadata and nonce-ledger rows).
 - Timestamps are ISO-8601 UTC.
 - Money uses integer satang.
 - Use explicit status enums; do not delete historical rows for ordinary CRUD.
