@@ -2081,7 +2081,15 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
         form.append('gameId',String(currentGameId));form.append('packageId',String(selectedPackageId));
         form.append('playerId',uid);form.append('serverId',$("#serverId").value.trim());
         form.append('couponCode',$("#couponCode").value.trim());
-        const created=await apiRequest('/api/public/orders',{method:'POST',body:form});
+        const attemptFingerprint=JSON.stringify([currentGameId,selectedPackageId,uid,$("#serverId").value.trim(),$("#couponCode").value.trim()]);
+        let idempotencyKey;
+        try {
+          const savedAttempt=JSON.parse(sessionStorage.getItem('nobi_order_attempt')||'null');
+          idempotencyKey=savedAttempt&&savedAttempt.fingerprint===attemptFingerprint?savedAttempt.key:null;
+          if(!idempotencyKey){idempotencyKey=crypto.randomUUID();sessionStorage.setItem('nobi_order_attempt',JSON.stringify({fingerprint:attemptFingerprint,key:idempotencyKey}));}
+        } catch (_) { idempotencyKey=crypto.randomUUID(); }
+        const created=await apiRequest('/api/public/orders',{method:'POST',headers:{'Idempotency-Key':idempotencyKey},body:form});
+        try { sessionStorage.removeItem('nobi_order_attempt'); } catch (_) {}
         activeCheckout={id:created.order.id,gameId:currentGameId,expiresAt:created.order.payment_expires_at};
         try { sessionStorage.setItem('nobi_active_checkout',JSON.stringify(activeCheckout)); } catch (_) {}
         checkoutNotice.textContent='สร้างออเดอร์ '+activeCheckout.id+' แล้ว กรุณาชำระเงินและส่งสลิปภายใน '+new Date(activeCheckout.expiresAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' (เวลาไทย)';
