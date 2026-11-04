@@ -24,7 +24,7 @@ Completed:
 - [x] Move SQLite initialization, schema, migrations, seed data and Admin bootstrap to `src/db/sqlite.js`.
 - [x] Extract session, upload, error-handler and security middleware under `src/middleware/`.
 - [x] Extract public and Admin API route handlers into `src/routes/public.routes.js` and `src/routes/admin.routes.js`; keep `server.js` as composition/entry point.
-- [x] Extract catalog and coupon eligibility logic into `src/services/`.
+- [x] Extract catalog, coupon eligibility, and pending order creation logic into `src/services/`.
 - [x] Extract Admin authorization, async route handling, and shared validators into focused middleware/utility modules.
 - [x] Centralize environment loading and runtime variables in `src/config/env.js` without changing existing defaults.
 - [x] Keep existing route declarations and `server.js` as the current app composition/entry point.
@@ -35,10 +35,10 @@ Remaining:
 - [x] Extract security setup and environment configuration without changing existing runtime behavior.
 - [x] Expand characterization coverage for game/package/coupon/promotion CRUD and lists, coupon suggestions/validation, order creation/status, payment configuration, and unsupported upload MIME rejection.
 - [x] Extract public and Admin route handlers in separate modules while preserving route paths and response bodies.
-- [ ] Extract remaining order/payment business logic into focused services and add unit-level coverage.
+- [ ] Extract remaining payment-info and order-status business logic into focused services and add unit-level coverage.
 - [ ] Keep SQLite until the replacement repository adapter passes tests.
 
-Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
+Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring), `41790464278` (pending order service wiring), and `41790497080` (invalid checkout upload cleanup) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
 
 Exit: local behavior remains equivalent; syntax and route smoke tests pass.
 
