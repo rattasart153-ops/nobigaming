@@ -4,6 +4,19 @@ const express = require('express');
 const fs = require('node:fs');
 const validateImageFile = require('../middleware/validate-image-file');
 
+function readCookie(req, name) {
+  const header = String(req.headers.cookie || '');
+  for (const part of header.split(';')) {
+    const index = part.indexOf('=');
+    if (index < 0) continue;
+    if (part.slice(0, index).trim() === name) return decodeURIComponent(part.slice(index + 1).trim());
+  }
+  return '';
+}
+function checkoutCookieName(orderId) {
+  return 'nobi_checkout_' + String(orderId).replace(/[^A-Za-z0-9_-]/g, '');
+}
+
 function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCatalog, getPaymentInfo, createPendingOrder, submitSlip }) {
   const router = express.Router();
 
@@ -50,19 +63,34 @@ function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCat
     });
     if (!result.ok) return res.status(422).json({ error: result.message });
     res.set('Cache-Control', 'no-store');
-    res.status(201).json({ message: result.order.slip_submitted_at ? 'รับออเดอร์และสลิปแล้ว' : 'สร้างออเดอร์แล้ว กรุณาชำระเงินและอัปโหลดสลิปก่อนหมดเวลา', order: result.order, checkout_token: result.checkoutToken });
+    if (!result.order.slip_submitted_at && result.checkoutToken) {
+      res.cookie(checkoutCookieName(result.order.id), result.checkoutToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production' || req.secure,
+        sameSite: 'strict',
+        path: '/api/public/orders/' + encodeURIComponent(result.order.id) + '/slip',
+        expires: new Date(result.order.payment_expires_at)
+      });
+    }
+    res.status(201).json({ message: result.order.slip_submitted_at ? 'รับออเดอร์และสลิปแล้ว' : 'สร้างออเดอร์แล้ว กรุณาชำระเงินและอัปโหลดสลิปก่อนหมดเวลา', order: result.order });
   });
 
   router.post('/api/public/orders/:id/slip', slipUpload.single('slip'), validateImageFile, (req,res) => {
     if (!req.file) return res.status(400).json({ error: 'กรุณาแนบสลิป PNG/JPG/WebP ไม่เกิน 5 MB' });
-    const authorization = String(req.get('authorization') || '');
-    const checkoutToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+    const cookieName = checkoutCookieName(req.params.id);
+    const checkoutToken = readCookie(req, cookieName);
     const result = submitSlip({ orderId: req.params.id, checkoutToken, file: req.file });
     if (!result.ok) {
       const status = result.reason === 'not_found' ? 404 : result.reason === 'expired' ? 410 : 409;
       const message = result.reason === 'expired' ? 'หมดเวลาชำระเงินและอัปโหลดสลิปแล้ว' : result.reason === 'already_submitted' ? 'ออเดอร์นี้มีการส่งสลิปแล้วหรือไม่สามารถแก้ไขได้' : 'ไม่พบออเดอร์หรือสิทธิ์อัปโหลดไม่ถูกต้อง';
       return res.status(status).json({ error: message, reason: result.reason });
     }
+    res.clearCookie(cookieName, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production' || req.secure,
+      sameSite: 'strict',
+      path: '/api/public/orders/' + encodeURIComponent(req.params.id) + '/slip'
+    });
     return res.status(201).json({ ok: true, slip_submitted_at: result.slipSubmittedAt });
   });
 
