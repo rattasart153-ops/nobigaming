@@ -10,7 +10,8 @@
 1. แตกไฟล์ ZIP แล้วเข้าโฟลเดอร์ `nobitopup-project`
 2. คัดลอก `.env.example` เป็น `.env`
 3. ตั้งค่า `SESSION_SECRET` ให้เป็นค่าสุ่มยาว และใส่ `PROMPTPAY_ID` ของร้านเพื่อเปิด QR PromptPay
-4. ติดตั้งแพ็กเกจและเริ่มเซิร์ฟเวอร์:
+4. กำหนด `ADMIN_USERNAME`, `ADMIN_PASSWORD` และ `SESSION_SECRET` ใน `.env` ให้ครบก่อน
+5. ติดตั้งแพ็กเกจและเริ่มเซิร์ฟเวอร์:
    ```bash
    npm install
    npm start
@@ -23,11 +24,11 @@ The zero-budget migration foundation is in `google-apps-script/`. Setup notes: [
 
 **Important:** the repository storefront/admin JavaScript has been connected to an Apps Script RPC bridge, but the two HTML files must still be copied manually into Apps Script as `Storefront` and `Admin` HtmlService files. PromptPay QR generation is not implemented in GAS, and no live deployment or end-to-end security test has been performed. Do not use this for real customer payments until the remaining checks in the setup guide pass.
 
-## บัญชีแอดมินเริ่มต้น
-- Username: `NobiGaming`
-- Password: `Nobi1534897`
-
-ค่าตั้งต้นจะใช้เฉพาะตอนสร้างฐานข้อมูลครั้งแรก สามารถกำหนด `ADMIN_USERNAME` และ `ADMIN_PASSWORD` ใน `.env` ก่อนเริ่มใช้งานได้ หากสร้างฐานข้อมูลแล้ว การเปลี่ยนค่าใน `.env` ไม่ได้เปลี่ยนรหัสของบัญชีที่มีอยู่โดยอัตโนมัติ
+## การตั้งค่าบัญชีแอดมินและ Session
+- ต้องกำหนด `ADMIN_USERNAME`, `ADMIN_PASSWORD` และ `SESSION_SECRET` ในไฟล์ `.env` ก่อนเริ่มระบบทุกสภาพแวดล้อม
+- ใช้รหัสผ่านที่ไม่ซ้ำกับบริการอื่น และสร้าง `SESSION_SECRET` แบบสุ่มยาวอย่างน้อย 32 bytes
+- ระบบจะไม่สร้างบัญชีด้วยรหัสผ่านเริ่มต้นที่ฝังใน Source Code อีกต่อไป
+- การเปลี่ยนค่า Admin ใน `.env` หลังสร้างฐานข้อมูลแล้วจะไม่เปลี่ยนรหัสผ่านของบัญชีเดิมโดยอัตโนมัติ
 
 ## ฟีเจอร์
 - หน้าแรกธีม Slate / Neon Cyan / Purple accent และรองรับมือถือ
