@@ -2,12 +2,9 @@
 
 const express = require('express');
 const fs = require('node:fs');
-const generatePayload = require('promptpay-qr');
-const QRCode = require('qrcode');
-const ENV = require('../config/env');
 const validateImageFile = require('../middleware/validate-image-file');
 
-function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCatalog, createPendingOrder }) {
+function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCatalog, getPaymentInfo, createPendingOrder }) {
   const router = express.Router();
 
   router.get('/api/health', (req,res) => res.json({ ok: true, service: 'Nobi Topup API' }));
@@ -26,11 +23,7 @@ function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCat
     res.status(result.ok ? 200 : 422).json({ ok: result.ok, message: result.message, discount: result.discount || 0, code: result.coupon && result.coupon.code });
   });
   router.get('/api/public/payment-info', asyncRoute(async (req,res) => {
-    const amount = Math.max(0, Number(req.query.amount || 0));
-    const promptpayId = ENV.PROMPTPAY_ID;
-    if (!promptpayId) return res.json({ configured: false, message: 'ผู้ดูแลระบบยังไม่ได้ตั้งค่า PromptPay ID' });
-    const payload = generatePayload(promptpayId, { amount: amount || undefined });
-    res.json({ configured: true, promptpayId, amount, qrDataUrl: await QRCode.toDataURL(payload, { margin: 1, width: 260 }) });
+    res.json(await getPaymentInfo(req.query.amount));
   }));
   router.post('/api/public/orders', slipUpload.single('slip'), validateImageFile, (req,res) => {
     const { gameId, packageId, playerId, serverId = '', couponCode = '' } = req.body;
