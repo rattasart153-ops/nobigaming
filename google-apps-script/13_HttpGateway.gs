@@ -54,7 +54,7 @@ function doPost(e) {
       return gatewayJson_({ok:false, version:NOBI_GATEWAY.VERSION, error:verified.error});
     }
 
-    const result = rpc(envelope.action, envelope.args || {});
+    const result = dispatchGatewayAction_(envelope.action, envelope.args || {});
     return gatewayJson_({ok:true, version:NOBI_GATEWAY.VERSION, result:result});
   } catch (error) {
     // Do not return stack traces, properties, or internal identifiers.
