@@ -66,21 +66,20 @@ Keep server.js as the compatibility entry point and local launcher. Move impleme
 
 ## Apps Script source layout
 Use separate .gs files in one Apps Script project:
-- 00_Config.gs
-- 01_HttpEntry.gs
-- 02_Auth.gs
-- 03_Database.gs
-- 04_Repositories.gs
-- 05_Catalog.gs
-- 06_Coupons.gs
-- 07_Orders.gs
-- 08_Members.gs
-- 09_Admin.gs
-- 10_Files.gs
-- 11_Validation.gs
-- 12_Utilities.gs
+- 00_Config.gs — current scaffold configuration and legacy sheet header map
+- 01_HttpEntry.gs — explicit signed-HTTP action dispatcher; no browser RPC
+- 02_Database.gs — current legacy database setup and sheet helpers (to be replaced by versioned setup)
+- 03_Catalog.gs — catalog and promotion reads
+- 04_Coupons.gs — current legacy coupon validation/suggestions
+- 05_Payments.gs — payment configuration boundary
+- 06_Orders.gs — current legacy order and slip logic
+- 07_Auth.gs — current legacy Admin authentication/bootstrap
+- 08_Admin.gs — Admin dashboard, orders and CRUD
+- 09_Validation.gs — current legacy record validation
+- 10_Utilities.gs — shared hashing, money, row and serialization helpers
+- 13_HttpGateway.gs — signed POST verification, nonce replay protection and response envelope
 
-Numeric prefixes are for human reading order, not execution order. Apps Script files share a global namespace; avoid duplicate global names.
+Numeric prefixes are for human reading order, not execution order. Apps Script files share a global namespace; avoid duplicate global names. The numbered module layout above reflects the current migration scaffold; repository adapters, Members and private file modules will be added only after the schema and contracts are implemented. The current Admin password helper is legacy SHA-256-only and must not be treated as production authentication.
 
 ## Security and correctness rules
 - Admin and Member identities and sessions are separate.
