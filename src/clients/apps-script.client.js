@@ -57,7 +57,7 @@ function createAppsScriptClient({ url, secret, fetchImpl = globalThis.fetch, tim
     try {
       response = await fetchImpl(endpoint, {
         method: 'POST',
-        redirect: 'follow',
+        redirect: 'manual',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: JSON.stringify(envelope),
         signal: AbortSignal.timeout(timeoutMs)
@@ -71,11 +71,33 @@ function createAppsScriptClient({ url, secret, fetchImpl = globalThis.fetch, tim
       );
     }
 
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers && response.headers.get('location');
+      let redirectUrl;
+      try { redirectUrl = new URL(location, endpoint); } catch (_) {}
+      const host = redirectUrl && redirectUrl.hostname.toLowerCase();
+      const trusted = host === 'script.google.com' || (host && host.endsWith('.googleusercontent.com'));
+      // ContentService uses a 302/303 redirect to a one-time Google-hosted URL.
+      // Never forward the signed POST body to a redirect destination.
+      if (!trusted || ![302, 303].includes(response.status)) {
+        throw new AppsScriptGatewayError('Apps Script gateway returned an unsafe redirect', 'UNTRUSTED_GATEWAY_REDIRECT', 502);
+      }
+      try {
+        response = await fetchImpl(redirectUrl.toString(), {
+          method: 'GET',
+          redirect: 'error',
+          headers: { accept: 'application/json' },
+          signal: AbortSignal.timeout(timeoutMs)
+        });
+      } catch (_) {
+        throw new AppsScriptGatewayError('Apps Script ContentService response could not be retrieved', 'GATEWAY_REDIRECT_FAILED', 502);
+      }
+    }
     if (response.url) {
       let finalHost = '';
       try { finalHost = new URL(response.url).hostname.toLowerCase(); } catch (_) {}
       if (finalHost && finalHost !== 'script.google.com' && !finalHost.endsWith('.googleusercontent.com')) {
-        throw new AppsScriptGatewayError('Apps Script gateway redirected to an untrusted host', 'UNTRUSTED_GATEWAY_REDIRECT', 502);
+        throw new AppsScriptGatewayError('Apps Script gateway resolved to an untrusted host', 'UNTRUSTED_GATEWAY_REDIRECT', 502);
       }
     }
 
