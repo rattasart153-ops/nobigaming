@@ -14,5 +14,5 @@ module.exports = multer({
     )
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => cb(null, /^image\\/(png|jpeg|webp)$/.test(file.mimetype))
+  fileFilter: (req, file, cb) => cb(null, /^image\/(png|jpeg|webp)$/.test(file.mimetype))
 });
