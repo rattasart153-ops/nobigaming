@@ -11,7 +11,8 @@ Public:
 - GET /api/public/coupons/suggestions
 - POST /api/public/coupons/validate
 - GET /api/public/payment-info
-- POST /api/public/orders (multipart upload; idempotency key required)
+- POST /api/public/orders (creates Pending checkout; slip upload is optional at creation)
+- POST /api/public/orders/:orderId/slip (multipart upload; `Authorization: Bearer <checkout_token>` required)
 
 Authentication:
 - POST /api/admin/login
@@ -45,7 +46,7 @@ Member identity is derived from the verified session, never from a browser-suppl
 - Admin and Member cookies are separate.
 - Order creation carries an idempotency key generated once per checkout attempt and reused only for retries of the same payload.
 - Server derives identity, price, discount, totals and coupon eligibility.
-- Every newly created order has a 15-minute payment deadline. For coupon orders, the effective deadline is the earlier of `created_at + 15 minutes` and the exclusive coupon expiry-day cutoff in `Asia/Bangkok` (00:00 at the start of the day after the coupon expiry date). The server stores this immutable deadline as `payment_expires_at`.
+- Orders without a coupon, and orders using a coupon without an expiry date, have a 15-minute payment deadline. An order using a coupon with an expiry date may be paid and have its slip submitted until the exclusive cutoff at 00:00 Asia/Bangkok on the day after the coupon expiry date; do not impose an additional 15-minute cap. The coupon expiry date is inclusive. The server stores this immutable deadline as `payment_expires_at`. Order creation returns a one-time checkout token; store only its SHA-256 hash and require the raw token as a Bearer token when submitting the slip.
 
 ## Vercel-to-Apps-Script request envelope
 Proposed JSON body fields:
@@ -107,7 +108,7 @@ Enable only actions required by an actual route. Public actions cannot invoke Ad
 - Bound every Apps Script call timeout.
 - Retry only transient reads or mutations protected by a stable idempotency key.
 - Never retry order creation with a new key after an ambiguous timeout.
-- A Pending order may transition to Completed only if authoritative server time is strictly before `payment_expires_at`; otherwise set `status=Rejected` with `status_reason=PAYMENT_TIMEOUT` and release its coupon reservation exactly once. An idempotent expiry worker should process abandoned Pending orders, while every order/status endpoint enforces the deadline synchronously.
+- A Pending order with a slip submitted strictly before `payment_expires_at` may be marked Completed by Admin even after the payment deadline. If no slip was submitted before the deadline, set `status=Expired` with `status_reason=PAYMENT_TIMEOUT` and release its coupon reservation exactly once. Rejected orders also release Reserved coupon capacity. Consumed reservations remain counted. An idempotent expiry sweep processes abandoned Pending orders; order creation, slip submission and Admin status changes enforce the rules synchronously.
 - On ambiguous create-order result, query with the original key before allowing another checkout.
 - Preserve request_id across retry; generate a fresh nonce and signature timestamp for each transport attempt.
 - Redirects, HTML error pages and malformed JSON are not success.
