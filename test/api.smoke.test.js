@@ -174,6 +174,36 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
     assert.ok(Array.isArray(await listResponse.json()), `${endpoint} should return an array`);
   }
 
+  // Invalid checkout payloads must not leave orphaned uploaded files.
+  const uploadCount = () => fs.readdirSync(process.env.NOBI_UPLOAD_DIR).length;
+  const beforeInvalidGame = uploadCount();
+  const invalidGameForm = new FormData();
+  invalidGameForm.append('gameId', '999999');
+  invalidGameForm.append('packageId', String(pack.id));
+  invalidGameForm.append('playerId', 'CI-PLAYER-INVALID-GAME');
+  invalidGameForm.append('slip', new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' }), 'invalid-game.png');
+  const invalidGameOrder = await fetch(`${baseUrl}/api/public/orders`, {
+    method: 'POST',
+    headers: { cookie: cookie.split(';')[0] },
+    body: invalidGameForm
+  });
+  assert.equal(invalidGameOrder.status, 400);
+  assert.equal(uploadCount(), beforeInvalidGame);
+
+  const beforeInvalidPlayer = uploadCount();
+  const invalidPlayerForm = new FormData();
+  invalidPlayerForm.append('gameId', String(game.id));
+  invalidPlayerForm.append('packageId', String(pack.id));
+  invalidPlayerForm.append('playerId', '');
+  invalidPlayerForm.append('slip', new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' }), 'invalid-player.png');
+  const invalidPlayerOrder = await fetch(`${baseUrl}/api/public/orders`, {
+    method: 'POST',
+    headers: { cookie: cookie.split(';')[0] },
+    body: invalidPlayerForm
+  });
+  assert.equal(invalidPlayerOrder.status, 400);
+  assert.equal(uploadCount(), beforeInvalidPlayer);
+
   // Upload a synthetic PNG only; never use a real payment slip in CI.
   const form = new FormData();
   form.append('gameId', String(game.id));
