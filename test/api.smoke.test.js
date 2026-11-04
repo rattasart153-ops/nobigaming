@@ -138,6 +138,18 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.equal(couponValidation.status, 200);
   assert.equal((await couponValidation.json()).discount, 2);
 
+  const suggestions = await fetch(`${baseUrl}/api/public/coupons/suggestions?gameId=${game.id}&subtotal=22&playerId=CI-PLAYER-01`);
+  assert.equal(suggestions.status, 200);
+  assert.equal((await suggestions.json()).suggestion.code, 'CISYNTHETIC');
+
+  const updatedCouponResponse = await fetch(`${baseUrl}/api/admin/coupons/${coupon.id}`, {
+    method: 'PUT',
+    headers: adminHeaders,
+    body: JSON.stringify({ code: 'CISYNTHETIC', discount_type: 'fixed', discount_value: 3, game_id: game.id })
+  });
+  assert.equal(updatedCouponResponse.status, 200);
+  assert.equal((await updatedCouponResponse.json()).discount_value, 3);
+
   const createdPromotionResponse = await fetch(`${baseUrl}/api/admin/promotions`, {
     method: 'POST',
     headers: adminHeaders,
@@ -153,6 +165,14 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   });
   assert.equal(updatedPromotionResponse.status, 200);
   assert.equal((await updatedPromotionResponse.json()).title, 'CI Synthetic Promotion Updated');
+
+  for (const endpoint of ['/api/admin/games', '/api/admin/packages', '/api/admin/coupons', '/api/admin/promotions']) {
+    const listResponse = await fetch(`${baseUrl}${endpoint}`, {
+      headers: { cookie: cookie.split(';')[0] }
+    });
+    assert.equal(listResponse.status, 200, `${endpoint} should be available to Admin`);
+    assert.ok(Array.isArray(await listResponse.json()), `${endpoint} should return an array`);
+  }
 
   // Upload a synthetic PNG only; never use a real payment slip in CI.
   const form = new FormData();
