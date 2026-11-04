@@ -79,7 +79,7 @@ One private root folder referenced only through Script Properties:
   - catalog-images
   - promotion-images
 
-No file or folder is shared as Anyone. Store Drive file IDs only. Return file bytes only to an authorized Vercel request.
+No file or folder is shared as Anyone. Store Drive file IDs only. Slips and other uploaded images remain private in Drive. When an image is intended for storefront display, Vercel may proxy its bytes through an application route without changing the Drive file's sharing permissions; never return a public Drive URL.
 
 ## Setup behavior
 - setupNobiDatabase() creates missing sheets and exact headers.
@@ -91,6 +91,6 @@ No file or folder is shared as Anyone. Store Drive file IDs only. Return file by
 ## Decisions still required
 1. Confirm whether login ID length 4–30 is final.
 2. Finalize coupon reservation and release lifecycle.
-3. Confirm whether marketing images may be externally hosted or all images must remain private Drive assets.
+3. Image privacy requirement is confirmed: uploaded images, including marketing/catalog images and slips, remain private in Drive; storefront display must use an application proxy rather than public Drive sharing.
 4. Set retention periods for login and Admin audit logs.
 5. Confirm Admin and Member session lifetime and idle timeout.
