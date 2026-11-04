@@ -57,7 +57,11 @@ async function validateImageFile(req, res, next) {
       sequentialRead: true,
       pages: 1
     });
-    const metadata = await image.metadata();
+    const metadata = await image.metadata().catch(() => null);
+    if (!metadata) {
+      await removeFile(originalPath);
+      return res.status(415).json({ error: 'ไฟล์ภาพเสียหายหรือไม่ใช่ภาพที่รองรับ' });
+    }
     const expectedFormat = FORMATS[mimeType];
     if (
       metadata.format !== expectedFormat ||
@@ -85,7 +89,12 @@ async function validateImageFile(req, res, next) {
     else if (expectedFormat === 'jpeg') pipeline = pipeline.flatten({ background: '#ffffff' }).jpeg({ quality: 88, mozjpeg: true });
     else pipeline = pipeline.webp({ quality: 88, effort: 4 });
 
-    await pipeline.toFile(temporaryPath);
+    const decoded = await pipeline.toFile(temporaryPath).then(() => true).catch(() => false);
+    if (!decoded) {
+      await removeFile(temporaryPath);
+      await removeFile(originalPath);
+      return res.status(415).json({ error: 'ไฟล์ภาพเสียหายหรือไม่สามารถถอดรหัสได้' });
+    }
     const outputStat = await fs.stat(temporaryPath);
     if (outputStat.size < 1 || outputStat.size > MAX_FILE_BYTES) {
       await removeFile(temporaryPath);
