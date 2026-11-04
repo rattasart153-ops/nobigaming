@@ -423,6 +423,28 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.equal(forgedImage.status, 415);
   assert.equal(publicUploadCount(), beforeForgedUpload, 'forged image should be deleted');
 
+  const beforeTruncatedUpload = publicUploadCount();
+  const truncatedImageForm = new FormData();
+  truncatedImageForm.append('image', new Blob([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0])], { type: 'image/png' }), 'truncated.png');
+  const truncatedImage = await fetch(`${baseUrl}/api/admin/upload`, {
+    method: 'POST',
+    headers: { cookie: cookie.split(';')[0], origin: baseUrl },
+    body: truncatedImageForm
+  });
+  assert.equal(truncatedImage.status, 415, 'a valid PNG signature is not sufficient without a full successful decode');
+  assert.equal(publicUploadCount(), beforeTruncatedUpload, 'truncated image should be deleted');
+
+  const sharp = require('sharp');
+  const oversizedDimensions = await sharp({ create: { width: 9000, height: 1, channels: 3, background: '#fff' } }).png().toBuffer();
+  const dimensionForm = new FormData();
+  dimensionForm.append('image', new Blob([oversizedDimensions], { type: 'image/png' }), 'too-wide.png');
+  const dimensionUpload = await fetch(`${baseUrl}/api/admin/upload`, {
+    method: 'POST',
+    headers: { cookie: cookie.split(';')[0], origin: baseUrl },
+    body: dimensionForm
+  });
+  assert.equal(dimensionUpload.status, 415, 'images exceeding the maximum edge must be rejected');
+
   const badUploadForm = new FormData();
   badUploadForm.append('image', new Blob(['not an image'], { type: 'text/plain' }), 'not-image.txt');
   const badUpload = await fetch(`${baseUrl}/api/admin/upload`, {
