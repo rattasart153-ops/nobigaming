@@ -78,7 +78,7 @@ Progress: GAS source is split into focused HTTP, catalog, coupon, payment, order
 - [ ] Add GAS runtime tests for bad signature, stale timestamp, replay, invalid action, missing schema, concurrent nonce claims and quota behavior.
 - [ ] Wire the Express repository adapter only after every action is mapped and tested.
 
-The split GAS modules and schema initializer pass Node syntax/structure and mocked setup tests, but have not been imported into or runtime-tested in Apps Script. Existing business handlers are still legacy and are not compatible with the new target schema yet; do not initialize a live spreadsheet or call `initializeAdmin()` until repository and authentication adapters are migrated. No deployment is authorized. No deployment is authorized.
+The split GAS modules and schema initializer pass Node syntax/structure and mocked setup tests, but have not been imported into or runtime-tested in Apps Script. Existing business handlers are still legacy and are not compatible with the new target schema yet; do not initialize a live spreadsheet or call `initializeAdmin()` until repository and authentication adapters are migrated. No deployment is authorized.
 
 ## Phase 3 — Durable authentication
 - Implement separate Admin and Member auth.
