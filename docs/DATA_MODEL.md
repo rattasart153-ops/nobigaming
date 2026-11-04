@@ -1,6 +1,6 @@
 # Nobi Topup — Google Sheets and Drive Data Model
 
-Status: proposed schema baseline. Validate before implementation.
+Status: approved target schema baseline; version 1 headers are implemented in `google-apps-script/00_Config.gs` and initialized by `02_Database.gs`. Business repositories are still pending.
 
 ## Conventions
 - Row 1 contains exact headers; first column is a stable UUID string.
@@ -120,9 +120,9 @@ One private root folder referenced only through Script Properties:
 No file or folder is shared as Anyone. Store Drive file IDs only. Slips and other uploaded images remain private in Drive. When an image is intended for storefront display, Vercel may proxy its bytes through an application route without changing the Drive file's sharing permissions; never return a public Drive URL.
 
 ## Setup behavior
-- setupNobiDatabase() creates missing sheets and exact headers.
-- If an existing sheet has unexpected headers or schema version, stop and report; do not overwrite.
-- Seed catalog only when the relevant table is empty.
+- `setupNobiDatabase()` initializes schema version 1 only after preflighting all existing sheets. It creates missing sheets, writes exact headers, stores `schema_version` in `system_metadata`, and records the spreadsheet ID in Script Properties only after successful completion.
+- If an existing sheet has unexpected headers, an unknown schema version, or populated data without a version marker, stop before changing any sheet; never append columns, clear rows, or rewrite existing content.
+- Do not seed catalog data during schema initialization; catalog seeding is a separate reviewed operation.
 - Do not create an Admin with a hard-coded password.
 - First Admin is created from a one-time Script Property bootstrap secret, then that secret is deleted.
 
