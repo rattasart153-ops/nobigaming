@@ -13,6 +13,7 @@ process.env.ADMIN_USERNAME = 'TestAdmin';
 process.env.ADMIN_PASSWORD = 'TestPassword123';
 process.env.NOBI_DATA_DIR = path.join(tempRoot, 'data');
 process.env.NOBI_UPLOAD_DIR = path.join(tempRoot, 'uploads');
+process.env.NOBI_PRIVATE_SLIP_DIR = path.join(tempRoot, 'private-slips');
 
 let app;
 let server;
@@ -40,6 +41,10 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   const health = await fetch(`${baseUrl}/api/health`);
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { ok: true, service: 'Nobi Topup API' });
+  assert.ok(health.headers.get('content-security-policy-report-only'), 'CSP should be delivered in report-only mode');
+
+  const unauthorizedSlip = await fetch(`${baseUrl}/api/admin/orders/unknown/slip`);
+  assert.equal(unauthorizedSlip.status, 401);
 
   const paymentInfo = await fetch(`${baseUrl}/api/public/payment-info`);
   assert.equal(paymentInfo.status, 200);
@@ -68,9 +73,16 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   const unauthorized = await fetch(`${baseUrl}/api/admin/dashboard`);
   assert.equal(unauthorized.status, 401);
 
+  const crossOriginLogin = await fetch(`${baseUrl}/api/admin/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: 'https://attacker.example' },
+    body: JSON.stringify({ username: 'TestAdmin', password: 'TestPassword123' })
+  });
+  assert.equal(crossOriginLogin.status, 403);
+
   const login = await fetch(`${baseUrl}/api/admin/login`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', origin: baseUrl },
     body: JSON.stringify({ username: 'TestAdmin', password: 'TestPassword123' })
   });
   assert.equal(login.status, 200);
@@ -88,7 +100,8 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   // Admin CRUD characterization using isolated synthetic records.
   const adminHeaders = {
     cookie: cookie.split(';')[0],
-    'content-type': 'application/json'
+    'content-type': 'application/json',
+    origin: baseUrl
   };
   const createdGameResponse = await fetch(`${baseUrl}/api/admin/games`, {
     method: 'POST',
@@ -175,13 +188,13 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   }
 
   // Invalid checkout payloads must not leave orphaned uploaded files.
-  const uploadCount = () => fs.readdirSync(process.env.NOBI_UPLOAD_DIR).length;
+  const uploadCount = () => fs.readdirSync(process.env.NOBI_PRIVATE_SLIP_DIR).length;
   const beforeInvalidGame = uploadCount();
   const invalidGameForm = new FormData();
   invalidGameForm.append('gameId', '999999');
   invalidGameForm.append('packageId', String(pack.id));
   invalidGameForm.append('playerId', 'CI-PLAYER-INVALID-GAME');
-  invalidGameForm.append('slip', new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' }), 'invalid-game.png');
+  invalidGameForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'invalid-game.png');
   const invalidGameOrder = await fetch(`${baseUrl}/api/public/orders`, {
     method: 'POST',
     headers: { cookie: cookie.split(';')[0] },
@@ -235,6 +248,14 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   const order = (await orderResponse.json()).order;
   assert.equal(order.status, 'Pending');
   assert.equal(order.total, 19);
+  assert.equal((await fetch(`${baseUrl}/api/admin/orders/${order.id}/slip`)).status, 401);
+  const privateSlip = await fetch(`${baseUrl}/api/admin/orders/${order.id}/slip`, { headers: { cookie: cookie.split(';')[0] } });
+  assert.equal(privateSlip.status, 200);
+  assert.equal(privateSlip.headers.get('content-type'), 'image/png');
+  assert.equal(privateSlip.headers.get('cache-control'), 'private, no-store');
+  const privateFilename = fs.readdirSync(process.env.NOBI_PRIVATE_SLIP_DIR)[0];
+  assert.ok(privateFilename);
+  assert.equal((await fetch(`${baseUrl}/uploads/${privateFilename}`)).status, 404);
 
   const completedResponse = await fetch(`${baseUrl}/api/admin/orders/${order.id}/status`, {
     method: 'PATCH',
@@ -249,7 +270,8 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   });
   assert.equal(ordersResponse.status, 200);
   const orders = await ordersResponse.json();
-  assert.ok(orders.some(item => item.id === order.id && item.status === 'Completed'));
+  assert.ok(orders.some(item => item.id === order.id && item.status === 'Completed' && item.has_slip === true));
+  assert.ok(orders.every(item => !Object.hasOwn(item, 'slip_path')), 'Admin list must not expose private filesystem paths');
 
   const invalidStatus = await fetch(`${baseUrl}/api/admin/orders/${order.id}/status`, {
     method: 'PATCH',
@@ -263,6 +285,15 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
     headers: { cookie: cookie.split(';')[0] }
   });
   assert.equal(rejectedDelete.status, 409);
+
+  const forgedImageForm = new FormData();
+  forgedImageForm.append('image', new Blob(['not a PNG'], { type: 'image/png' }), 'forged.png');
+  const forgedImage = await fetch(`${baseUrl}/api/admin/upload`, {
+    method: 'POST',
+    headers: { cookie: cookie.split(';')[0] },
+    body: forgedImageForm
+  });
+  assert.equal(forgedImage.status, 415);
 
   const badUploadForm = new FormData();
   badUploadForm.append('image', new Blob(['not an image'], { type: 'text/plain' }), 'not-image.txt');
