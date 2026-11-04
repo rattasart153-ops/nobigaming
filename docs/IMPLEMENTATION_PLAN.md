@@ -56,7 +56,7 @@ Exit: local behavior remains equivalent; syntax and route smoke tests pass.
 - [x] Frontend GAS RPC calls and current response contracts inventoried.
 - [x] Express route gaps and response-shape mismatches recorded.
 - [ ] User review/confirmation of unresolved member, coupon lifecycle, audit retention, and session policy decisions.
-- [ ] Decide final image storage policy. User's prior requirement is private Google Drive storage for slips and other uploaded images; implement that target, not public Drive sharing.
+- [x] Confirm image privacy requirement: slips and all other uploaded images remain private in Google Drive; storefront-visible assets must be served through an application proxy without public Drive sharing.
 - [ ] Complete full image decoding and multi-instance abuse-control strategy.
 - [ ] Do not begin live integration until the user approves unresolved policy decisions.
 
@@ -103,7 +103,7 @@ Exit: all critical tests pass, remaining risks are documented, and user separate
 ## Decisions required before relevant code
 1. Member login ID length: proposal ASCII letters/digits, 4–30 characters; confirm.
 2. Coupon lifecycle: decide when Pending reserves capacity, reservation expiry, and release behavior on Rejected.
-3. Image policy: private Drive only or allow selected externally hosted marketing images.
+3. Image privacy is confirmed: all uploaded images remain private in Drive; app proxy may serve storefront-visible images without making Drive files public.
 4. Retention for login and Admin audit logs.
 5. Admin and Member session lifetime and idle timeout.
 6. Benchmark a suitable slow password KDF in Apps Script; do not ship SHA-256-only password hashing.
