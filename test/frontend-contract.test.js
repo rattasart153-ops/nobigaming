@@ -31,7 +31,10 @@ test('storefront and admin inline scripts parse and use REST API, not Apps Scrip
     assert.ok(source.includes('fetch('));
   }
   const storefront = readInlineScripts('nobitopup.html').join('\\n');
-  for (const contract of ['/api/public/catalog', '/api/public/coupons/validate', '/api/public/orders', 'checkout_token', 'payment_expires_at']) assert.ok(storefront.includes(contract), 'missing storefront contract: ' + contract);
+  for (const contract of ['/api/public/catalog', '/api/public/coupons/validate', '/api/public/orders', 'Idempotency-Key', 'nobi_active_checkout', 'payment_expires_at']) assert.ok(storefront.includes(contract), 'missing storefront contract: ' + contract);
+  assert.equal(storefront.includes('checkout_token'), false, 'checkout token must not be exposed to storefront JavaScript');
+  assert.equal(storefront.includes('Authorization:\'Bearer '), false, 'checkout token must not be sent as a JavaScript-readable Bearer token');
+  assert.ok(storefront.includes('nobi_order_attempt'), 'idempotency key must survive a retry in the current browser session');
   const admin = readInlineScripts('admin.html').join('\\n');
   for (const contract of ["credentials:'same-origin'", 'has_slip', '/api/admin/orders/']) assert.ok(admin.includes(contract), 'missing Admin contract: ' + contract);
   assert.equal(admin.includes('nobi_admin_token'), false);
