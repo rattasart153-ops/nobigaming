@@ -2,6 +2,7 @@
 
 const express = require('express');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const validateImageFile = require('../middleware/validate-image-file');
 
 function readCookie(req, name) {
@@ -45,6 +46,11 @@ function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCat
     const discardUpload = () => {
       if (req.file && req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     };
+    const idempotencyKey = String(req.get('Idempotency-Key') || '');
+    if (!/^[A-Za-z0-9._:-]{16,128}$/.test(idempotencyKey)) {
+      discardUpload();
+      return res.status(400).json({ error: 'ต้องระบุ Idempotency-Key ที่ถูกต้องเพื่อป้องกันออเดอร์ซ้ำ' });
+    }
     if (!game || !pack) {
       discardUpload();
       return res.status(400).json({ error: 'ไม่พบเกมหรือแพ็กเกจที่เลือก' });
@@ -53,15 +59,22 @@ function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCat
       discardUpload();
       return res.status(400).json({ error: 'กรุณากรอก UID ให้ถูกต้อง' });
     }
+    const normalizedPlayerId = String(playerId).trim();
+    const normalizedServerId = String(serverId || '').trim();
+    const normalizedCouponCode = String(couponCode || '').trim();
+    const slipHash = req.file ? crypto.createHash('sha256').update(fs.readFileSync(req.file.path)).digest('hex') : null;
+    const requestHash = crypto.createHash('sha256').update(JSON.stringify({
+      gameId: game.id, packageId: pack.id, playerId: normalizedPlayerId,
+      serverId: normalizedServerId, couponCode: normalizedCouponCode, slipHash
+    })).digest('hex');
     const result = createPendingOrder({
-      game,
-      pack,
-      playerId: String(playerId).trim(),
-      serverId,
-      couponCode,
-      file: req.file || null
+      game, pack, playerId: normalizedPlayerId, serverId: normalizedServerId,
+      couponCode: normalizedCouponCode, file: req.file || null, idempotencyKey, requestHash
     });
-    if (!result.ok) return res.status(422).json({ error: result.message });
+    if (!result.ok) {
+      const status = result.reason === 'idempotency_conflict' ? 409 : 422;
+      return res.status(status).json({ error: result.message, reason: result.reason });
+    }
     res.set('Cache-Control', 'no-store');
     if (!result.order.slip_submitted_at && result.checkoutToken) {
       res.cookie(checkoutCookieName(result.order.id), result.checkoutToken, {
@@ -72,7 +85,7 @@ function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCat
         expires: new Date(result.order.payment_expires_at)
       });
     }
-    res.status(201).json({ message: result.order.slip_submitted_at ? 'รับออเดอร์และสลิปแล้ว' : 'สร้างออเดอร์แล้ว กรุณาชำระเงินและอัปโหลดสลิปก่อนหมดเวลา', order: result.order });
+    res.status(result.replay ? 200 : 201).json({ message: result.order.slip_submitted_at ? 'รับออเดอร์และสลิปแล้ว' : 'สร้างออเดอร์แล้ว กรุณาชำระเงินและอัปโหลดสลิปก่อนหมดเวลา', order: result.order, replayed: Boolean(result.replay) });
   });
 
   router.post('/api/public/orders/:id/slip', slipUpload.single('slip'), validateImageFile, (req,res) => {
