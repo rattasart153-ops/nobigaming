@@ -279,6 +279,20 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.equal(completedResponse.status, 200);
   assert.equal((await completedResponse.json()).status, 'Completed');
 
+  const unchangedStatus = await fetch(`${baseUrl}/api/admin/orders/${order.id}/status`, {
+    method: 'PATCH',
+    headers: adminHeaders,
+    body: JSON.stringify({ status: 'Completed' })
+  });
+  assert.equal(unchangedStatus.status, 200);
+
+  const forbiddenReverseTransition = await fetch(`${baseUrl}/api/admin/orders/${order.id}/status`, {
+    method: 'PATCH',
+    headers: adminHeaders,
+    body: JSON.stringify({ status: 'Rejected' })
+  });
+  assert.equal(forbiddenReverseTransition.status, 409);
+
   const ordersResponse = await fetch(`${baseUrl}/api/admin/orders`, {
     headers: { cookie: cookie.split(';')[0] }
   });
