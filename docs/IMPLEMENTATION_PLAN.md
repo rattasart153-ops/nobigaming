@@ -38,7 +38,7 @@ Remaining:
 - [ ] Extract remaining payment-info and order-status business logic into focused services and add unit-level coverage.
 - [ ] Keep SQLite until the replacement repository adapter passes tests.
 
-Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring), `41790464278` (pending order service wiring), and `41790497080` (invalid checkout upload cleanup) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
+Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring), `41790464278` (pending order service wiring), and `41790497080` (invalid checkout upload cleanup) and `41790533090` (invalid coupon upload cleanup) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
 
 Exit: local behavior remains equivalent; syntax and route smoke tests pass.
 
