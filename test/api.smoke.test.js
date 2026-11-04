@@ -328,8 +328,9 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
     headers: { cookie: cookie.split(';')[0], origin: baseUrl },
     body: oversizedForm
   });
-  assert.equal(oversizedUpload.status, 400);
-  assert.match((await oversizedUpload.json()).error, /5 MB/);
+  const oversizedBody = await oversizedUpload.json();
+  assert.equal(oversizedUpload.status, 400, JSON.stringify(oversizedBody));
+  assert.match(oversizedBody.error, /5 MB/);
 
   const deletePromotion = await fetch(`${baseUrl}/api/admin/promotions/${promotion.id}`, {
     method: 'DELETE',
