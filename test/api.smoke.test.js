@@ -41,6 +41,10 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { ok: true, service: 'Nobi Topup API' });
 
+  const paymentInfo = await fetch(`${baseUrl}/api/public/payment-info`);
+  assert.equal(paymentInfo.status, 200);
+  assert.equal((await paymentInfo.json()).configured, false);
+
   const catalogResponse = await fetch(`${baseUrl}/api/public/catalog`);
   assert.equal(catalogResponse.status, 200);
   const catalog = await catalogResponse.json();
