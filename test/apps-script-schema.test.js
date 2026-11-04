@@ -87,7 +87,8 @@ function loadGasDatabase(spreadsheet, initialProperties = {}) {
   const source = [
     fs.readFileSync(path.join(gasDir, '00_Config.gs'), 'utf8'),
     fs.readFileSync(path.join(gasDir, '02_Database.gs'), 'utf8'),
-    'globalThis.__nobi = NOBI; globalThis.__setupNobiDatabase = setupNobiDatabase;'
+    fs.readFileSync(path.join(gasDir, '11_Repositories.gs'), 'utf8'),
+    'globalThis.__nobi = NOBI; globalThis.__setupNobiDatabase = setupNobiDatabase; globalThis.__repoInsert = repositoryInsert_; globalThis.__repoFind = repositoryFindByField_; globalThis.__repoUpdate = repositoryUpdate_;'
   ].join('\n');
   vm.runInNewContext(source, context);
   return { context, properties };
@@ -130,4 +131,46 @@ test('versioned Sheets setup refuses unknown schema versions', () => {
   metadata.appendRow(['schema_version','99','2026-11-04T00:00:00.000Z']);
   const { context } = loadGasDatabase(spreadsheet, { NOBI_SHEET_ID: spreadsheet.getId() });
   assert.throws(() => context.__setupNobiDatabase(), /SCHEMA_VERSION_UNSUPPORTED/);
+});
+
+test('Sheets repositories enforce schema, primary keys, unique keys and safe updates', () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const { context } = loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+
+  const first = context.__repoInsert('members', {
+    member_id: 'member-1',
+    login_id_normalized: 'nobi1234',
+    login_id_display: 'Nobi1234',
+    full_name: 'Nobi'
+  });
+  assert.equal(first.member_id, 'member-1');
+  assert.equal(context.__repoFind('members', 'login_id_normalized', 'nobi1234').length, 1);
+  assert.throws(() => context.__repoInsert('members', {
+    member_id: 'member-2',
+    login_id_normalized: 'nobi1234'
+  }), /REPOSITORY_DUPLICATE/);
+
+  const updated = context.__repoUpdate('members', 'member-1', { full_name: 'Nobi Topup' });
+  assert.equal(updated.full_name, 'Nobi Topup');
+  assert.throws(() => context.__repoUpdate('members', 'member-1', { member_id: 'member-3' }), /PRIMARY_KEY_IMMUTABLE/);
+  assert.throws(() => context.__repoInsert('members', {
+    member_id: 'member-3',
+    unknown_column: 'not allowed'
+  }), /FIELD_NOT_ALLOWED/);
+});
+
+test('idempotency repository uniqueness is scoped by both scope and request key', () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const { context } = loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  context.__repoInsert('idempotency_records', {
+    idempotency_id: 'idem-1', scope: 'create-order', request_key: 'key-1', payload_hash: 'hash-1'
+  });
+  context.__repoInsert('idempotency_records', {
+    idempotency_id: 'idem-2', scope: 'member-login', request_key: 'key-1', payload_hash: 'hash-2'
+  });
+  assert.throws(() => context.__repoInsert('idempotency_records', {
+    idempotency_id: 'idem-3', scope: 'create-order', request_key: 'key-1', payload_hash: 'hash-3'
+  }), /REPOSITORY_DUPLICATE/);
 });
