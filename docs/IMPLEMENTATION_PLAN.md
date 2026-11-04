@@ -115,3 +115,13 @@ Exit: all critical tests pass, remaining risks are documented, and user separate
 - Do not accept real orders or slips during testing.
 - Never delete or rewrite existing user data during setup.
 - Make small reviewable commits and verify every changed file.
+
+
+### Frontend REST integration update (2026-11-04)
+- [x] Replace Storefront Apps Script RPC calls with same-origin Express REST calls for catalog, promotions, coupon validation/suggestions, PromptPay info, checkout creation and slip upload.
+- [x] Adapt checkout UI to create Pending first, then submit a slip using the one-time checkout token; show the server-provided payment deadline and lock order details after reservation.
+- [x] Replace Admin Apps Script RPC/token bridge with HttpOnly cookie-based REST calls.
+- [x] Adapt Admin order list to `has_slip`, private binary slip retrieval, payment deadline and `Expired` status.
+- [x] Add frontend syntax/contract test and verify it in GitHub Actions.
+
+Still open: connect the Express service/repository layer to Apps Script + Sheets + private Drive; implement the previously approved member and member-coupon rules; make sessions, rate limits and all uploaded media durable/private; complete real-browser end-to-end tests. Frontend REST integration is not production readiness.
