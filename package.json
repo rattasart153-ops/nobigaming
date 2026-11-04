@@ -4,7 +4,7 @@
   "private": true,
   "description": "Nobi Topup full-stack game top-up storefront and admin dashboard",
   "main": "server.js",
-  "scripts": { "start": "node server.js", "dev": "node --watch server.js" },
+  "scripts": { "start": "node server.js", "dev": "node --watch server.js", "test": "node --test" },
   "engines": { "node": ">=20" },
   "dependencies": {
     "bcryptjs": "^2.4.3",
