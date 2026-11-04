@@ -34,6 +34,7 @@ test('Apps Script client signs versioned requests and returns gateway result', a
 
 test('Apps Script client fails closed when gateway configuration is missing', () => {
   assert.throws(() => createAppsScriptClient({ url: '', secret }), AppsScriptGatewayError);
+  assert.throws(() => createAppsScriptClient({ url: 'https://attacker.example/macros/s/test/exec', secret }), error => error.code === 'GATEWAY_NOT_CONFIGURED');
   assert.throws(() => createAppsScriptClient({ url: 'https://script.google.com/macros/s/test/exec', secret: 'short' }), AppsScriptGatewayError);
 });
 
