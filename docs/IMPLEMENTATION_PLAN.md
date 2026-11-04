@@ -15,7 +15,9 @@ Status: ordered plan; policy decisions for Phase 0/1 confirmed; no deployment au
 Exit: architecture and compatibility map reviewed; implementation-affecting decisions must be confirmed before the phase that depends on them.
 
 ## Phase 1 — Modularize and harden the Express baseline
-Progress: technical baseline and policy decisions complete; final branch/CI acceptance review remains. Production persistence and private Drive delivery are separate later release gates.
+
+<escape>Status: COMPLETE (2026-11-04) — Express baseline scope only; not production-ready.</escape>
+Progress: COMPLETE for the Phase 1 Express-baseline scope. Policy decisions are confirmed, documentation is reconciled, branch isolation is verified, and the final GitHub Actions run passed. Production persistence, globally shared rate limiting, enforced CSP, private Drive delivery and full browser E2E remain separate later release gates.
 
 Completed:
 - [x] Add Node.js API characterization smoke tests and `npm test`.
@@ -43,7 +45,7 @@ Remaining:
 - [x] Extract payment-info and order-status business logic into focused services; API tests cover configured/unconfigured payment response, status completion, no-op, and forbidden reversal.
 - [x] Keep SQLite as the isolated characterization baseline until the replacement repository adapter passes tests.
 
-Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring), `41790464278` (pending order service wiring), and `41790497080` (invalid checkout upload cleanup), `41790533090` (invalid coupon upload cleanup), `41791884105` (private slip isolation, same-origin hardening and startup fail-closed tests), `41792343333` (missing credential startup tests), `41792303043` (order transition tests), and `41792431314` (payment service wiring), `41792910475` (Phase 1 plan update), and `41792917493` (security release-gate update) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
+Latest verified CI: `41834884352` (final Phase 1 policy/documentation commit `68827f0b25d3c8dbd677a5d49b87f658d54b5eea`) — success. Job `api-smoke` completed successfully, including dependency installation and API characterization tests. Earlier expanded test run `41790083468` failed on an outdated expected total; the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
 
 Exit: existing API contracts are characterized, security changes are intentional and tested, and syntax/API regression tests pass. Frontend compatibility and durable production storage remain separate release gates.
 
@@ -61,7 +63,7 @@ Exit: existing API contracts are characterized, security changes are intentional
 - [x] Complete full image decoding and document the shared multi-instance abuse-control strategy in [PHASE1_ABUSE_CONTROL_DESIGN.md](./PHASE1_ABUSE_CONTROL_DESIGN.md); implementation/load testing is a production integration gate for the shared backend.
 - [x] User confirmed IP login history and Admin audit-log retention: 90 days, then delete or irreversibly anonymize.
 - [x] User confirmed Admin and Member session policy: maximum lifetime 8 hours; idle timeout 30 minutes; revoke on logout or password change.
-- [x] Phase 1 policy decisions recorded; do not begin Phase 2 until final verification and explicit phase acceptance.
+- [x] Phase 1 final acceptance review completed: approved policies documented, final CI passed, and `main` remains unchanged. Phase 1 is closed for its stated Express-baseline scope. Phase 2 has NOT started; begin it only after a separate user instruction.
 
 ## Phase 2 — Apps Script gateway and storage
 Progress: gateway transport foundation added; repository adapter and Sheets/Drive migration remain open.
