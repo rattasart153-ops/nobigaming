@@ -30,9 +30,14 @@ function createOrderService({ db, validateCoupon }) {
         if(prior.request_hash!==requestHash) return {ok:false,reason:'idempotency_conflict',message:'คำขอนี้ใช้รหัสซ้ำกับข้อมูลออเดอร์อื่น กรุณาเริ่มรายการใหม่'};
         const existing=db.prepare('SELECT * FROM orders WHERE id=?').get(prior.order_id);
         if(!existing) return {ok:false,reason:'idempotency_conflict',message:'ไม่สามารถกู้คืนรายการเดิมได้ กรุณาติดต่อผู้ดูแล'};
-        if(existing.status==='Pending' && !existing.slip_submitted_at && Date.parse(existing.payment_expires_at)>Date.now()){
+        if(existing.status==='Pending' && !existing.slip_submitted_at && Date.parse(existing.payment_expires_at)>createdAt.getTime()){
           db.prepare('UPDATE orders SET checkout_token_hash=?,updated_at=? WHERE id=?').run(checkoutTokenHash,createdAt.toISOString(),existing.id);
           return {ok:true,replay:true,order:{id:existing.id,game:game.name,package:pack.name,subtotal:existing.subtotal,discount:existing.discount,total:existing.total,status:existing.status,payment_expires_at:existing.payment_expires_at,slip_submitted_at:existing.slip_submitted_at},checkoutToken};
+        }
+        if(existing.status==='Pending' && !existing.slip_submitted_at && (!existing.payment_expires_at || Date.parse(existing.payment_expires_at)<=createdAt.getTime())){
+          db.prepare("UPDATE orders SET status='Expired',status_reason='PAYMENT_TIMEOUT',updated_at=? WHERE id=? AND status='Pending'").run(createdAt.toISOString(),existing.id);
+          releaseReservation(existing.id,createdAt.toISOString());
+          return {ok:false,reason:'expired',message:'ออเดอร์เดิมหมดเวลาชำระเงินแล้ว กรุณาเริ่มรายการใหม่'};
         }
         return {ok:true,replay:true,order:{id:existing.id,game:game.name,package:pack.name,subtotal:existing.subtotal,discount:existing.discount,total:existing.total,status:existing.status,payment_expires_at:existing.payment_expires_at,slip_submitted_at:existing.slip_submitted_at},checkoutToken:null};
       }
