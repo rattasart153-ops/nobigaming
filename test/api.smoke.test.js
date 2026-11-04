@@ -303,6 +303,22 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.equal(prepayResponse.status, 201);
   const prepay = await prepayResponse.json();
   assert.equal(Object.hasOwn(prepay, 'checkout_token'), false, 'checkout token must never be exposed in JSON');
+
+  // Two simultaneous requests with one key must reserve exactly one order.
+  const concurrentKey = 'CI-CONCURRENT-ORDER-KEY-01';
+  const concurrentForms = [0,1].map(() => {
+    const f = new FormData();
+    f.append('gameId', String(game.id)); f.append('packageId', String(pack.id)); f.append('playerId', 'CI-CONCURRENT-01');
+    return f;
+  });
+  const concurrentResponses = await Promise.all(concurrentForms.map(body =>
+    fetch(`${baseUrl}/api/public/orders`, { method: 'POST', headers: { 'Idempotency-Key': concurrentKey }, body })
+  ));
+  assert.deepEqual(concurrentResponses.map(r=>r.status).sort(), [200,201]);
+  const concurrentBodies = await Promise.all(concurrentResponses.map(r=>r.json()));
+  assert.equal(concurrentBodies[0].order.id, concurrentBodies[1].order.id);
+  assert.equal(concurrentBodies.filter(x=>x.replayed===false).length, 1);
+  assert.equal(concurrentBodies.filter(x=>x.replayed===true).length, 1);
   const checkoutCookie = prepayResponse.headers.get('set-cookie');
   assert.ok(checkoutCookie && checkoutCookie.includes('HttpOnly') && checkoutCookie.includes('SameSite=Strict'));
   assert.ok(checkoutCookie.includes('Path=/api/public/orders/' + prepay.order.id + '/slip'));
