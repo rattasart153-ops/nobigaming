@@ -29,7 +29,10 @@ before(async () => {
 });
 
 after(async () => {
-  if (server) await new Promise(resolve => server.close(resolve));
+  if (server) {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
   fs.rmSync(tempRoot, { recursive: true, force: true });
 });
 
