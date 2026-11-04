@@ -66,19 +66,19 @@ Exit: existing API contracts are characterized, security changes are intentional
 - [x] Phase 1 final acceptance review completed: approved policies documented, final CI passed, and `main` remains unchanged. Phase 1 is closed for its stated Express-baseline scope. Phase 2 has NOT started; begin it only after a separate user instruction.
 
 ## Phase 2 — Apps Script gateway and storage
-Progress: GAS source has been split into focused HTTP, catalog, coupon, payment, order, authentication, Admin, validation, database and utility modules. The legacy `rpc()`/HtmlService assumptions have been removed from the entry point. Versioned Sheets schema, Drive migration and repository adapter remain open.
+Progress: GAS source is split into focused HTTP, catalog, coupon, payment, order, authentication, Admin, validation, database and utility modules. The legacy `rpc()`/HtmlService assumptions are removed from the entry point. The complete target Sheets header model and non-destructive schema-versioned initializer are implemented and covered by Node tests. Drive migration and repository adapter remain open.
 - [x] Split legacy GAS business logic into focused files and replace the legacy `rpc()` entry with an explicit signed-HTTP action dispatcher; remove HtmlService/browser RPC assumptions.
 - [x] Add signed, version-1 HTTP request envelope and fixed legacy action allowlist (`13_HttpGateway.gs`).
 - [x] Add HMAC-SHA256 verification, timestamp freshness check and nonce replay ledger guarded by ScriptLock.
 - [x] Add matching Vercel Node client with bounded timeout, typed errors and no implicit mutation retries.
 - [x] Add Node tests for request signing, success response, gateway rejection and no implicit retry.
-- [ ] Implement schema-versioned, idempotent Sheets setup that stops safely on incompatible headers and never clears existing content.
+- [x] Implement schema-versioned, idempotent Sheets setup (schema version 1) that preflights all existing headers, stops on incompatibility or unknown versions, never clears existing content, and is covered by repeat-run/legacy-schema/version tests.
 - [ ] Implement the approved complete Sheets model, including Members, Member/Admin sessions, coupon reservations, order deadlines, audit and idempotency records.
 - [ ] Implement private Drive storage for slips and all storefront/catalog/promotion images, plus authorized Vercel proxy delivery.
 - [ ] Add GAS runtime tests for bad signature, stale timestamp, replay, invalid action, missing schema, concurrent nonce claims and quota behavior.
 - [ ] Wire the Express repository adapter only after every action is mapped and tested.
 
-The split GAS modules pass Node syntax/structure checks, but have not been imported into or runtime-tested in Apps Script. The business handlers still use the legacy scaffold schema and do not yet implement all approved Member/coupon/order rules. Do not run the legacy `setupNobiDatabase()` or `initializeAdmin()` before the versioned schema and hardened authentication tasks are complete. No deployment is authorized.
+The split GAS modules and schema initializer pass Node syntax/structure and mocked setup tests, but have not been imported into or runtime-tested in Apps Script. Existing business handlers are still legacy and are not compatible with the new target schema yet; do not initialize a live spreadsheet or call `initializeAdmin()` until repository and authentication adapters are migrated. No deployment is authorized. No deployment is authorized.
 
 ## Phase 3 — Durable authentication
 - Implement separate Admin and Member auth.
