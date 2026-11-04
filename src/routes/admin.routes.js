@@ -89,7 +89,7 @@ function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, valid
   router.delete('/api/admin/promotions/:id', requireAdmin, (req,res) => { const r=db.prepare('DELETE FROM promotions WHERE id=?').run(Number(req.params.id)); if(!r.changes)return res.status(404).json({error:'ไม่พบโปรโมชั่น'}); res.json({ok:true}); });
   router.get('/api/admin/orders', requireAdmin, (req,res) => {
     const orders = db.prepare(`SELECT o.*,g.name game_name,p.name package_name,c.code coupon_code FROM orders o JOIN games g ON g.id=o.game_id JOIN packages p ON p.id=o.package_id LEFT JOIN coupons c ON c.id=o.coupon_id ORDER BY o.created_at DESC`).all();
-    res.json(orders.map(({ slip_path, ...order }) => ({ ...order, has_slip: Boolean(slip_path) })));
+    res.json(orders.map(({ slip_path, checkout_token_hash, ...order }) => ({ ...order, has_slip: Boolean(slip_path) })));
   });
   router.get('/api/admin/orders/:id/slip', requireAdmin, (req,res,next) => {
     const order = db.prepare('SELECT slip_path FROM orders WHERE id=?').get(String(req.params.id));
@@ -128,6 +128,8 @@ function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, valid
     }
     const result = setOrderStatus(String(req.params.id), status);
     if (!result.ok && result.reason === 'not_found') return res.status(404).json({ error: 'ไม่พบออเดอร์' });
+    if (!result.ok && result.reason === 'missing_slip') return res.status(409).json({ error: 'ยังไม่พบสลิปที่ส่งภายในกำหนดเวลา' });
+    if (!result.ok && result.reason === 'expired') return res.status(409).json({ error: 'ออเดอร์หมดเวลาแล้วและคืนสิทธิ์คูปองแล้ว' });
     if (!result.ok && result.reason === 'invalid_transition') {
       return res.status(409).json({ error: 'ออเดอร์ที่ตรวจสอบแล้วไม่สามารถเปลี่ยนสถานะซ้ำได้' });
     }
