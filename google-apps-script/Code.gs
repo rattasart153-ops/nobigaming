@@ -1,5 +1,5 @@
 /** Nobi Topup Apps Script HTTP entry point.
- * Browser traffic belongs to the Vercel REST API. This project exposes no HtmlService UI.
+ * Browser traffic belongs to the Vercel REST API. This project exposes no embedded browser UI.
  * Do not deploy until the Sheets/Drive migration and runtime verification are complete.
  */
 function doGet() {
