@@ -70,13 +70,13 @@ Keep CommonJS and the existing `server.js` entry point initially to minimize dep
 7. `src/app.js` — compose middleware/routes and export the Express app.
 8. Keep `server.js` as a thin compatibility entry that loads configuration, imports the app, and starts a local listener only when run directly.
 
-Do not extract or replace the GAS implementation in this phase. Do not switch frontend RPC calls to REST in the same change set; that is a separate integration phase after the Vercel-to-GAS gateway exists.
+Do not replace the legacy GAS business implementation in this phase. The frontend REST migration was completed later as a separate compatibility change; the Express REST API remains the active frontend boundary while the Apps Script gateway is not yet wired.
 
 ## Phase 1 acceptance gates
 
 - Existing Express route paths, methods, status codes, JSON shapes, cookie/session settings, and upload constraints remain unchanged during extraction.
 - Local start behavior and Vercel handler export behavior remain compatible.
-- No frontend calls or visual layout are changed.
+- No frontend calls or visual layout are changed during the initial extraction. A separately approved compatibility change later migrated the storefront and Admin pages to same-origin Express REST; both inline scripts are syntax-checked by CI.
 - No production storage is claimed: SQLite and local uploads remain development-only until the durable GAS/Sheets/Drive integration is implemented and verified.
 - Add automated smoke/characterization tests for health, public catalog, Admin authentication/session, CRUD, order status, and upload validation before or alongside extraction.
 - Validate syntax and module loading after each small extraction; do not perform a bulk rewrite.
