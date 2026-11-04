@@ -17,7 +17,7 @@ test('Apps Script client signs versioned requests and returns gateway result', a
     fetchImpl: async (url, options) => {
       assert.equal(url, 'https://script.google.com/macros/s/test/exec');
       assert.equal(options.method, 'POST');
-      assert.equal(options.redirect, 'follow');
+      assert.equal(options.redirect, 'manual');
       captured = JSON.parse(options.body);
       const expected = crypto.createHmac('sha256', secret).update(canonicalEnvelope(captured)).digest('hex');
       assert.equal(captured.signature, expected);
