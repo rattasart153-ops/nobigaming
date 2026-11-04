@@ -72,27 +72,13 @@ Failure fields: `ok=false, version=1, error.code, error.message`.
 
 Never expose stack traces, spreadsheet IDs, Drive IDs, password hashes, tokens or secret configuration.
 
-## Initial action allowlist
-- system.health
-- catalog.get
-- promotions.get
-- payment.info
-- coupon.suggest
-- coupon.validate
-- order.create
-- order.expire-pending (internal scheduled/maintenance action; not browser-callable)
-- auth.admin.login, auth.admin.session.get, auth.admin.logout
-- auth.member.register, auth.member.login, auth.member.session.get, auth.member.logout
-- member.orders.list
-- admin.dashboard.get
-- admin.orders.list, admin.orders.status.set, admin.orders.slip.get
-- admin.games.list/upsert/delete
-- admin.packages.list/upsert/delete
-- admin.coupons.list/upsert/delete
-- admin.promotions.list/upsert/delete
-- admin.members.list, admin.members.ip-history.get
+## Current gateway action allowlist
 
-Enable only actions required by an actual route. Public actions cannot invoke Admin repositories.
+The initial gateway currently forwards only these legacy RPC action names through the existing `rpc()` switch:
+- `catalog`, `promotions`, `coupon`, `couponSuggestions`, `paymentInfo`, `createOrder`
+- `adminLogin`, `adminMe`, `adminLogout`, `adminDashboard`, `adminOrders`, `adminSlipData`, `adminSetOrderStatus`, `adminList`, `adminUpsert`, `adminDelete`
+
+This is a transport foundation, not the final business-action contract. Some legacy RPC handlers still use the older Sheets schema and do not implement the approved Member, reservation, payment-deadline, or private-media proxy behavior. Do not expose the Web App or connect production routes until each action has a reviewed adapter, authorization boundary and contract test. The target action names above remain design intent, not an assertion that those handlers already exist.
 
 ## HTTP status mapping
 - 200 successful read/update; 201 created.
