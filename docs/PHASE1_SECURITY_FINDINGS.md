@@ -48,7 +48,7 @@ Status: findings recorded during structural refactoring and security hardening. 
 - Status: Remediated in current branch.
 - Evidence: Earlier development mode supplied a fixed Admin username/password when environment variables were missing.
 - Remediation: Removed both fallbacks. Startup now requires explicit `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `SESSION_SECRET` in every environment. The Admin login form no longer pre-fills a username, and README setup instructions explain the required configuration.
-- Verification: The API test harness supplies isolated credentials and still starts successfully. A separate negative startup test should be added to assert missing secrets fail closed.
+- Verification: The API test harness supplies isolated credentials and still starts successfully. Negative startup tests confirm missing `SESSION_SECRET` and missing Admin credentials both fail closed (CI run `41792343333`).
 
 ## S-07 — Content Security Policy is disabled
 
