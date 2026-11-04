@@ -2059,7 +2059,7 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
     if(!selected||!selectedPackageId||!currentGameId){showToast("กรุณาเลือกแพ็กเกจ",false);return;}
     const slip=$("#paymentSlip").files[0];
     if(slip&&(!['image/png','image/jpeg','image/webp'].includes(slip.type)||slip.size>5*1024*1024)){showToast("ไฟล์สลิปต้องเป็น PNG/JPG/WebP และไม่เกิน 5 MB",false);return;}
-    if($("#couponCode").value.trim()&&!(await validateCouponUi()))return;
+    if(!activeCheckout&&$("#couponCode").value.trim()&&!(await validateCouponUi()))return;
     confirmBtn.disabled=true;confirmBtn.style.opacity=".65";
     try{
       if(!activeCheckout){
