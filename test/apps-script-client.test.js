@@ -3,6 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
 const { createAppsScriptClient, AppsScriptGatewayError, canonicalEnvelope } = require('../src/clients/apps-script.client');
 
 const secret = 'test-shared-secret-that-is-long-enough-for-hmac';
@@ -53,4 +55,18 @@ test('Apps Script client does not retry a failed mutation implicitly', async () 
   });
   await assert.rejects(client.call('createOrder', { request_key: 'stable-key-123456' }), error => error.code === 'GATEWAY_UNREACHABLE');
   assert.equal(calls, 1);
+});
+
+test('GAS gateway action allowlist matches the legacy rpc dispatcher and replay schema', () => {
+  const gateway = fs.readFileSync(path.join(__dirname, '..', 'google-apps-script', '13_HttpGateway.gs'), 'utf8');
+  const code = fs.readFileSync(path.join(__dirname, '..', 'google-apps-script', 'Code.gs'), 'utf8');
+  const allowlistBlock = gateway.match(/ALLOWED_ACTIONS:\s*\\[([\\s\\S]*?)\\]/);
+  assert.ok(allowlistBlock, 'gateway action allowlist must exist');
+  const allowed = Array.from(allowlistBlock[1].matchAll(/'([^']+)'/g), match => match[1]).sort();
+  const dispatched = Array.from(code.matchAll(/case '([^']+)'/g), match => match[1]).sort();
+  assert.deepEqual(allowed, dispatched, 'every gateway action must have an explicit rpc dispatcher case and vice versa');
+  assert.ok(gateway.includes('function doPost(e)'), 'GAS HTTP entry point must exist');
+  assert.ok(gateway.includes('Utilities.computeHmacSha256Signature'), 'gateway must verify HMAC-SHA256');
+  assert.ok(gateway.includes('LockService.getScriptLock'), 'nonce claims must be serialized');
+  assert.ok(code.includes("gateway_nonces: ['nonce_hash','created_at']"), 'database setup must create the nonce ledger');
 });
