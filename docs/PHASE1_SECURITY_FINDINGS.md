@@ -66,6 +66,15 @@ Status: findings recorded during read-only review and structural refactoring. Th
 - Verification: Multer upgrade CI run `41790235366` and multipart-limits CI run `41790242496` passed. The expanded oversized-upload test run `41790264334` also passed.
 - Ongoing requirement: Monitor upstream advisories and keep the patched version range current.
 
+
+## S-09 — Rejected checkout requests could leave orphaned uploaded files
+
+- Status: Remediated in source and covered by CI.
+- Evidence: Multer writes the uploaded file before the order handler validates the selected game/package, player UID, and coupon. Earlier behavior returned an error without deleting the uploaded file on some validation failures.
+- Impact: Repeated invalid submissions could consume the upload disk quota and leave unnecessary payment-related files behind.
+- Remediation: The public order route now removes the uploaded file when game/package or player validation fails; the order service removes it when coupon validation or database insertion fails.
+- Verification: CI run `41790497080` passed with synthetic upload tests confirming cleanup for invalid game, player, and coupon submissions.
+
 ## Phase 1 scope note
 
 The Phase 1 changes are structural extractions and characterization tests. The findings above are deliberately not silently “fixed” by changing existing frontend contracts. They remain explicit blockers or follow-up requirements for the storage, authentication, and release phases.
