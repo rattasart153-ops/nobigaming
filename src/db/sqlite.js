@@ -4,6 +4,7 @@ const path = require('node:path');
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
 const { DATA_DIR } = require('../config/paths');
+const ENV = require('../config/env');
 
 // Preserve the existing SQLite schema, migrations, seed data, and Admin bootstrap.
 const db = new Database(path.join(DATA_DIR, 'nobitopup.sqlite'));
@@ -50,8 +51,8 @@ if (db.prepare('SELECT COUNT(*) AS n FROM packages').get().n === 0) {
     }
   }); tx();
 }
-const adminUser = process.env.ADMIN_USERNAME || (process.env.NODE_ENV === 'production' ? '' : 'NobiGaming');
-const adminPass = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? '' : 'Nobi1534897');
+const adminUser = ENV.ADMIN_USERNAME || (ENV.NODE_ENV === 'production' ? '' : 'NobiGaming');
+const adminPass = ENV.ADMIN_PASSWORD || (ENV.NODE_ENV === 'production' ? '' : 'Nobi1534897');
 if (!adminUser || !adminPass) throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD must be configured in production.');
 if (!db.prepare('SELECT id FROM admins WHERE username=?').get(adminUser)) {
   db.prepare('INSERT INTO admins(username,password_hash) VALUES(?,?)').run(adminUser, bcrypt.hashSync(adminPass, 12));
