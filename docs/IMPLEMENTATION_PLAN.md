@@ -8,9 +8,9 @@ Status: ordered plan; no deployment authorization.
 - [x] Define runtime boundaries and proposed source layout.
 - [x] Define proposed Sheets/Drive schema.
 - [x] Define browser API and Vercel-to-GAS contract.
-- [ ] Review open decisions.
-- [ ] Inventory every current frontend API call and exact response shape.
-- [ ] Record branch commit SHA as rollback point.
+- [ ] Review open decisions that require explicit user confirmation (see Decisions section).
+- [x] Inventory every current frontend API call and exact response shape in [FRONTEND_API_INVENTORY.md](./FRONTEND_API_INVENTORY.md).
+- [x] Record code rollback point: `8d34a26d965c45d99ec52f54551efa55fdad42b5` (before this plan-documentation update).
 
 Exit: architecture and compatibility map reviewed; no unresolved decision that could cause data loss or security regression.
 
@@ -32,20 +32,33 @@ Completed:
 - [x] Verify API characterization tests after extraction.
 
 Remaining:
+- [x] Remove fixed development Admin credentials and default Session Secret; require explicit configuration in every environment.
+- [x] Separate public media uploads from private order slips and add Admin-only slip retrieval.
+- [x] Validate PNG/JPEG/WebP file signatures and reject MIME spoofing; full image decode/re-encode and dimension limits remain open.
+- [x] Require same-origin Origin headers for Admin mutations and reject cross-site Fetch Metadata.
+- [x] Enable CSP in Report-Only mode and verify the header.
 - [x] Extract security setup and environment configuration without changing existing runtime behavior.
-- [x] Expand characterization coverage for game/package/coupon/promotion CRUD and lists, coupon suggestions/validation, order creation/status, payment configuration, and unsupported upload MIME rejection.
+- [x] Expand characterization coverage for game/package/coupon/promotion CRUD and lists, coupon suggestions/validation, order creation/status, payment configuration, unsupported MIME, spoofed image signatures, oversized uploads, private slip access, same-origin checks, and fail-closed startup configuration.
 - [x] Extract public and Admin route handlers in separate modules while preserving route paths and response bodies.
-- [ ] Extract remaining payment-info and order-status business logic into focused services and add unit-level coverage.
-- [ ] Keep SQLite until the replacement repository adapter passes tests.
+- [x] Extract payment-info and order-status business logic into focused services; API tests cover configured/unconfigured payment response, status completion, no-op, and forbidden reversal.
+- [x] Keep SQLite as the isolated characterization baseline until the replacement repository adapter passes tests.
 
-Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring), `41790464278` (pending order service wiring), and `41790497080` (invalid checkout upload cleanup) and `41790533090` (invalid coupon upload cleanup) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
+Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring), `41790464278` (pending order service wiring), and `41790497080` (invalid checkout upload cleanup), `41790533090` (invalid coupon upload cleanup), `41791884105` (private slip isolation, same-origin hardening and startup fail-closed tests), `41792343333` (missing credential startup tests), `41792303043` (order transition tests), and `41792431314` (payment service wiring) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
 
 Exit: local behavior remains equivalent; syntax and route smoke tests pass.
 
 ## Phase 1 security findings
-- See [PHASE1_SECURITY_FINDINGS.md](./PHASE1_SECURITY_FINDINGS.md) for the evidence, impact, and remediation gates.
-- Publicly served upload paths, spoofable MIME validation, process-local rate limiting, local SQLite persistence, missing explicit CSRF controls, development Admin credential fallback, and disabled CSP remain documented risks.
+- See [PHASE1_SECURITY_FINDINGS.md](./PHASE1_SECURITY_FINDINGS.md) for evidence, remediation, and remaining release gates.
+- Remaining material risks: local SQLite/session persistence on Vercel, process-local rate limiting, lack of full image decoding, CSP still Report-Only, and private slips still need durable Google Drive storage.
 - Do not enable production orders until the critical/high findings are resolved and retested.
+
+## Phase 0/1 exit blockers before Phase 2
+- [x] Frontend GAS RPC calls and current response contracts inventoried.
+- [x] Express route gaps and response-shape mismatches recorded.
+- [ ] User review/confirmation of unresolved member, coupon lifecycle, audit retention, and session policy decisions.
+- [ ] Decide final image storage policy. User's prior requirement is private Google Drive storage for slips and other uploaded images; implement that target, not public Drive sharing.
+- [ ] Complete full image decoding and multi-instance abuse-control strategy.
+- [ ] Do not begin live integration until the user approves unresolved policy decisions.
 
 ## Phase 2 — Apps Script gateway and storage
 - Split GAS code into focused files.
