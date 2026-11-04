@@ -11,7 +11,10 @@ function requireSameOrigin(req, res, next) {
   }
 
   const origin = req.get('origin');
-  if (origin) {
+  if (!origin) {
+    return res.status(403).json({ error: 'คำขอเปลี่ยนแปลงข้อมูลต้องระบุ Origin' });
+  }
+  {
     let parsed;
     try {
       parsed = new URL(origin);
