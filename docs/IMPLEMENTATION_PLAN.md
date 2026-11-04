@@ -12,10 +12,10 @@ Status: ordered plan; no deployment authorization.
 - [x] Inventory every current frontend API call and exact response shape in [FRONTEND_API_INVENTORY.md](./FRONTEND_API_INVENTORY.md).
 - [x] Record code rollback point: `8d34a26d965c45d99ec52f54551efa55fdad42b5` (before this plan-documentation update).
 
-Exit: architecture and compatibility map reviewed; no unresolved decision that could cause data loss or security regression.
+Exit: architecture and compatibility map reviewed; implementation-affecting decisions must be confirmed before the phase that depends on them.
 
 ## Phase 1 — Modularize and harden the Express baseline
-Progress: in progress. The first extraction group is complete and its API smoke suite passes in GitHub Actions.
+Progress: in progress. Modularization, security hardening, route characterization, and frontend contract inventory are complete for the current Express baseline; production persistence and frontend migration remain open.
 
 Completed:
 - [x] Add Node.js API characterization smoke tests and `npm test`.
@@ -43,7 +43,7 @@ Remaining:
 - [x] Extract payment-info and order-status business logic into focused services; API tests cover configured/unconfigured payment response, status completion, no-op, and forbidden reversal.
 - [x] Keep SQLite as the isolated characterization baseline until the replacement repository adapter passes tests.
 
-Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring), `41790464278` (pending order service wiring), and `41790497080` (invalid checkout upload cleanup), `41790533090` (invalid coupon upload cleanup), `41791884105` (private slip isolation, same-origin hardening and startup fail-closed tests), `41792343333` (missing credential startup tests), `41792303043` (order transition tests), and `41792431314` (payment service wiring) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
+Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring), `41790464278` (pending order service wiring), and `41790497080` (invalid checkout upload cleanup), `41790533090` (invalid coupon upload cleanup), `41791884105` (private slip isolation, same-origin hardening and startup fail-closed tests), `41792343333` (missing credential startup tests), `41792303043` (order transition tests), and `41792431314` (payment service wiring), `41792910475` (Phase 1 plan update), and `41792917493` (security release-gate update) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
 
 Exit: existing API contracts are characterized, security changes are intentional and tested, and syntax/API regression tests pass. Frontend compatibility and durable production storage remain separate release gates.
 
@@ -103,10 +103,9 @@ Exit: all critical tests pass, remaining risks are documented, and user separate
 ## Decisions required before relevant code
 1. Member login ID length: proposal ASCII letters/digits, 4–30 characters; confirm.
 2. Coupon lifecycle: decide when Pending reserves capacity, reservation expiry, and release behavior on Rejected.
-3. Image privacy is confirmed: all uploaded images remain private in Drive; app proxy may serve storefront-visible images without making Drive files public.
-4. Retention for login and Admin audit logs.
-5. Admin and Member session lifetime and idle timeout.
-6. Benchmark a suitable slow password KDF in Apps Script; do not ship SHA-256-only password hashing.
+3. Retention for login and Admin audit logs.
+4. Admin and Member session lifetime and idle timeout.
+5. Benchmark a suitable slow password KDF in Apps Script; do not ship SHA-256-only password hashing.
 
 ## Safety rules
 - Work only on vercel-drive-setup; never update main.
