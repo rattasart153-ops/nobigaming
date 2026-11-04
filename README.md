@@ -16,7 +16,9 @@
    npm install
    npm start
    ```
-6. เปิดหน้าร้านที่ `http://localhost:3000/` และหลังบ้านที่ `http://localhost:3000/admin`
+6. API health check อยู่ที่ `http://localhost:3000/api/health`.
+
+**ข้อจำกัดปัจจุบัน:** Express เสิร์ฟไฟล์ HTML ได้ แต่ JavaScript ของหน้าร้านและหน้า Admin ยังเรียก Google Apps Script RPC โดยตรง จึงต้องเปิดผ่าน Apps Script Web App ที่ตั้งค่าไว้จึงจะทำงานครบ หน้า HTML ที่เสิร์ฟจาก Express ยังไม่ถือว่าเชื่อมกับ Express API แล้ว
 
 ## Google Apps Script migration (in progress)
 
