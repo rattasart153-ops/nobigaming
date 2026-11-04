@@ -45,7 +45,7 @@ Member identity is derived from the verified session, never from a browser-suppl
 - Admin and Member cookies are separate.
 - Order creation carries an idempotency key generated once per checkout attempt and reused only for retries of the same payload.
 - Server derives identity, price, discount, totals and coupon eligibility.
-- Every newly created order has a 15-minute payment deadline. For coupon orders, the effective deadline is the earlier of `created_at + 15 minutes` and the coupon expiry-day cutoff in `Asia/Bangkok` (the start of the day after `expires_at`'s calendar date). The server stores this immutable deadline as `payment_expires_at`.
+- Every newly created order has a 15-minute payment deadline. For coupon orders, the effective deadline is the earlier of `created_at + 15 minutes` and the exclusive coupon expiry-day cutoff in `Asia/Bangkok` (00:00 at the start of the day after the coupon expiry date). The server stores this immutable deadline as `payment_expires_at`.
 
 ## Vercel-to-Apps-Script request envelope
 Proposed JSON body fields:
@@ -107,7 +107,7 @@ Enable only actions required by an actual route. Public actions cannot invoke Ad
 - Bound every Apps Script call timeout.
 - Retry only transient reads or mutations protected by a stable idempotency key.
 - Never retry order creation with a new key after an ambiguous timeout.
-- A Pending order may transition to Completed only if the authoritative server time is before `payment_expires_at`; otherwise expiry handling must release its coupon reservation and reject completion.
+- A Pending order may transition to Completed only if authoritative server time is strictly before `payment_expires_at`; otherwise set `status=Rejected` with `status_reason=PAYMENT_TIMEOUT` and release its coupon reservation exactly once. An idempotent expiry worker should process abandoned Pending orders, while every order/status endpoint enforces the deadline synchronously.
 - On ambiguous create-order result, query with the original key before allowing another checkout.
 - Preserve request_id across retry; generate a fresh nonce and signature timestamp for each transport attempt.
 - Redirects, HTML error pages and malformed JSON are not success.
