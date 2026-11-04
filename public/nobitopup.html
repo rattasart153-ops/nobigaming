@@ -1646,7 +1646,7 @@ body {
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-async function apiRequest(url,options={}){const response=await fetch(url,{credentials:'same-origin',...options});const type=response.headers.get('content-type')||'';const data=type.includes('application/json')?await response.json():null;if(!response.ok){const error=new Error(data?.error||data?.message||'เชื่อมต่อระบบไม่สำเร็จ');error.status=response.status;throw error}return data}
+async function apiRequest(url,options={}){const response=await fetch(url,{credentials:'same-origin',...options});const type=response.headers.get('content-type')||'';const data=type.includes('application/json')?await response.json():null;if(!response.ok){const error=new Error(data?.error||data?.message||'เชื่อมต่อระบบไม่สำเร็จ');error.status=response.status;error.reason=data?.reason;throw error}return data}
 
 /* =========================================================
    Nobi Topup — interactions
@@ -2105,7 +2105,16 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
       showToast('ส่งสลิปเรียบร้อย · '+activeCheckout.id);
       try { sessionStorage.removeItem('nobi_active_checkout'); } catch (_) {}
       closeModal();playerId.value='';activeCheckout=null;slipSubmitted=false;
-    }catch(e){if(e.status===409||e.status===410){try{sessionStorage.removeItem('nobi_order_attempt')}catch(_){}}showToast(e.message,false);}
+    }catch(e){
+      if(e.reason==='already_submitted'){
+        try{sessionStorage.removeItem('nobi_active_checkout')}catch(_){}
+        showToast('ออเดอร์นี้ส่งสลิปแล้ว ระบบได้รับรายการเรียบร้อย');
+        slipSubmitted=true;activeCheckout=null;closeModal();
+      }else{
+        if(e.status===409||e.status===410){try{sessionStorage.removeItem('nobi_order_attempt')}catch(_){}}
+        showToast(e.message,false);
+      }
+    }
     finally{confirmBtn.disabled=false;confirmBtn.style.opacity="";}
   });
   // Admin entry opens the real backend dashboard.
