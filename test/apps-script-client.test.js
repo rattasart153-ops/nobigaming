@@ -93,6 +93,8 @@ test('GAS gateway action allowlist matches the legacy rpc dispatcher and replay 
   const dispatched = Array.from(code.matchAll(/case '([^']+)'/g), match => match[1]).sort();
   assert.deepEqual(allowed, dispatched, 'every gateway action must have an explicit rpc dispatcher case and vice versa');
   assert.ok(gateway.includes('function doPost(e)'), 'GAS HTTP entry point must exist');
+  assert.ok(code.includes('function doGet()'), 'minimal gateway health endpoint must exist');
+  assert.equal(code.includes('HtmlService'), false, 'GAS project must not depend on HtmlService frontend files');
   assert.ok(gateway.includes('Utilities.computeHmacSha256Signature'), 'gateway must verify HMAC-SHA256');
   assert.ok(gateway.includes('LockService.getScriptLock'), 'nonce claims must be serialized');
   assert.ok(code.includes("gateway_nonces: ['nonce_hash','created_at']"), 'database setup must create the nonce ledger');
