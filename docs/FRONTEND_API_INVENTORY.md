@@ -38,7 +38,7 @@ The `api(url, opts)` helper is not a REST client. It parses the local options an
 | `GET /api/admin/me` | `adminMe` | `{token}` | `{authenticated:boolean}`. |
 | `GET /api/admin/dashboard` | `adminDashboard` | `{token}` | `{orders, pending, completed, revenue}`. |
 | `GET /api/admin/orders` | `adminOrders` | `{token}` | Array of orders; includes `slip_file_id` for the Admin UI to decide whether to show “ดูสลิป”. |
-| `GET /api/admin/orders/:id/status` pseudo-route | `adminSetOrderStatus` | `{token, orderId, status}` | `{ok:true}` on success; GAS rejects status changes once an order has left Pending, except a no-op same status. |
+| `PATCH /api/admin/orders/:id/status` pseudo-route | `adminSetOrderStatus` | `{token, orderId, status}` | `{ok:true}` on success; GAS rejects status changes once an order has left Pending, except a no-op same status. |
 | View slip button | `adminSlipData` | `{token, orderId}` | `{name, mimeType, base64}`; UI creates a data URL and renders the image. |
 | `GET /api/admin/{games,packages,coupons,promotions}` | `adminList` | `{token, tableName}` | Array of records. |
 | `POST/PUT /api/admin/{games,packages,coupons,promotions}` | `adminUpsert` | `{token, tableName, record}` | `{ok:true, id}`; the UI refreshes the list instead of consuming the returned record. |
