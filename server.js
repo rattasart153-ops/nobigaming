@@ -3,10 +3,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
 const bcrypt = require('bcryptjs');
-const multer = require('multer');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const generatePayload = require('promptpay-qr');
@@ -15,7 +12,10 @@ const QRCode = require('qrcode');
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 // Keep path resolution centralized; preserve the existing locations and overrides.
-const { ROOT, PUBLIC, DATA_DIR, UPLOADS, IS_VERCEL } = require('./src/config/paths');
+const { PUBLIC, DATA_DIR, UPLOADS, IS_VERCEL } = require('./src/config/paths');
+const sessionMiddleware = require('./src/middleware/session');
+const upload = require('./src/middleware/uploads');
+const errorHandler = require('./src/middleware/error-handler');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS, { recursive: true });
 if (IS_VERCEL) console.warn('[Nobi Topup] Vercel is using ephemeral /tmp storage. Orders, sessions, SQLite data and uploads will not persist across instance replacement. Do not use for production transactions.');
@@ -25,15 +25,7 @@ app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
-const sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'dev-only-change-this-session-secret-before-deploying');
-if (!sessionSecret) throw new Error('SESSION_SECRET must be configured in production.');
-app.use(session({
-  store: new SQLiteStore({ db: 'sessions.sqlite', dir: DATA_DIR }),
-  secret: sessionSecret,
-  resave: false,
-  saveUninitialized: false,
-  cookie: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 1000 * 60 * 60 * 8 }
-}));
+app.use(sessionMiddleware);
 app.use('/uploads', express.static(UPLOADS, { maxAge: '1h', dotfiles: 'deny' }));
 app.use(express.static(PUBLIC));
 
@@ -42,11 +34,6 @@ const db = require('./src/db/sqlite');
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const requireAdmin = (req, res, next) => req.session && req.session.adminId ? next() : res.status(401).json({ error: 'กรุณาเข้าสู่ระบบแอดมินก่อน' });
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'พยายามเข้าสู่ระบบหลายครั้งเกินไป กรุณาลองใหม่ภายหลัง' } });
-const upload = multer({
-  storage: multer.diskStorage({ destination: UPLOADS, filename: (req, file, cb) => cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${path.extname(file.originalname).toLowerCase()}`) }),
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => cb(null, /^image\/(png|jpeg|webp)$/.test(file.mimetype))
-});
 const bool = v => v === true || v === 1 || v === '1' || v === 'true' ? 1 : 0;
 const validDate = v => !v || !Number.isNaN(Date.parse(v));
 function getCatalog() {
@@ -206,11 +193,7 @@ app.post('/api/admin/upload', requireAdmin, upload.single('image'), (req,res) =>
 
 app.get('/admin', (req,res) => res.sendFile(path.join(PUBLIC,'admin.html')));
 app.get('/', (req,res) => res.sendFile(path.join(PUBLIC,'nobitopup.html')));
-app.use((err,req,res,next) => {
-  console.error(err);
-  if (err instanceof multer.MulterError) return res.status(400).json({error: err.code === 'LIMIT_FILE_SIZE' ? 'ไฟล์ใหญ่เกิน 5 MB' : 'อัปโหลดไฟล์ไม่สำเร็จ'});
-  res.status(500).json({error:'เกิดข้อผิดพลาดภายในระบบ'});
-});
+app.use(errorHandler);
 // Vercel invokes the exported handler; local development starts its own HTTP listener.
 if (require.main === module) {
   app.listen(PORT, () => console.log(`Nobi Topup running at http://localhost:${PORT}`));
