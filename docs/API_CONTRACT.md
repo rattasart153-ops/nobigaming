@@ -12,7 +12,7 @@ Public:
 - POST /api/public/coupons/validate
 - GET /api/public/payment-info
 - POST /api/public/orders (creates Pending checkout; slip upload is optional at creation)
-- POST /api/public/orders/:orderId/slip (multipart upload; `Authorization: Bearer <checkout_token>` required)
+- POST /api/public/orders/:orderId/slip (multipart upload; order-scoped HttpOnly checkout cookie required)
 
 Authentication:
 - POST /api/admin/login
@@ -49,24 +49,26 @@ Member identity is derived from the verified session, never from a browser-suppl
 - Orders without a coupon, and orders using a coupon without an expiry date, have a 15-minute payment deadline. An order using a coupon with an expiry date may be paid and have its slip submitted until the exclusive cutoff at 00:00 Asia/Bangkok on the day after the coupon expiry date; do not impose an additional 15-minute cap. The coupon expiry date is inclusive. The server stores this immutable deadline as `payment_expires_at`. Order creation generates a one-time checkout token; store only its SHA-256 hash. Return the raw token only in an HttpOnly, SameSite=Strict cookie scoped to that order's slip-upload path, expiring at payment_expires_at. Never return the token in JSON or store it in browser storage. Slip submission uses the scoped cookie. After acceptance, shorten its expiry to five minutes so a client that missed the response can safely retry and receive an `already_submitted` result; the token cannot submit a second slip.
 
 ## Vercel-to-Apps-Script request envelope
-Proposed JSON body fields:
-- version: integer protocol version
-- request_id: UUID
-- timestamp: ISO-8601 UTC
-- nonce: random one-time value
-- action: fixed allowlisted action string
-- payload: action-specific object
-- auth: key_id and base64 HMAC-SHA256 signature
 
-Signature covers a canonical representation of version, request_id, timestamp, nonce, action and payload. Shared secret exists only in Vercel environment variables and Apps Script Script Properties. It is never sent to browser or committed.
+The repository gateway currently implements protocol version 1 in `google-apps-script/13_HttpGateway.gs` and `src/clients/apps-script.client.js`.
 
-Apps Script validates request shape, protocol version, timestamp freshness, key ID, signature, replay policy, action allowlist, payload schema and operation authorization.
+Signed JSON body fields:
+- `version`: integer, currently 1
+- `timestamp`: Unix epoch milliseconds
+- `nonce`: cryptographically random base64url value, unique per transport attempt
+- `action`: fixed allowlisted action name
+- `args`: action-specific object
+- `signature`: lowercase hexadecimal HMAC-SHA256
 
-Do not assume arbitrary HTTP headers are exposed in Apps Script doPost event objects. Carry authentication in the signed body and test redirect/response behavior using a test deployment before production.
+The signature covers the exact canonical JSON representation of `version,timestamp,nonce,action,args` in that order. The shared secret exists only in Vercel environment variable `APPS_SCRIPT_SHARED_SECRET` and Apps Script Script Property `NOBI_GATEWAY_SECRET`; it is never sent to the browser or committed. The GAS endpoint validates the secret, timestamp freshness (±5 minutes), signature, nonce replay and action allowlist before dispatch.
+
+The nonce ledger is the private `gateway_nonces` sheet created by `setupNobiDatabase()`. A ScriptLock serializes replay checks and inserts. This is an initial bounded-replay control, not a claim of unlimited throughput; monitor sheet growth and Apps Script quotas.
+
+Apps Script Web App ContentService does not provide arbitrary HTTP status mapping. The gateway therefore returns a JSON envelope and the Vercel client must inspect `ok`, `version` and `error.code`; a transport-level HTTP 200 is not proof of application success.
 
 ## Response envelope
-Success fields: ok=true, version, request_id, data.
-Failure fields: ok=false, version, request_id, error.code, error.message.
+Success fields: `ok=true, version=1, result`.
+Failure fields: `ok=false, version=1, error.code, error.message`.
 
 Never expose stack traces, spreadsheet IDs, Drive IDs, password hashes, tokens or secret configuration.
 
