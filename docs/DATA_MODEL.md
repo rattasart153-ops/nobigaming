@@ -50,17 +50,17 @@ coupon_id, code_normalized, code_display, discount_type, discount_value, min_ord
 access_type is everyone, member_only or member_game_spend. game_id limits redemption game; member_spend_game_id is the separate game used to calculate Member eligibility.
 
 ### coupon_redemptions
-redemption_id, coupon_id, order_id, member_id, player_id, game_id, discount_satang, state, reserved_at, finalized_at, released_at
+redemption_id, coupon_id, order_id, member_id, player_id, game_id, discount_satang, state, reserved_at, reserved_until, finalized_at, released_at
 
-Proposed states: Reserved, Consumed, Released. This ledger should be the source of truth for capacity. Reservation timing, expiry and release on Rejected must be decided before implementation.
+States: Reserved, Consumed, Released. This ledger is the source of truth for coupon capacity. Reserve immediately when an order enters Pending; change to Consumed only when the order is Completed before its payment deadline; release on Rejected or payment expiry. Enforce every reserve/consume/release operation under a shared lock and make it idempotent. `reserved_until` records the effective payment deadline.
 
 ### promotions
 promotion_id, title, subtitle, image_file_id, image_url, link_url, active, sort_order, starts_at, ends_at, created_at, updated_at
 
 ### orders
-order_id, order_number, request_key, member_id, game_id, package_id, player_id, server_id, coupon_id, subtotal_satang, discount_satang, total_satang, slip_file_id, slip_mime_type, slip_size_bytes, status, status_reason, created_at, updated_at, completed_at, rejected_at
+order_id, order_number, request_key, member_id, game_id, package_id, player_id, server_id, coupon_id, subtotal_satang, discount_satang, total_satang, slip_file_id, slip_mime_type, slip_size_bytes, status, status_reason, payment_expires_at, created_at, updated_at, completed_at, rejected_at
 
-Guest order has blank member_id. Status is Pending, Completed or Rejected. request_key is unique. Member history is always filtered by authenticated member_id.
+Guest order has blank member_id. Status is Pending, Completed or Rejected. `payment_expires_at` is fixed at order creation: for every order, 15 minutes after creation; for coupon orders, the earlier of that time and the coupon expiry-day cutoff. Coupon expiry dates are interpreted in Asia/Bangkok and remain valid through that calendar day, with cutoff at 00:00 at the start of the following day. A Pending order must not be completed after `payment_expires_at`; expiry processing changes it to an expired/rejected terminal state and releases any Reserved coupon capacity exactly once. `request_key` is unique. Member history is always filtered by authenticated member_id.
 
 ### idempotency_records
 idempotency_id, scope, request_key, payload_hash, resource_id, state, created_at, expires_at
@@ -90,7 +90,7 @@ No file or folder is shared as Anyone. Store Drive file IDs only. Slips and othe
 
 ## Decisions still required
 1. Confirm whether login ID length 4–30 is final.
-2. Finalize coupon reservation and release lifecycle.
+2. Coupon lifecycle and payment window are confirmed; see the `orders` and `coupon_redemptions` rules above.
 3. Image privacy requirement is confirmed: uploaded images, including marketing/catalog images and slips, remain private in Drive; storefront display must use an application proxy rather than public Drive sharing.
 4. Set retention periods for login and Admin audit logs.
 5. Confirm Admin and Member session lifetime and idle timeout.
