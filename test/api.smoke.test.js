@@ -301,6 +301,11 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   const prepayResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', body: prepayForm });
   assert.equal(prepayResponse.status, 201);
   const prepay = await prepayResponse.json();
+  assert.equal(Object.hasOwn(prepay, 'checkout_token'), false, 'checkout token must never be exposed in JSON');
+  const checkoutCookie = prepayResponse.headers.get('set-cookie');
+  assert.ok(checkoutCookie && checkoutCookie.includes('HttpOnly') && checkoutCookie.includes('SameSite=Strict'));
+  assert.ok(checkoutCookie.includes('Path=/api/public/orders/' + prepay.order.id + '/slip'));
+  const checkoutCookiePair = checkoutCookie.split(';')[0];
   assert.equal(prepay.order.status, 'Pending');
   assert.equal(prepay.order.slip_submitted_at, null);
   assert.ok(Date.parse(prepay.order.payment_expires_at) - Date.now() > 14 * 60 * 1000);
@@ -309,8 +314,9 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.equal(prematureCompletion.status, 409);
   const prepaySlipForm = new FormData();
   prepaySlipForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'prepay.png');
-  const prepaySlip = await fetch(`${baseUrl}/api/public/orders/${prepay.order.id}/slip`, { method: 'POST', headers: { authorization: `Bearer ${prepay.checkout_token}` }, body: prepaySlipForm });
+  const prepaySlip = await fetch(`${baseUrl}/api/public/orders/${prepay.order.id}/slip`, { method: 'POST', headers: { cookie: checkoutCookiePair }, body: prepaySlipForm });
   assert.equal(prepaySlip.status, 201);
+  assert.match(prepaySlip.headers.get('set-cookie') || '', /Max-Age=0|Expires=/, 'checkout cookie should be cleared after slip submission');
   const prepayCompleted = await fetch(`${baseUrl}/api/admin/orders/${prepay.order.id}/status`, { method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ status: 'Completed' }) });
   assert.equal(prepayCompleted.status, 200);
 
