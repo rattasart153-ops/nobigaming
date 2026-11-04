@@ -80,6 +80,13 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   });
   assert.equal(crossOriginLogin.status, 403);
 
+  const missingOriginLogin = await fetch(`${baseUrl}/api/admin/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username: 'TestAdmin', password: 'TestPassword123' })
+  });
+  assert.equal(missingOriginLogin.status, 403);
+
   const login = await fetch(`${baseUrl}/api/admin/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: baseUrl },
@@ -282,7 +289,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
 
   const rejectedDelete = await fetch(`${baseUrl}/api/admin/games/${game.id}`, {
     method: 'DELETE',
-    headers: { cookie: cookie.split(';')[0] }
+    headers: { cookie: cookie.split(';')[0], origin: baseUrl }
   });
   assert.equal(rejectedDelete.status, 409);
 
@@ -292,7 +299,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   forgedImageForm.append('image', new Blob(['not a PNG'], { type: 'image/png' }), 'forged.png');
   const forgedImage = await fetch(`${baseUrl}/api/admin/upload`, {
     method: 'POST',
-    headers: { cookie: cookie.split(';')[0] },
+    headers: { cookie: cookie.split(';')[0], origin: baseUrl },
     body: forgedImageForm
   });
   assert.equal(forgedImage.status, 415);
@@ -302,7 +309,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   badUploadForm.append('image', new Blob(['not an image'], { type: 'text/plain' }), 'not-image.txt');
   const badUpload = await fetch(`${baseUrl}/api/admin/upload`, {
     method: 'POST',
-    headers: { cookie: cookie.split(';')[0] },
+    headers: { cookie: cookie.split(';')[0], origin: baseUrl },
     body: badUploadForm
   });
   assert.equal(badUpload.status, 400);
@@ -311,7 +318,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   oversizedForm.append('image', new Blob([new Uint8Array(5 * 1024 * 1024 + 1)], { type: 'image/png' }), 'oversized.png');
   const oversizedUpload = await fetch(`${baseUrl}/api/admin/upload`, {
     method: 'POST',
-    headers: { cookie: cookie.split(';')[0] },
+    headers: { cookie: cookie.split(';')[0], origin: baseUrl },
     body: oversizedForm
   });
   assert.equal(oversizedUpload.status, 400);
@@ -325,7 +332,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
 
   const logout = await fetch(`${baseUrl}/api/admin/logout`, {
     method: 'POST',
-    headers: { cookie: cookie.split(';')[0] }
+    headers: { cookie: cookie.split(';')[0], origin: baseUrl }
   });
   assert.equal(logout.status, 200);
 
