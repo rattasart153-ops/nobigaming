@@ -78,9 +78,9 @@ Exit: existing API contracts are characterized, security changes are intentional
 - Coupon suggestions and validation.
 - Guest and Member checkout.
 - Server-side pricing and eligibility.
-- Enforce a 15-minute payment deadline on every order; coupon orders use the earlier coupon expiry-day cutoff in Asia/Bangkok. Add idempotent expiry processing and synchronous deadline checks.
+- Enforce 15 minutes for orders without coupons or coupons without expiry; coupon orders with an expiry date remain payable through that date (Asia/Bangkok), with no 15-minute cap. Add idempotent expiry processing and synchronous deadline checks.
 - Idempotent order creation and private slip upload.
-- Reserve coupon capacity when a Pending order is created; consume on timely Completed; release on Rejected or payment expiry. Payment deadline is the earlier of 15 minutes after order creation or the coupon's expiry-day cutoff.
+- Reserve coupon capacity when a coupon Pending order is created; consume when Admin marks Completed only if a slip was submitted before the deadline; release on Rejected or Expired. Coupon orders with an expiry date use the coupon-day cutoff; all other orders use 15 minutes.
 
 ## Phase 5 — Admin and frontend integration
 - Admin login/session/dashboard/orders.
@@ -103,7 +103,7 @@ Exit: all critical tests pass, remaining risks are documented, and user separate
 
 ## Decisions required before relevant code
 1. Member login ID length: proposal ASCII letters/digits, 4–30 characters; confirm.
-2. Coupon lifecycle (confirmed): reserve capacity immediately on Pending; consume only when Completed before the payment deadline; release on Rejected or expiry. All orders have a 15-minute payment window. Coupon orders must also be paid no later than the end of the coupon expiry date (Asia/Bangkok); the effective deadline is the earlier cutoff.
+2. Coupon lifecycle (confirmed): reserve capacity immediately on Pending; consume when Completed if the slip was submitted before the payment deadline; release on Rejected or Expired. Orders without a coupon, or using a non-expiring coupon, have 15 minutes. A coupon with an expiry date gives the order until the end of that date in Asia/Bangkok, without an extra 15-minute cap.
 3. Retention for login and Admin audit logs.
 4. Admin and Member session lifetime and idle timeout.
 5. Benchmark a suitable slow password KDF in Apps Script; do not ship SHA-256-only password hashing.
