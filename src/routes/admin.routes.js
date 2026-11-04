@@ -2,9 +2,11 @@
 
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const requireSameOrigin = require('../middleware/require-same-origin');
 
 function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, validDate }) {
   const router = express.Router();
+  router.use(requireSameOrigin);
 
   router.post('/api/admin/login', loginLimiter, (req,res,next) => {
     const { username, password } = req.body || {};
