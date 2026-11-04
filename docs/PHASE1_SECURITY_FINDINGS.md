@@ -9,7 +9,7 @@ Status: findings recorded during structural refactoring and security hardening. 
 - Evidence: The previous Express build mounted the whole upload directory at `/uploads` and stored slips under that public path.
 - Remediation in current branch: Public marketing images are stored under a dedicated public subdirectory. Checkout slips are stored in a separate private directory that is not mounted by `express.static`. Admin order lists expose only `has_slip`, never the filesystem path; `GET /api/admin/orders/:id/slip` streams the file only after Admin authentication and sets `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`. Legacy `/uploads/<filename>` slip paths are resolvable only through the authenticated endpoint; the old root upload directory is no longer publicly mounted.
 - Verification: CI checks that unauthenticated slip access returns 401, authenticated access returns the image, and the same filename is unavailable under `/uploads/`.
-- Remaining release gate: Replace local private-slip storage with private Google Drive storage before Vercel production, because `/tmp` is ephemeral. No deployment is authorized.
+- Remaining release gate: Replace local private-slip and local public-media storage with private Google Drive storage for all uploaded images before Vercel production, because `/tmp` is ephemeral. Storefront-visible images must be delivered through an application proxy; do not change Drive sharing to Anyone. No deployment is authorized.
 
 ## S-02 — Upload validation trusts the supplied MIME type
 
@@ -80,7 +80,7 @@ Status: findings recorded during structural refactoring and security hardening. 
 - Evidence: Admin marketing media and customer payment slips previously shared the same directory and static mount.
 - Remediation: Public Admin uploads now use `uploads/public`; payment slips use a separately configured private directory (`NOBI_PRIVATE_SLIP_DIR`, defaulting to `DATA_DIR/private-slips`). Only the public subdirectory is mounted at `/uploads`.
 - Verification: CI verifies private slip files cannot be fetched from the public upload route and can be retrieved only through the Admin-protected slip endpoint.
-- Remaining release gate: Private local storage is still ephemeral on Vercel. Use private Drive storage in the target architecture.
+- Remaining release gate: The local Express baseline still uses a public application URL for catalog/marketing images. In the target architecture, store all uploaded image objects in private Drive and proxy only the selected storefront-visible assets through the application without public Drive sharing.
 
 ## Phase 1 scope note
 
