@@ -1,6 +1,7 @@
 'use strict';
 
 const express = require('express');
+const fs = require('node:fs');
 const generatePayload = require('promptpay-qr');
 const QRCode = require('qrcode');
 const ENV = require('../config/env');
@@ -34,8 +35,17 @@ function createPublicRouter({ db, upload, asyncRoute, validateCoupon, getCatalog
     const { gameId, packageId, playerId, serverId = '', couponCode = '' } = req.body;
     const game = db.prepare('SELECT * FROM games WHERE id=? AND active=1').get(Number(gameId));
     const pack = db.prepare('SELECT * FROM packages WHERE id=? AND game_id=? AND active=1').get(Number(packageId), Number(gameId));
-    if (!game || !pack) return res.status(400).json({ error: 'ไม่พบเกมหรือแพ็กเกจที่เลือก' });
-    if (!String(playerId || '').trim() || String(playerId).trim().length > 100) return res.status(400).json({ error: 'กรุณากรอก UID ให้ถูกต้อง' });
+    const discardUpload = () => {
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    };
+    if (!game || !pack) {
+      discardUpload();
+      return res.status(400).json({ error: 'ไม่พบเกมหรือแพ็กเกจที่เลือก' });
+    }
+    if (!String(playerId || '').trim() || String(playerId).trim().length > 100) {
+      discardUpload();
+      return res.status(400).json({ error: 'กรุณากรอก UID ให้ถูกต้อง' });
+    }
     if (!req.file) return res.status(400).json({ error: 'กรุณาแนบสลิปการโอนเงิน (PNG/JPG/WebP ไม่เกิน 5 MB)' });
 
     const result = createPendingOrder({
