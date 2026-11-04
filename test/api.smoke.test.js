@@ -204,6 +204,21 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.equal(invalidPlayerOrder.status, 400);
   assert.equal(uploadCount(), beforeInvalidPlayer);
 
+  const beforeInvalidCoupon = uploadCount();
+  const invalidCouponForm = new FormData();
+  invalidCouponForm.append('gameId', String(game.id));
+  invalidCouponForm.append('packageId', String(pack.id));
+  invalidCouponForm.append('playerId', 'CI-PLAYER-INVALID-COUPON');
+  invalidCouponForm.append('couponCode', 'NOT-A-REAL-COUPON');
+  invalidCouponForm.append('slip', new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' }), 'invalid-coupon.png');
+  const invalidCouponOrder = await fetch(`${baseUrl}/api/public/orders`, {
+    method: 'POST',
+    headers: { cookie: cookie.split(';')[0] },
+    body: invalidCouponForm
+  });
+  assert.equal(invalidCouponOrder.status, 422);
+  assert.equal(uploadCount(), beforeInvalidCoupon);
+
   // Upload a synthetic PNG only; never use a real payment slip in CI.
   const form = new FormData();
   form.append('gameId', String(game.id));
