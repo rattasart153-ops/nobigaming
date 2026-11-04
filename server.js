@@ -21,6 +21,7 @@ app.use('/uploads', express.static(UPLOADS, { maxAge: '1h', dotfiles: 'deny' }))
 app.use(express.static(PUBLIC));
 
 const db = require('./src/db/sqlite');
+const loginLimiter = createLoginLimiter();
 
 const asyncRoute = require('./src/utils/async-route');
 const requireAdmin = require('./src/middleware/admin-auth');
