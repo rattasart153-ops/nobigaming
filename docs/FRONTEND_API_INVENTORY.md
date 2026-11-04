@@ -82,3 +82,16 @@ For each frontend operation:
 6. Remove the GAS RPC path only after the replacement has passed the same checks.
 
 No frontend migration, Apps Script publication, Vercel deployment, or live checkout is authorized by this inventory.
+
+
+## 6. REST frontend migration status (2026-11-04)
+
+The current `public/nobitopup.html` and `public/admin.html` now call the same-origin Express REST API; both inline scripts have been removed from the Apps Script RPC path.
+
+- Storefront: `GET /api/public/catalog`, `GET /api/public/promotions`, `GET /api/public/coupons/suggestions`, `POST /api/public/coupons/validate`, `GET /api/public/payment-info`, `POST /api/public/orders`, and `POST /api/public/orders/:id/slip`.
+- Checkout creates a Pending order first and receives a one-time checkout token. If a slip is selected, it is uploaded as a second request; otherwise the modal remains in the payment/upload step and displays the server deadline. The token is held in page memory only.
+- Admin uses same-origin `fetch` with cookie credentials for login, logout, session check, dashboard, CRUD, order list and status changes. It reads `has_slip` and opens slips through the authenticated binary endpoint `GET /api/admin/orders/:id/slip`.
+- Admin displays `payment_expires_at` and the `Expired` status. Approval is disabled until a slip exists; the API independently enforces this rule.
+- `test/frontend-contract.test.js` compiles the inline scripts and checks the REST contract and absence of Apps Script RPC calls.
+
+This is frontend-to-local-Express integration only. It does not complete the Google Sheets/Drive repository adapter, member system, member-specific coupon access rules, durable session/storage, or private Drive media proxy. Do not deploy or accept live payments until those release gates and full browser/device end-to-end tests pass.
