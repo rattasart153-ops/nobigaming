@@ -87,6 +87,13 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   });
   assert.equal(missingOriginLogin.status, 403);
 
+  const crossSiteLogin = await fetch(`${baseUrl}/api/admin/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', origin: baseUrl, 'sec-fetch-site': 'cross-site' },
+    body: JSON.stringify({ username: 'TestAdmin', password: 'TestPassword123' })
+  });
+  assert.equal(crossSiteLogin.status, 403);
+
   const login = await fetch(`${baseUrl}/api/admin/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: baseUrl },
@@ -326,7 +333,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
 
   const deletePromotion = await fetch(`${baseUrl}/api/admin/promotions/${promotion.id}`, {
     method: 'DELETE',
-    headers: { cookie: cookie.split(';')[0] }
+    headers: { cookie: cookie.split(';')[0], origin: baseUrl }
   });
   assert.equal(deletePromotion.status, 200);
 
