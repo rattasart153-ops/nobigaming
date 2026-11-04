@@ -5,7 +5,14 @@ function createCouponService(db) {
     if (!code) return { ok: false, message: 'กรุณากรอกโค้ดส่วนลด' };
     const c = db.prepare(`SELECT c.*, g.name AS game_name FROM coupons c LEFT JOIN games g ON g.id=c.game_id WHERE upper(c.code)=upper(?)`).get(code.trim());
     if (!c || !c.active) return { ok: false, message: 'ไม่พบโค้ดนี้หรือโค้ดถูกปิดใช้งาน' };
-    if (c.expires_at && Date.parse(c.expires_at) < Date.now()) return { ok: false, message: 'โค้ดนี้หมดอายุแล้ว' };
+    if (c.expires_at) {
+      const match = String(c.expires_at).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        // Coupon date is inclusive in Asia/Bangkok; cutoff is midnight at the next local day.
+        const cutoff = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1) - 7 * 60 * 60 * 1000;
+        if (Date.now() >= cutoff) return { ok: false, message: 'โค้ดนี้หมดอายุแล้ว' };
+      } else if (Date.parse(c.expires_at) <= Date.now()) return { ok: false, message: 'โค้ดนี้หมดอายุแล้ว' };
+    }
     if (c.usage_limit !== null && c.usage_limit !== undefined && c.used_count >= c.usage_limit) return { ok: false, message: 'โค้ดนี้ถูกใช้ครบจำนวนแล้ว' };
     if (subtotal < c.min_spend) return { ok: false, message: `ยอดซื้อขั้นต่ำของโค้ดนี้คือ ฿${Number(c.min_spend).toLocaleString('th-TH')}`, coupon: c };
     if (c.game_id && Number(c.game_id) !== Number(gameId)) return { ok: false, message: `โค้ดนี้ใช้ได้เฉพาะเกม ${c.game_name}`, coupon: c };
