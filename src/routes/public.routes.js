@@ -72,7 +72,7 @@ function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCat
       couponCode: normalizedCouponCode, file: req.file || null, idempotencyKey, requestHash
     });
     if (!result.ok) {
-      const status = result.reason === 'idempotency_conflict' ? 409 : 422;
+      const status = result.reason === 'idempotency_conflict' ? 409 : result.reason === 'expired' ? 410 : 422;
       return res.status(status).json({ error: result.message, reason: result.reason });
     }
     res.set('Cache-Control', 'no-store');
