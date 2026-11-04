@@ -1942,6 +1942,8 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
     activeCheckout = null; slipSubmitted = false; checkoutNotice.textContent = '';
     confirmBtn.textContent = 'สร้างออเดอร์และดำเนินการชำระเงิน';
     confirmBtn.disabled = false;
+    $('.pack',packGrid).forEach(el=>el.disabled=false);
+    ['#playerId','#serverId','#couponCode','#applyCoupon'].forEach(sel=>$(sel).disabled=false);
     lastFocused = card;
 
     modalTitle.textContent = name;
@@ -1994,6 +1996,7 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
   };
 
   const closeModal = () => {
+    if (activeCheckout && !slipSubmitted) { showToast('มีออเดอร์ที่รอส่งสลิป กรุณาส่งสลิปก่อนปิดหน้าต่าง', false); return; }
     modal.hidden = true;
     document.body.style.overflow = "";
     if (lastFocused) lastFocused.focus();
@@ -2071,6 +2074,8 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
         activeCheckout={id:created.order.id,token:created.checkout_token,expiresAt:created.order.payment_expires_at};
         checkoutNotice.textContent='สร้างออเดอร์ '+activeCheckout.id+' แล้ว กรุณาชำระเงินและส่งสลิปภายใน '+new Date(activeCheckout.expiresAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' (เวลาไทย)';
         confirmBtn.textContent='ส่งสลิปการชำระเงิน';
+        $('.pack',packGrid).forEach(el=>el.disabled=true);
+        ['#playerId','#serverId','#couponCode','#applyCoupon'].forEach(sel=>$(sel).disabled=true);
         showToast('สร้างออเดอร์แล้ว กรุณาชำระเงินและแนบสลิป');
       }
       if(!slip){confirmBtn.disabled=false;confirmBtn.style.opacity="";return;}
