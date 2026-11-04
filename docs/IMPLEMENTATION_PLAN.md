@@ -14,7 +14,7 @@ Status: ordered plan; no deployment authorization.
 
 Exit: architecture and compatibility map reviewed; no unresolved decision that could cause data loss or security regression.
 
-## Phase 1 — Modularize without behavior changes
+## Phase 1 — Modularize and harden the Express baseline
 Progress: in progress. The first extraction group is complete and its API smoke suite passes in GitHub Actions.
 
 Completed:
@@ -45,11 +45,11 @@ Remaining:
 
 Latest verified CI runs: `41789682979` (environment centralization), `41789980248` (Admin router extraction/mount), `41790264334` (Multer 2.5.0 upload limits and oversized upload rejection), and `41790360883` (service/middleware wiring), `41790464278` (pending order service wiring), and `41790497080` (invalid checkout upload cleanup), `41790533090` (invalid coupon upload cleanup), `41791884105` (private slip isolation, same-origin hardening and startup fail-closed tests), `41792343333` (missing credential startup tests), `41792303043` (order transition tests), and `41792431314` (payment service wiring) — success. One expanded test run failed on an outdated expected total (`41790083468`); the assertion was corrected from ฿20 to ฿19 after coupon discount changed from ฿2 to ฿3, and the corrected run passed.
 
-Exit: local behavior remains equivalent; syntax and route smoke tests pass.
+Exit: existing API contracts are characterized, security changes are intentional and tested, and syntax/API regression tests pass. Frontend compatibility and durable production storage remain separate release gates.
 
 ## Phase 1 security findings
 - See [PHASE1_SECURITY_FINDINGS.md](./PHASE1_SECURITY_FINDINGS.md) for evidence, remediation, and remaining release gates.
-- Remaining material risks: local SQLite/session persistence on Vercel, process-local rate limiting, lack of full image decoding, CSP still Report-Only, and private slips still need durable Google Drive storage.
+- Remaining material risks: local SQLite/session persistence on Vercel, process-local rate limiting, lack of full image decoding, CSP still Report-Only, and all uploaded images still need private Google Drive storage and application-proxy delivery.
 - Do not enable production orders until the critical/high findings are resolved and retested.
 
 ## Phase 0/1 exit blockers before Phase 2
