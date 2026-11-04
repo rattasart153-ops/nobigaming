@@ -1,6 +1,6 @@
 # Nobi Topup — Structural Readiness and Implementation Plan
 
-Status: ordered plan; no deployment authorization.
+Status: ordered plan; policy decisions for Phase 0/1 confirmed; no deployment authorization.
 
 ## Phase 0 — Architecture baseline
 - [x] Confirm clean initial setup; no legacy DB/uploads need migration.
@@ -8,14 +8,14 @@ Status: ordered plan; no deployment authorization.
 - [x] Define runtime boundaries and proposed source layout.
 - [x] Define proposed Sheets/Drive schema.
 - [x] Define browser API and Vercel-to-GAS contract.
-- [ ] Review open decisions that require explicit user confirmation (see Decisions section).
+- [x] Review open decisions that require explicit user confirmation (see Decisions section); all Phase 0/1 policy decisions are now confirmed.
 - [x] Inventory every current frontend API call and exact response shape in [FRONTEND_API_INVENTORY.md](./FRONTEND_API_INVENTORY.md).
 - [x] Record code rollback point: `8d34a26d965c45d99ec52f54551efa55fdad42b5` (before this plan-documentation update).
 
 Exit: architecture and compatibility map reviewed; implementation-affecting decisions must be confirmed before the phase that depends on them.
 
 ## Phase 1 — Modularize and harden the Express baseline
-Progress: technical baseline work substantially complete; Phase 1 remains open only for explicit policy confirmations and final acceptance review. Production persistence and private Drive delivery are separate later release gates.
+Progress: technical baseline and policy decisions complete; final branch/CI acceptance review remains. Production persistence and private Drive delivery are separate later release gates.
 
 Completed:
 - [x] Add Node.js API characterization smoke tests and `npm test`.
@@ -50,16 +50,18 @@ Exit: existing API contracts are characterized, security changes are intentional
 ## Phase 1 security findings
 - See [PHASE1_SECURITY_FINDINGS.md](./PHASE1_SECURITY_FINDINGS.md) for evidence, remediation, and remaining release gates.
 - See [PHASE1_ABUSE_CONTROL_DESIGN.md](./PHASE1_ABUSE_CONTROL_DESIGN.md) for the documented no-new-service multi-instance limiter strategy.
-- Remaining material risks: local SQLite/session persistence on Vercel, process-local rate limiting, lack of full image decoding, CSP still Report-Only, and all uploaded images still need private Google Drive storage and application-proxy delivery.
+- Remaining material risks: local SQLite/session persistence on Vercel, process-local rate limiting, CSP still Report-Only, and all uploaded images still need private Google Drive storage and application-proxy delivery.
 - Do not enable production orders until the critical/high findings are resolved and retested.
 
 ## Phase 0/1 exit blockers before Phase 2
 - [x] Frontend GAS RPC calls and current response contracts inventoried.
 - [x] Express route gaps and response-shape mismatches recorded.
-- [ ] User confirmation of remaining policy details: Login ID length (4–30 ASCII characters is proposed, not confirmed), audit/IP-log retention, and Admin/Member session lifetime and idle timeout. Coupon reservation and payment deadline policy is confirmed.
+- [x] User confirmed Login ID policy: ASCII English letters and digits only, 4–30 characters, case-insensitive.
 - [x] Confirm image privacy requirement: slips and all other uploaded images remain private in Google Drive; storefront-visible assets must be served through an application proxy without public Drive sharing.
 - [x] Complete full image decoding and document the shared multi-instance abuse-control strategy in [PHASE1_ABUSE_CONTROL_DESIGN.md](./PHASE1_ABUSE_CONTROL_DESIGN.md); implementation/load testing is a production integration gate for the shared backend.
-- [ ] Do not begin the next implementation phase until the user confirms the remaining policy details and the Phase 1 exit checklist is signed off.
+- [x] User confirmed IP login history and Admin audit-log retention: 90 days, then delete or irreversibly anonymize.
+- [x] User confirmed Admin and Member session policy: maximum lifetime 8 hours; idle timeout 30 minutes; revoke on logout or password change.
+- [x] Phase 1 policy decisions recorded; do not begin Phase 2 until final verification and explicit phase acceptance.
 
 ## Phase 2 — Apps Script gateway and storage
 Progress: gateway transport foundation added; repository adapter and Sheets/Drive migration remain open.
@@ -111,10 +113,10 @@ Gateway code is not deployed or runtime-verified in Apps Script. The existing le
 Exit: all critical tests pass, remaining risks are documented, and user separately authorizes deployment.
 
 ## Decisions required before relevant code
-1. Member login ID length: proposal ASCII letters/digits, 4–30 characters; confirm.
+1. Member login ID: CONFIRMED — ASCII English letters/digits only, 4–30 characters, case-insensitive.
 2. Coupon lifecycle (confirmed): reserve capacity immediately on Pending; consume when Completed if the slip was submitted before the payment deadline; release on Rejected or Expired. Orders without a coupon, or using a non-expiring coupon, have 15 minutes. A coupon with an expiry date gives the order until the end of that date in Asia/Bangkok, without an extra 15-minute cap.
-3. Retention for login and Admin audit logs.
-4. Admin and Member session lifetime and idle timeout.
+3. Login and Admin audit-log retention: CONFIRMED — 90 days, then delete or irreversibly anonymize.
+4. Admin and Member session policy: CONFIRMED — 8-hour maximum lifetime, 30-minute idle timeout, revoke on logout or password change.
 5. Benchmark a suitable slow password KDF in Apps Script; do not ship SHA-256-only password hashing.
 
 ## Safety rules
