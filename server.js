@@ -33,6 +33,7 @@ const { bool, validDate } = require('./src/utils/validation');
 const getCatalog = require('./src/services/catalog.service')(db);
 const validateCoupon = require('./src/services/coupon.service')(db);
 const createPendingOrder = require('./src/services/order.service')({ db, validateCoupon });
+const setOrderStatus = require('./src/services/order-status.service')(db);
 
 const createPublicRouter = require('./src/routes/public.routes');
 app.use(createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCatalog, createPendingOrder }));
