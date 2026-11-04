@@ -2037,7 +2037,7 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
       modalTotal.textContent = money(Math.max(0, selected.price - currentDiscount));
       if (data.ok) { $("#couponSuggestion").hidden = true; updatePaymentQr(Math.max(0, selected.price-currentDiscount)); }
       return !!data.ok;
-    } catch(e) { $("#couponMessage").textContent = "เชื่อมต่อระบบคูปองไม่ได้ในขณะนี้"; $("#couponMessage").className = "coupon-message is-error"; return false; }
+    } catch(e) { $("#couponMessage").textContent = e.message || "ตรวจสอบคูปองไม่สำเร็จ"; $("#couponMessage").className = "coupon-message is-error"; return false; }
   }
   $("#applyCoupon").addEventListener("click", () => validateCouponUi());
   $("#couponCode").addEventListener("keydown", e => { if(e.key === "Enter") { e.preventDefault(); validateCouponUi(); } });
