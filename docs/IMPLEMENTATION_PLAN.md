@@ -55,7 +55,7 @@ Exit: existing API contracts are characterized, security changes are intentional
 ## Phase 0/1 exit blockers before Phase 2
 - [x] Frontend GAS RPC calls and current response contracts inventoried.
 - [x] Express route gaps and response-shape mismatches recorded.
-- [ ] User review/confirmation of unresolved member, coupon lifecycle, audit retention, and session policy decisions.
+- [ ] User review/confirmation of remaining member, audit retention, and session policy decisions. Coupon reservation and payment deadline policy is confirmed.
 - [x] Confirm image privacy requirement: slips and all other uploaded images remain private in Google Drive; storefront-visible assets must be served through an application proxy without public Drive sharing.
 - [ ] Complete full image decoding and multi-instance abuse-control strategy.
 - [ ] Do not begin live integration until the user approves unresolved policy decisions.
@@ -79,7 +79,7 @@ Exit: existing API contracts are characterized, security changes are intentional
 - Guest and Member checkout.
 - Server-side pricing and eligibility.
 - Idempotent order creation and private slip upload.
-- Explicit coupon reservation/finalization/release lifecycle.
+- Reserve coupon capacity when a Pending order is created; consume on timely Completed; release on Rejected or payment expiry. Payment deadline is the earlier of 15 minutes after order creation or the coupon's expiry-day cutoff.
 
 ## Phase 5 — Admin and frontend integration
 - Admin login/session/dashboard/orders.
@@ -102,7 +102,7 @@ Exit: all critical tests pass, remaining risks are documented, and user separate
 
 ## Decisions required before relevant code
 1. Member login ID length: proposal ASCII letters/digits, 4–30 characters; confirm.
-2. Coupon lifecycle: decide when Pending reserves capacity, reservation expiry, and release behavior on Rejected.
+2. Coupon lifecycle (confirmed): reserve capacity immediately on Pending; consume only when Completed before the payment deadline; release on Rejected or expiry. All orders have a 15-minute payment window. Coupon orders must also be paid no later than the end of the coupon expiry date (Asia/Bangkok); the effective deadline is the earlier cutoff.
 3. Retention for login and Admin audit logs.
 4. Admin and Member session lifetime and idle timeout.
 5. Benchmark a suitable slow password KDF in Apps Script; do not ship SHA-256-only password hashing.
