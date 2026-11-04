@@ -1,0 +1,147 @@
+/** Nobi Topup schema-aware Sheets repositories.
+ * Call the Locked variants only while holding the Apps Script ScriptLock.
+ */
+
+const NOBI_REPOSITORY_UNIQUE_FIELDS = {
+  admins: ['username_normalized'],
+  admin_sessions: ['token_hash'],
+  members: ['login_id_normalized'],
+  member_sessions: ['token_hash'],
+  coupons: ['code_normalized'],
+  coupon_redemptions: ['order_id'],
+  orders: ['request_key'],
+  idempotency_records: ['scope', 'request_key'],
+  system_metadata: ['key'],
+  gateway_nonces: ['nonce_hash']
+};
+
+function repositorySheet_(tableName) {
+  const headers = NOBI.SHEETS[tableName];
+  if (!headers) throw new Error('REPOSITORY_TABLE_NOT_ALLOWED');
+  const sheet = sheet_(tableName);
+  if (!databaseHeadersMatch_(databaseHeaders_(sheet), headers)) {
+    throw new Error('REPOSITORY_SCHEMA_MISMATCH: ' + tableName);
+  }
+  return sheet;
+}
+
+function repositoryRowObject_(headers, row) {
+  const record = {};
+  headers.forEach(function(header, index) {
+    const value = row[index];
+    record[header] = value instanceof Date ? value.toISOString() : value;
+  });
+  return record;
+}
+
+function repositoryRows_(tableName) {
+  const sheet = repositorySheet_(tableName);
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+  const headers = values[0].map(String);
+  return values.slice(1)
+    .filter(function(row) { return row.some(function(value) { return value !== '' && value !== null; }); })
+    .map(function(row) { return repositoryRowObject_(headers, row); });
+}
+
+function repositoryGetById_(tableName, id) {
+  const headers = NOBI.SHEETS[tableName];
+  if (!headers) throw new Error('REPOSITORY_TABLE_NOT_ALLOWED');
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) return null;
+  const key = headers[0];
+  return repositoryRows_(tableName).find(function(record) {
+    return String(record[key]) === normalizedId;
+  }) || null;
+}
+
+function repositoryFindByField_(tableName, field, value) {
+  const headers = NOBI.SHEETS[tableName];
+  if (!headers || headers.indexOf(field) === -1) throw new Error('REPOSITORY_FIELD_NOT_ALLOWED');
+  const expected = String(value == null ? '' : value);
+  return repositoryRows_(tableName).filter(function(record) {
+    return String(record[field] == null ? '' : record[field]) === expected;
+  });
+}
+
+function repositoryAssertUniqueLocked_(tableName, record, exceptId) {
+  const uniqueFields = NOBI_REPOSITORY_UNIQUE_FIELDS[tableName] || [];
+  if (!uniqueFields.length) return;
+  const headers = NOBI.SHEETS[tableName];
+  const primaryKey = headers[0];
+  const existing = repositoryRows_(tableName);
+  uniqueFields.forEach(function(field) {
+    const value = String(record[field] == null ? '' : record[field]).trim();
+    if (!value) return;
+    const duplicate = existing.some(function(candidate) {
+      if (exceptId && String(candidate[primaryKey]) === String(exceptId)) return false;
+      return String(candidate[field] == null ? '' : candidate[field]).trim() === value;
+    });
+    if (duplicate) throw new Error('REPOSITORY_DUPLICATE: ' + tableName + '.' + field);
+  });
+}
+
+function repositoryNormalizeRecord_(tableName, record, allowPrimaryKey) {
+  const headers = NOBI.SHEETS[tableName];
+  if (!headers || !record || typeof record !== 'object' || Array.isArray(record)) {
+    throw new Error('REPOSITORY_INVALID_RECORD');
+  }
+  Object.keys(record).forEach(function(field) {
+    if (headers.indexOf(field) === -1) throw new Error('REPOSITORY_FIELD_NOT_ALLOWED: ' + field);
+    if (!allowPrimaryKey && field === headers[0]) throw new Error('REPOSITORY_PRIMARY_KEY_IMMUTABLE');
+  });
+  return headers.reduce(function(result, field) {
+    if (Object.prototype.hasOwnProperty.call(record, field)) result[field] = record[field];
+    return result;
+  }, {});
+}
+
+function repositoryInsertLocked_(tableName, record) {
+  const sheet = repositorySheet_(tableName);
+  const headers = NOBI.SHEETS[tableName];
+  const safe = repositoryNormalizeRecord_(tableName, record, true);
+  const primaryKey = String(safe[headers[0]] || '').trim();
+  if (!primaryKey) throw new Error('REPOSITORY_PRIMARY_KEY_REQUIRED');
+  if (repositoryGetById_(tableName, primaryKey)) throw new Error('REPOSITORY_DUPLICATE: ' + tableName + '.' + headers[0]);
+  repositoryAssertUniqueLocked_(tableName, safe, null);
+  sheet.appendRow(headers.map(function(field) {
+    return safe[field] === undefined || safe[field] === null ? '' : safe[field];
+  }));
+  return safe;
+}
+
+function repositoryUpdateLocked_(tableName, id, patch) {
+  const sheet = repositorySheet_(tableName);
+  const headers = NOBI.SHEETS[tableName];
+  const primaryKey = headers[0];
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) throw new Error('REPOSITORY_PRIMARY_KEY_REQUIRED');
+  const safePatch = repositoryNormalizeRecord_(tableName, patch, false);
+  const values = sheet.getDataRange().getValues();
+  const idIndex = headers.indexOf(primaryKey);
+  for (let rowIndex = 1; rowIndex < values.length; rowIndex++) {
+    if (String(values[rowIndex][idIndex]) !== normalizedId) continue;
+    const current = repositoryRowObject_(headers, values[rowIndex]);
+    const next = Object.assign({}, current, safePatch);
+    repositoryAssertUniqueLocked_(tableName, next, normalizedId);
+    sheet.getRange(rowIndex + 1, 1, 1, headers.length).setValues([headers.map(function(field) {
+      return next[field] === undefined || next[field] === null ? '' : next[field];
+    })]);
+    return next;
+  }
+  throw new Error('REPOSITORY_NOT_FOUND');
+}
+
+function repositoryInsert_(tableName, record) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try { return repositoryInsertLocked_(tableName, record); }
+  finally { lock.releaseLock(); }
+}
+
+function repositoryUpdate_(tableName, id, patch) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try { return repositoryUpdateLocked_(tableName, id, patch); }
+  finally { lock.releaseLock(); }
+}
