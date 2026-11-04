@@ -1,0 +1,24 @@
+name: Nobi Topup API tests
+
+on:
+  push:
+    branches:
+      - vercel-drive-setup
+  pull_request:
+    branches:
+      - vercel-drive-setup
+
+jobs:
+  api-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run API characterization tests
+        run: npm test
