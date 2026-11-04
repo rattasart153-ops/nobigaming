@@ -61,11 +61,19 @@ Exit: existing API contracts are characterized, security changes are intentional
 - [ ] Do not begin live integration until the user approves unresolved policy decisions.
 
 ## Phase 2 — Apps Script gateway and storage
-- Split GAS code into focused files.
-- Implement signed, versioned HTTP request envelope and fixed action allowlist.
-- Implement schema-versioned, idempotent Sheets setup that never clears existing content.
-- Implement private Drive storage and normalized errors.
-- Test bad signature, replay, invalid action and missing schema fail closed.
+Progress: gateway transport foundation added; repository adapter and Sheets/Drive migration remain open.
+- [ ] Split legacy GAS business logic into focused files and remove obsolete HtmlService/RPC assumptions.
+- [x] Add signed, version-1 HTTP request envelope and fixed legacy action allowlist (`13_HttpGateway.gs`).
+- [x] Add HMAC-SHA256 verification, timestamp freshness check and nonce replay ledger guarded by ScriptLock.
+- [x] Add matching Vercel Node client with bounded timeout, typed errors and no implicit mutation retries.
+- [x] Add Node tests for request signing, success response, gateway rejection and no implicit retry.
+- [ ] Implement schema-versioned, idempotent Sheets setup that stops safely on incompatible headers and never clears existing content.
+- [ ] Implement the approved complete Sheets model, including Members, Member/Admin sessions, coupon reservations, order deadlines, audit and idempotency records.
+- [ ] Implement private Drive storage for slips and all storefront/catalog/promotion images, plus authorized Vercel proxy delivery.
+- [ ] Add GAS runtime tests for bad signature, stale timestamp, replay, invalid action, missing schema, concurrent nonce claims and quota behavior.
+- [ ] Wire the Express repository adapter only after every action is mapped and tested.
+
+Gateway code is not deployed or runtime-verified in Apps Script. The existing legacy GAS RPC handlers are not yet production-safe and do not yet implement all approved Member/coupon/order rules.
 
 ## Phase 3 — Durable authentication
 - Implement separate Admin and Member auth.
