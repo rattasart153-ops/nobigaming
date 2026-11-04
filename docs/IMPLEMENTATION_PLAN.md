@@ -66,8 +66,8 @@ Exit: existing API contracts are characterized, security changes are intentional
 - [x] Phase 1 final acceptance review completed: approved policies documented, final CI passed, and `main` remains unchanged. Phase 1 is closed for its stated Express-baseline scope. Phase 2 has NOT started; begin it only after a separate user instruction.
 
 ## Phase 2 — Apps Script gateway and storage
-Progress: gateway transport foundation added; repository adapter and Sheets/Drive migration remain open.
-- [ ] Split legacy GAS business logic into focused files and remove obsolete HtmlService/RPC assumptions.
+Progress: GAS source has been split into focused HTTP, catalog, coupon, payment, order, authentication, Admin, validation, database and utility modules. The legacy `rpc()`/HtmlService assumptions have been removed from the entry point. Versioned Sheets schema, Drive migration and repository adapter remain open.
+- [x] Split legacy GAS business logic into focused files and replace the legacy `rpc()` entry with an explicit signed-HTTP action dispatcher; remove HtmlService/browser RPC assumptions.
 - [x] Add signed, version-1 HTTP request envelope and fixed legacy action allowlist (`13_HttpGateway.gs`).
 - [x] Add HMAC-SHA256 verification, timestamp freshness check and nonce replay ledger guarded by ScriptLock.
 - [x] Add matching Vercel Node client with bounded timeout, typed errors and no implicit mutation retries.
@@ -78,7 +78,7 @@ Progress: gateway transport foundation added; repository adapter and Sheets/Driv
 - [ ] Add GAS runtime tests for bad signature, stale timestamp, replay, invalid action, missing schema, concurrent nonce claims and quota behavior.
 - [ ] Wire the Express repository adapter only after every action is mapped and tested.
 
-Gateway code is not deployed or runtime-verified in Apps Script. The existing legacy GAS RPC handlers are not yet production-safe and do not yet implement all approved Member/coupon/order rules.
+The split GAS modules pass Node syntax/structure checks, but have not been imported into or runtime-tested in Apps Script. The business handlers still use the legacy scaffold schema and do not yet implement all approved Member/coupon/order rules. Do not run the legacy `setupNobiDatabase()` or `initializeAdmin()` before the versioned schema and hardened authentication tasks are complete. No deployment is authorized.
 
 ## Phase 3 — Durable authentication
 - Implement separate Admin and Member auth.
