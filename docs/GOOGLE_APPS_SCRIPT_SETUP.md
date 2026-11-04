@@ -26,30 +26,19 @@ This is the first backend foundation for the agreed zero-budget direction: Googl
 8. After those checks pass, deploy as a Web App using the narrowest viable execution/access settings. Recheck that the slip folder and spreadsheet remain private. Do not share either with “Anyone”.
 
 
-## Import the HtmlService front end and connect it
+## Vercel and Apps Script integration boundary
 
-After copying `Code.gs` and the manifest into the Apps Script project:
+Do **not** create `Storefront` or `Admin` HtmlService files for the current architecture. The repository's `public/nobitopup.html` and `public/admin.html` are served by Vercel and call same-origin Express REST endpoints. Browser code must never call `google.script.run` or the Apps Script URL.
 
-1. In the Apps Script editor, click **+ → HTML** and create a file named exactly `Storefront` (without `.html`). Copy the complete contents of [public/nobitopup.html](../public/nobitopup.html) into it.
-2. Create a second HTML file named exactly `Admin`. Copy [public/admin.html](../public/admin.html) into it.
-3. Save all files. The storefront is served by the web app URL; the admin login page is served by adding `?page=admin` to that URL.
-4. The pages now use the allowlisted `rpc()` bridge via `google.script.run`; do not expose Sheets or Drive IDs in browser code. Admin RPC calls require a server-issued session token. The order list returns only a Drive file ID; the image bytes are returned only by the separately authorized `adminSlipData` call.
-5. Run `setupNobiDatabase` and `initializeAdmin` as described above. Add game/package/coupon/promotion rows using the admin page after the web app is deployed for testing.
-6. Deploy a **test deployment** first. Check that the web app runs as the shop's Google account, that the spreadsheet and slip folder remain private, and that unauthenticated users cannot call any admin RPC successfully.
+The new `13_HttpGateway.gs` file adds a signed `doPost(e)` entry point for server-to-server calls. The matching Node client is `src/clients/apps-script.client.js`. The client is intentionally not wired into the current Express routes yet; SQLite remains the active persistence layer until the Sheets repositories, API mapping, and tests are complete.
 
-**Important deployment caveat:** the storefront is intended to be public, so a Web App deployment may need “Anyone” access while executing as the owner. That makes every public RPC callable by the internet. The allowlist intentionally exposes only catalog, promotions, coupon validation/suggestions, payment-info status, and order creation without admin credentials. Do not add unrestricted Drive/Sheets methods to this allowlist. Admin authentication is a custom token layer and is not equivalent to Google-managed identity or an HttpOnly cookie.
+The GAS gateway uses:
+- `NOBI_GATEWAY_SECRET` in Apps Script Script Properties.
+- `APPS_SCRIPT_URL` and the same `APPS_SCRIPT_SHARED_SECRET` in Vercel environment configuration.
+- Protocol version 1 with timestamp, nonce, fixed action name, arguments and HMAC-SHA256 signature.
+- A private `gateway_nonces` sheet and ScriptLock for replay prevention.
 
-## Signed HTTP gateway foundation (not yet deployed)
-
-- `doPost(e)` accepts only a signed version-1 JSON envelope.
-- HMAC-SHA256 signature verification uses `NOBI_GATEWAY_SECRET` from Script Properties.
-- Timestamp freshness is limited to five minutes in either direction.
-- Nonce replay is checked and recorded under ScriptLock in the `gateway_nonces` sheet.
-- Actions are restricted to the explicit allowlist in `13_HttpGateway.gs`, then dispatched through the existing `rpc()` allowlist.
-- `src/clients/apps-script.client.js` creates the matching signed envelope from Vercel. It does not retry mutations implicitly.
-- Apps Script ContentService returns JSON with an application-level `ok` field; HTTP 200 alone must never be treated as success.
-
-This gateway foundation is not a completed persistence adapter. Existing RPC handlers still have legacy data shapes and business rules. Do not publish the Web App until the action mapping, schemas, auth model, and private media flows are migrated and tested.
+Do not paste secrets into GitHub, chat, browser code, or source files. Do not deploy the Apps Script Web App yet. The gateway and legacy RPC handlers have not been exercised inside a real Apps Script deployment.
 
 ## Implemented scaffold functions
 
