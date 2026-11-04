@@ -16,13 +16,11 @@ This is the first backend foundation for the agreed zero-budget direction: Googl
 
 1. Open Google Apps Script while signed in to the Google account you already use: https://script.google.com/
 2. Create a new project named **Nobi Topup Backend**.
-3. Replace the starter `Code.gs` with the repository's `google-apps-script/Code.gs` contents.
-4. Add a script file named `13_HttpGateway.gs` and copy the repository file with that name into it. Apps Script combines top-level functions across files; keep function names unique.
-5. In Project Settings, enable showing the `appsscript.json` manifest; replace it with `google-apps-script/appsscript.json`.
-6. Save, select `setupNobiDatabase`, and click **Run**. Review and approve the Google permissions. This creates a spreadsheet and a Drive folder, and stores their IDs in Script Properties.
-7. In **Project Settings → Script Properties**, add `NOBI_ADMIN_USERNAME` and `NOBI_ADMIN_PASSWORD` (14+ characters), save, then run `initializeAdmin` once. The bootstrap password property is deleted after the admin is created. Never put the password in source code or chat.
-8. Add `NOBI_GATEWAY_SECRET` as a random secret of at least 32 characters. Configure the exact same value as Vercel's `APPS_SCRIPT_SHARED_SECRET`; never put it in Git or chat.
-9. Do not deploy a public Web App yet. Complete the repository adapter, schema migration, private media proxy, authentication and automated/manual integration tests first. Deployment requires separate explicit approval.
+3. Copy **all** `.gs` files from the repository `google-apps-script/` directory into this one Apps Script project, preserving their filenames. The project uses shared global scope across files; do not duplicate functions.
+4. In Project Settings, enable showing the `appsscript.json` manifest; replace it with `google-apps-script/appsscript.json`.
+5. Save the project, but **do not run `setupNobiDatabase()` or `initializeAdmin()` yet**. The current setup function still represents the legacy unversioned schema and may add incompatible columns to an existing sheet. The versioned, non-destructive schema initializer is a remaining Phase 2 task.
+6. Add `NOBI_GATEWAY_SECRET` only when you are ready to configure the matching Vercel secret. Use a random secret of at least 32 characters; never put it in Git or chat.
+7. Do not deploy a public Web App yet. Complete the versioned schema, private media proxy, repository adapter, hardened authentication and runtime/integration tests first. Deployment requires separate explicit approval.
 
 
 ## Vercel and Apps Script integration boundary
@@ -37,7 +35,7 @@ The GAS gateway uses:
 - Protocol version 1 with timestamp, nonce, fixed action name, arguments and HMAC-SHA256 signature.
 - A private `gateway_nonces` sheet and ScriptLock for replay prevention.
 
-Do not paste secrets into GitHub, chat, browser code, or source files. Do not deploy the Apps Script Web App yet. The gateway and legacy RPC handlers have not been exercised inside a real Apps Script deployment.
+Do not paste secrets into GitHub, chat, browser code, or source files. Do not deploy the Apps Script Web App yet. The gateway and business handlers have not been exercised inside a real Apps Script deployment. The old `rpc()` function has been removed; signed HTTP requests enter through `doPost(e)` and the explicit `dispatchGatewayAction_()` action dispatcher.
 
 ## Implemented scaffold functions
 
@@ -65,7 +63,7 @@ These are Apps Script functions intended to be called by a trusted integration l
 
 ## Data model
 
-Current `Code.gs` still contains a legacy scaffold schema. The target schema is specified in [DATA_MODEL.md](./DATA_MODEL.md), including separate Admin/Member sessions, coupon redemption ledger, order deadlines, idempotency records, audit logs and gateway nonce ledger. The schema migration is not complete.
+Current `00_Config.gs` and `02_Database.gs` still contain a legacy scaffold schema. The target schema is specified in [DATA_MODEL.md](./DATA_MODEL.md), including separate Admin/Member sessions, coupon redemption ledger, order deadlines, idempotency records, audit logs and gateway nonce ledger. The schema migration is not complete.
 
 
 ## เงื่อนไขคูปองเพิ่มเติม
