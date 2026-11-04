@@ -51,9 +51,9 @@ if (db.prepare('SELECT COUNT(*) AS n FROM packages').get().n === 0) {
     }
   }); tx();
 }
-const adminUser = ENV.ADMIN_USERNAME || (ENV.NODE_ENV === 'production' ? '' : 'NobiGaming');
-const adminPass = ENV.ADMIN_PASSWORD || (ENV.NODE_ENV === 'production' ? '' : 'Nobi1534897');
-if (!adminUser || !adminPass) throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD must be configured in production.');
+const adminUser = ENV.ADMIN_USERNAME;
+const adminPass = ENV.ADMIN_PASSWORD;
+if (!adminUser || !adminPass) throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD must be configured before startup in every environment.');
 if (!db.prepare('SELECT id FROM admins WHERE username=?').get(adminUser)) {
   db.prepare('INSERT INTO admins(username,password_hash) VALUES(?,?)').run(adminUser, bcrypt.hashSync(adminPass, 12));
 }
