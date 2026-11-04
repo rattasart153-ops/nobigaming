@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const generatePayload = require('promptpay-qr');
 const QRCode = require('qrcode');
+const ENV = require('../config/env');
 
 function createPublicRouter({ db, upload, asyncRoute, validateCoupon, getCatalog }) {
   const router = express.Router();
