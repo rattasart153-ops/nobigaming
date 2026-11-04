@@ -60,7 +60,7 @@ test('Apps Script client does not retry a failed mutation implicitly', async () 
 test('GAS gateway action allowlist matches the legacy rpc dispatcher and replay schema', () => {
   const gateway = fs.readFileSync(path.join(__dirname, '..', 'google-apps-script', '13_HttpGateway.gs'), 'utf8');
   const code = fs.readFileSync(path.join(__dirname, '..', 'google-apps-script', 'Code.gs'), 'utf8');
-  const allowlistBlock = gateway.match(/ALLOWED_ACTIONS:\s*\\[([\\s\\S]*?)\\]/);
+  const allowlistBlock = gateway.match(/ALLOWED_ACTIONS:\s*\[([\s\S]*?)\]/);
   assert.ok(allowlistBlock, 'gateway action allowlist must exist');
   const allowed = Array.from(allowlistBlock[1].matchAll(/'([^']+)'/g), match => match[1]).sort();
   const dispatched = Array.from(code.matchAll(/case '([^']+)'/g), match => match[1]).sort();
