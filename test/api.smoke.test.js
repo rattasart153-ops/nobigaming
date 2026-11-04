@@ -208,7 +208,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   invalidPlayerForm.append('gameId', String(game.id));
   invalidPlayerForm.append('packageId', String(pack.id));
   invalidPlayerForm.append('playerId', '');
-  invalidPlayerForm.append('slip', new Blob([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], { type: 'image/png' }), 'invalid-player.png');
+  invalidPlayerForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'invalid-player.png');
   const invalidPlayerOrder = await fetch(`${baseUrl}/api/public/orders`, {
     method: 'POST',
     headers: { cookie: cookie.split(';')[0] },
