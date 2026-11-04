@@ -17,17 +17,24 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
-const UPLOADS = path.join(ROOT, 'uploads');
-fs.mkdirSync(path.join(ROOT, 'data'), { recursive: true });
+// Vercel functions have a read-only deployment filesystem; /tmp is writable but ephemeral.
+const IS_VERCEL = process.env.VERCEL === '1';
+const DATA_DIR = process.env.NOBI_DATA_DIR || (IS_VERCEL ? path.join('/tmp', 'nobi-topup') : path.join(ROOT, 'data'));
+const UPLOADS = process.env.NOBI_UPLOAD_DIR || (IS_VERCEL ? path.join(DATA_DIR, 'uploads') : path.join(ROOT, 'uploads'));
+fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS, { recursive: true });
+if (IS_VERCEL) console.warn('[Nobi Topup] Vercel is using ephemeral /tmp storage. Orders, sessions, SQLite data and uploads will not persist across instance replacement. Do not use for production transactions.');
+app.set('trust proxy', IS_VERCEL ? 1 : false);
 
 app.disable('x-powered-by');
 app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+const sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'dev-only-change-this-session-secret-before-deploying');
+if (!sessionSecret) throw new Error('SESSION_SECRET must be configured in production.');
 app.use(session({
-  store: new SQLiteStore({ db: 'sessions.sqlite', dir: path.join(ROOT, 'data') }),
-  secret: process.env.SESSION_SECRET || 'dev-only-change-this-session-secret-before-deploying',
+  store: new SQLiteStore({ db: 'sessions.sqlite', dir: DATA_DIR }),
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 1000 * 60 * 60 * 8 }
@@ -35,7 +42,7 @@ app.use(session({
 app.use('/uploads', express.static(UPLOADS, { maxAge: '1h', dotfiles: 'deny' }));
 app.use(express.static(PUBLIC));
 
-const db = new Database(path.join(ROOT, 'data', 'nobitopup.sqlite'));
+const db = new Database(path.join(DATA_DIR, 'nobitopup.sqlite'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 db.exec(`
@@ -79,8 +86,9 @@ if (db.prepare('SELECT COUNT(*) AS n FROM packages').get().n === 0) {
     }
   }); tx();
 }
-const adminUser = process.env.ADMIN_USERNAME || 'NobiGaming';
-const adminPass = process.env.ADMIN_PASSWORD || 'Nobi1534897';
+const adminUser = process.env.ADMIN_USERNAME || (process.env.NODE_ENV === 'production' ? '' : 'NobiGaming');
+const adminPass = process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? '' : 'Nobi1534897');
+if (!adminUser || !adminPass) throw new Error('ADMIN_USERNAME and ADMIN_PASSWORD must be configured in production.');
 if (!db.prepare('SELECT id FROM admins WHERE username=?').get(adminUser)) {
   db.prepare('INSERT INTO admins(username,password_hash) VALUES(?,?)').run(adminUser, bcrypt.hashSync(adminPass, 12));
 }
@@ -257,4 +265,9 @@ app.use((err,req,res,next) => {
   if (err instanceof multer.MulterError) return res.status(400).json({error: err.code === 'LIMIT_FILE_SIZE' ? 'ไฟล์ใหญ่เกิน 5 MB' : 'อัปโหลดไฟล์ไม่สำเร็จ'});
   res.status(500).json({error:'เกิดข้อผิดพลาดภายในระบบ'});
 });
-app.listen(PORT, () => console.log(`Nobi Topup running at http://localhost:${PORT}`));
+// Vercel invokes the exported handler; local development starts its own HTTP listener.
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`Nobi Topup running at http://localhost:${PORT}`));
+}
+
+module.exports = app;
