@@ -66,7 +66,7 @@ Exit: existing API contracts are characterized, security changes are intentional
 - [x] Phase 1 final acceptance review completed: approved policies documented, final CI passed, and `main` remains unchanged. Phase 1 is closed for its stated Express-baseline scope. Phase 2 has NOT started; begin it only after a separate user instruction.
 
 ## Phase 2 — Apps Script gateway and storage
-Progress: GAS source is split into focused HTTP, catalog, coupon, payment, order, authentication, Admin, validation, database and utility modules. The legacy `rpc()`/HtmlService assumptions are removed from the entry point. The complete target Sheets header model and non-destructive schema-versioned initializer are implemented and covered by Node tests. Drive migration and repository adapter remain open.
+Progress: GAS source is split into focused HTTP, catalog, coupon, payment, order, authentication, Admin, validation, database and utility modules. The legacy `rpc()`/HtmlService assumptions are removed from the entry point. The complete target Sheets header model and non-destructive schema-versioned initializer are implemented and covered by Node tests. Initial schema-aware repository primitives now provide validated row reads, primary-key lookup, unique-key checks and lock-aware inserts/updates; full business workflows and Drive integration remain open.
 - [x] Split legacy GAS business logic into focused files and replace the legacy `rpc()` entry with an explicit signed-HTTP action dispatcher; remove HtmlService/browser RPC assumptions.
 - [x] Add signed, version-1 HTTP request envelope and fixed legacy action allowlist (`13_HttpGateway.gs`).
 - [x] Add HMAC-SHA256 verification, timestamp freshness check and nonce replay ledger guarded by ScriptLock.
