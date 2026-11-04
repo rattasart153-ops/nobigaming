@@ -18,12 +18,24 @@ function createOrderService({ db, validateCoupon }) {
     if(changed) db.prepare('UPDATE coupons SET used_count=MAX(0,used_count-1) WHERE id=?').run(row.coupon_id);
     return Boolean(changed);
   }
-  function createPendingOrder({game,pack,playerId,serverId='',couponCode='',file=null,memberId=null}) {
+  function createPendingOrder({game,pack,playerId,serverId='',couponCode='',file=null,memberId=null,idempotencyKey,requestHash}) {
+    const keyHash=crypto.createHash('sha256').update(String(idempotencyKey || '')).digest('hex');
     const id=`NBI-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
     const checkoutToken=crypto.randomBytes(32).toString('base64url');
     const checkoutTokenHash=crypto.createHash('sha256').update(checkoutToken).digest('hex');
     const createdAt=new Date();
     const tx=db.transaction(()=>{
+      const prior=db.prepare('SELECT request_hash,order_id FROM idempotency_records WHERE key_hash=?').get(keyHash);
+      if(prior){
+        if(prior.request_hash!==requestHash) return {ok:false,reason:'idempotency_conflict',message:'คำขอนี้ใช้รหัสซ้ำกับข้อมูลออเดอร์อื่น กรุณาเริ่มรายการใหม่'};
+        const existing=db.prepare('SELECT * FROM orders WHERE id=?').get(prior.order_id);
+        if(!existing) return {ok:false,reason:'idempotency_conflict',message:'ไม่สามารถกู้คืนรายการเดิมได้ กรุณาติดต่อผู้ดูแล'};
+        if(existing.status==='Pending' && !existing.slip_submitted_at && Date.parse(existing.payment_expires_at)>Date.now()){
+          db.prepare('UPDATE orders SET checkout_token_hash=?,updated_at=? WHERE id=?').run(checkoutTokenHash,createdAt.toISOString(),existing.id);
+          return {ok:true,replay:true,order:{id:existing.id,game:game.name,package:pack.name,subtotal:existing.subtotal,discount:existing.discount,total:existing.total,status:existing.status,payment_expires_at:existing.payment_expires_at,slip_submitted_at:existing.slip_submitted_at},checkoutToken};
+        }
+        return {ok:true,replay:true,order:{id:existing.id,game:game.name,package:pack.name,subtotal:existing.subtotal,discount:existing.discount,total:existing.total,status:existing.status,payment_expires_at:existing.payment_expires_at,slip_submitted_at:existing.slip_submitted_at},checkoutToken:null};
+      }
       let couponId=null,discount=0,coupon=null;
       if(String(couponCode).trim()){
         const validation=validateCoupon(couponCode,game.id,pack.price,playerId);
@@ -38,6 +50,7 @@ function createOrderService({ db, validateCoupon }) {
       db.prepare(`INSERT INTO orders(id,game_id,package_id,player_id,server_id,coupon_id,subtotal,discount,total,slip_path,status,status_reason,payment_expires_at,slip_submitted_at,checkout_token_hash,created_at,updated_at)
         VALUES(?,?,?,?,?,?,?,?,?,?,'Pending',NULL,?,?,?,?,?)`)
         .run(id,game.id,pack.id,playerId,String(serverId).trim(),couponId,pack.price,discount,total,file ? file.filename : null,deadline.toISOString(),slipSubmittedAt,checkoutTokenHash,createdAt.toISOString(),createdAt.toISOString());
+      db.prepare('INSERT INTO idempotency_records(key_hash,request_hash,order_id,created_at) VALUES(?,?,?,?)').run(keyHash,requestHash,id,createdAt.toISOString());
       if(couponId){
         const reserved=db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=? AND active=1 AND (usage_limit IS NULL OR used_count<usage_limit)').run(couponId);
         if(!reserved.changes) throw new Error('COUPON_CAPACITY_EXHAUSTED');
@@ -45,7 +58,7 @@ function createOrderService({ db, validateCoupon }) {
       }
       return {ok:true,order:{id,game:game.name,package:pack.name,subtotal:pack.price,discount,total,status:'Pending',payment_expires_at:deadline.toISOString(),slip_submitted_at:slipSubmittedAt},checkoutToken};
     });
-    try { const result=tx.immediate(); if(!result.ok) safeUnlink(file); return result; }
+    try { const result=tx.immediate(); if(!result.ok || result.replay) safeUnlink(file); return result; }
     catch(error){ safeUnlink(file); if(error.message==='COUPON_CAPACITY_EXHAUSTED') return {ok:false,message:'โค้ดนี้ถูกจองครบจำนวนแล้ว กรุณาเลือกโค้ดอื่น'}; throw error; }
   }
   function submitSlip({orderId,checkoutToken,file,now=new Date()}) {
