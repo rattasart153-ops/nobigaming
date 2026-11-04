@@ -15,12 +15,8 @@ const QRCode = require('qrcode');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const ROOT = __dirname;
-const PUBLIC = path.join(ROOT, 'public');
-// Vercel functions have a read-only deployment filesystem; /tmp is writable but ephemeral.
-const IS_VERCEL = process.env.VERCEL === '1';
-const DATA_DIR = process.env.NOBI_DATA_DIR || (IS_VERCEL ? path.join('/tmp', 'nobi-topup') : path.join(ROOT, 'data'));
-const UPLOADS = process.env.NOBI_UPLOAD_DIR || (IS_VERCEL ? path.join(DATA_DIR, 'uploads') : path.join(ROOT, 'uploads'));
+// Keep path resolution centralized; preserve the existing locations and overrides.
+const { ROOT, PUBLIC, DATA_DIR, UPLOADS, IS_VERCEL } = require('./src/config/paths');
 fs.mkdirSync(DATA_DIR, { recursive: true });
 fs.mkdirSync(UPLOADS, { recursive: true });
 if (IS_VERCEL) console.warn('[Nobi Topup] Vercel is using ephemeral /tmp storage. Orders, sessions, SQLite data and uploads will not persist across instance replacement. Do not use for production transactions.');
