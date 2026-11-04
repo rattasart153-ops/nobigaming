@@ -1,4 +1,4 @@
-require('dotenv').config();
+const ENV = require('./src/config/env');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -8,7 +8,7 @@ const generatePayload = require('promptpay-qr');
 const QRCode = require('qrcode');
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(ENV.PORT || 3000);
 // Keep path resolution centralized; preserve the existing locations and overrides.
 const { PUBLIC, DATA_DIR, UPLOADS, IS_VERCEL } = require('./src/config/paths');
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -74,7 +74,7 @@ app.post('/api/public/coupons/validate', (req,res) => {
 });
 app.get('/api/public/payment-info', asyncRoute(async (req,res) => {
   const amount = Math.max(0, Number(req.query.amount || 0));
-  const promptpayId = process.env.PROMPTPAY_ID;
+  const promptpayId = ENV.PROMPTPAY_ID;
   if (!promptpayId) return res.json({ configured: false, message: 'ผู้ดูแลระบบยังไม่ได้ตั้งค่า PromptPay ID' });
   const payload = generatePayload(promptpayId, { amount: amount || undefined });
   res.json({ configured: true, promptpayId, amount, qrDataUrl: await QRCode.toDataURL(payload, { margin: 1, width: 260 }) });
