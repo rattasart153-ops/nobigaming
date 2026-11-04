@@ -17,7 +17,7 @@ test('Apps Script client signs versioned requests and returns gateway result', a
     fetchImpl: async (url, options) => {
       assert.equal(url, 'https://script.google.com/macros/s/test/exec');
       assert.equal(options.method, 'POST');
-      assert.equal(options.redirect, 'error');
+      assert.equal(options.redirect, 'follow');
       captured = JSON.parse(options.body);
       const expected = crypto.createHmac('sha256', secret).update(canonicalEnvelope(captured)).digest('hex');
       assert.equal(captured.signature, expected);
@@ -35,6 +35,22 @@ test('Apps Script client signs versioned requests and returns gateway result', a
 test('Apps Script client fails closed when gateway configuration is missing', () => {
   assert.throws(() => createAppsScriptClient({ url: '', secret }), AppsScriptGatewayError);
   assert.throws(() => createAppsScriptClient({ url: 'https://script.google.com/macros/s/test/exec', secret: 'short' }), AppsScriptGatewayError);
+});
+
+test('Apps Script client follows only Google-owned ContentService redirect destinations', async () => {
+  const allowed = createAppsScriptClient({
+    url: 'https://script.google.com/macros/s/test/exec',
+    secret,
+    fetchImpl: async () => ({ ok: true, url: 'https://script.googleusercontent.com/macros/echo?user_content_key=test', json: async () => ({ ok: true, version: 1, result: 'ok' }) })
+  });
+  assert.equal(await allowed.call('catalog'), 'ok');
+
+  const blocked = createAppsScriptClient({
+    url: 'https://script.google.com/macros/s/test/exec',
+    secret,
+    fetchImpl: async () => ({ ok: true, url: 'https://attacker.example/redirect', json: async () => ({ ok: true, version: 1, result: 'forged' }) })
+  });
+  await assert.rejects(blocked.call('catalog'), error => error.code === 'UNTRUSTED_GATEWAY_REDIRECT');
 });
 
 test('Apps Script client maps signed gateway rejections to typed errors', async () => {
