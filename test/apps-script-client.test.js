@@ -103,8 +103,8 @@ test('GAS gateway allowlist matches the focused HTTP action dispatcher', () => {
   assert.equal(entry.includes('rpc('), false, 'minimal entry point must not expose legacy RPC');
   assert.ok(gateway.includes('Utilities.computeHmacSha256Signature'), 'gateway must verify HMAC-SHA256');
   assert.ok(gateway.includes('LockService.getScriptLock'), 'nonce claims must be serialized');
-  const database = fs.readFileSync(path.join(gasDir, '02_Database.gs'), 'utf8');
-  assert.ok(database.includes("gateway_nonces: ['nonce_hash','created_at']"), 'database scaffold must include nonce ledger');
+  const config = fs.readFileSync(path.join(gasDir, '00_Config.gs'), 'utf8');
+  assert.ok(config.includes("gateway_nonces: ['nonce_hash','created_at']"), 'configuration schema must include nonce ledger');
 });
 
 test('all Apps Script modules parse and define unique top-level functions', () => {
