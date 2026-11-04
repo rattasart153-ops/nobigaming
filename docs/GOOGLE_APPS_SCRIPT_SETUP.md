@@ -18,9 +18,10 @@ This is the first backend foundation for the agreed zero-budget direction: Googl
 2. Create a new project named **Nobi Topup Backend**.
 3. Copy **all** `.gs` files from the repository `google-apps-script/` directory into this one Apps Script project, preserving their filenames. The project uses shared global scope across files; do not duplicate functions.
 4. In Project Settings, enable showing the `appsscript.json` manifest; replace it with `google-apps-script/appsscript.json`.
-5. Save the project, but **do not run `setupNobiDatabase()` or `initializeAdmin()` yet**. The current setup function still represents the legacy unversioned schema and may add incompatible columns to an existing sheet. The versioned, non-destructive schema initializer is a remaining Phase 2 task.
-6. Add `NOBI_GATEWAY_SECRET` only when you are ready to configure the matching Vercel secret. Use a random secret of at least 32 characters; never put it in Git or chat.
-7. Do not deploy a public Web App yet. Complete the versioned schema, private media proxy, repository adapter, hardened authentication and runtime/integration tests first. Deployment requires separate explicit approval.
+5. Save the project. The versioned schema initializer is implemented, but **do not run `setupNobiDatabase()` yet**: the legacy business handlers are not yet compatible with the new schema. Wait until repository/authentication adapters and the full integration test suite are complete.
+6. Do not run `initializeAdmin()`; it still belongs to the legacy authentication scaffold and must be replaced by the approved Admin bootstrap flow.
+7. Add `NOBI_GATEWAY_SECRET` only when you are ready to configure the matching Vercel secret. Use a random secret of at least 32 characters; never put it in Git or chat.
+8. Do not deploy a public Web App yet. Complete the private media proxy, repository adapter, hardened authentication and runtime/integration tests first. Deployment requires separate explicit approval.
 
 
 ## Vercel and Apps Script integration boundary
@@ -39,7 +40,7 @@ Do not paste secrets into GitHub, chat, browser code, or source files. Do not de
 
 ## Implemented scaffold functions
 
-- `setupNobiDatabase()`: creates the Sheets and a private Drive folder.
+- `setupNobiDatabase()`: schema version 1 initializer; preflights existing headers and version metadata, creates only missing/empty sheets, never clears or appends missing columns, and does not seed data or create Drive folders.
 - `initializeAdmin()`: creates the first admin from editor prompts.
 - `publicCatalog()`, `publicPromotions()`, `validateCoupon()`.
 - `createOrder(payload)`: validates selected active game/package, coupon, idempotency key and image type/size; stores slip in private Drive; records order and increments coupon usage under a script lock.
@@ -49,7 +50,7 @@ These are Apps Script functions intended to be called by a trusted integration l
 
 ## Known work remaining before launch
 
-- Replace the legacy Sheets schema and RPC business logic with the approved versioned data model and focused repositories.
+- Migrate legacy business handlers to the approved versioned data model and focused repositories.
 - Implement Member registration/login, separate Admin/Member sessions, approved coupon access modes and Admin-only IP audit history.
 - Replace SHA-256-only password hashing with a deliberately slow KDF and test its Apps Script runtime cost.
 - Implement coupon reservation/consume/release and payment-deadline lifecycle exactly as approved; the current GAS scaffold does not yet do this.
@@ -63,7 +64,7 @@ These are Apps Script functions intended to be called by a trusted integration l
 
 ## Data model
 
-Current `00_Config.gs` and `02_Database.gs` still contain a legacy scaffold schema. The target schema is specified in [DATA_MODEL.md](./DATA_MODEL.md), including separate Admin/Member sessions, coupon redemption ledger, order deadlines, idempotency records, audit logs and gateway nonce ledger. The schema migration is not complete.
+The `00_Config.gs` and `02_Database.gs` modules now define and initialize the approved version-1 target headers. Business handlers and repository adapters still need migration to those headers. The target schema is specified in [DATA_MODEL.md](./DATA_MODEL.md), including separate Admin/Member sessions, coupon redemption ledger, order deadlines, idempotency records, audit logs and gateway nonce ledger. The schema migration is not complete.
 
 
 ## เงื่อนไขคูปองเพิ่มเติม
