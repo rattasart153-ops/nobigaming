@@ -293,6 +293,62 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   });
   assert.equal(forbiddenReverseTransition.status, 409);
 
+  // Checkout can be created before payment; the customer gets 15 minutes to submit a slip.
+  const prepayForm = new FormData();
+  prepayForm.append('gameId', String(game.id));
+  prepayForm.append('packageId', String(pack.id));
+  prepayForm.append('playerId', 'CI-PREPAY-15M');
+  const prepayResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', body: prepayForm });
+  assert.equal(prepayResponse.status, 201);
+  const prepay = await prepayResponse.json();
+  assert.equal(prepay.order.status, 'Pending');
+  assert.equal(prepay.order.slip_submitted_at, null);
+  assert.ok(Date.parse(prepay.order.payment_expires_at) - Date.now() > 14 * 60 * 1000);
+  assert.ok(Date.parse(prepay.order.payment_expires_at) - Date.now() <= 15 * 60 * 1000);
+  const prematureCompletion = await fetch(`${baseUrl}/api/admin/orders/${prepay.order.id}/status`, { method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ status: 'Completed' }) });
+  assert.equal(prematureCompletion.status, 409);
+  const prepaySlipForm = new FormData();
+  prepaySlipForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'prepay.png');
+  const prepaySlip = await fetch(`${baseUrl}/api/public/orders/${prepay.order.id}/slip`, { method: 'POST', headers: { authorization: `Bearer ${prepay.checkout_token}` }, body: prepaySlipForm });
+  assert.equal(prepaySlip.status, 201);
+  const prepayCompleted = await fetch(`${baseUrl}/api/admin/orders/${prepay.order.id}/status`, { method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ status: 'Completed' }) });
+  assert.equal(prepayCompleted.status, 200);
+
+  // A dated coupon grants the whole Bangkok expiry date, not an extra 15-minute cap.
+  const datedCouponResponse = await fetch(`${baseUrl}/api/admin/coupons`, {
+    method: 'POST', headers: adminHeaders,
+    body: JSON.stringify({ code: 'CI-DATED-RESERVE', discount_type: 'fixed', discount_value: 1, game_id: game.id, expires_at: '2099-12-31', usage_limit: 1 })
+  });
+  assert.equal(datedCouponResponse.status, 201);
+  const datedCoupon = await datedCouponResponse.json();
+  const datedOrderForm = new FormData();
+  datedOrderForm.append('gameId', String(game.id)); datedOrderForm.append('packageId', String(pack.id));
+  datedOrderForm.append('playerId', 'CI-DATED-COUPON'); datedOrderForm.append('couponCode', datedCoupon.code);
+  const datedOrderResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', body: datedOrderForm });
+  assert.equal(datedOrderResponse.status, 201);
+  const datedOrder = (await datedOrderResponse.json()).order;
+  assert.equal(datedOrder.payment_expires_at, '2099-12-31T17:00:00.000Z');
+  const blockedByReservationForm = new FormData();
+  blockedByReservationForm.append('gameId', String(game.id)); blockedByReservationForm.append('packageId', String(pack.id));
+  blockedByReservationForm.append('playerId', 'CI-DATED-COUPON-2'); blockedByReservationForm.append('couponCode', datedCoupon.code);
+  const blockedByReservation = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', body: blockedByReservationForm });
+  assert.equal(blockedByReservation.status, 422);
+  const db = require('../src/db/sqlite');
+  assert.equal(db.prepare('SELECT used_count FROM coupons WHERE id=?').get(datedCoupon.id).used_count, 1);
+  const rejectDatedOrder = await fetch(`${baseUrl}/api/admin/orders/${datedOrder.id}/status`, { method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ status: 'Rejected' }) });
+  assert.equal(rejectDatedOrder.status, 200);
+  assert.equal(db.prepare('SELECT used_count FROM coupons WHERE id=?').get(datedCoupon.id).used_count, 0);
+  const expiredOrderForm = new FormData();
+  expiredOrderForm.append('gameId', String(game.id)); expiredOrderForm.append('packageId', String(pack.id));
+  expiredOrderForm.append('playerId', 'CI-DATED-EXPIRE'); expiredOrderForm.append('couponCode', datedCoupon.code);
+  const expiredOrderResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', body: expiredOrderForm });
+  assert.equal(expiredOrderResponse.status, 201);
+  const expiredOrder = (await expiredOrderResponse.json()).order;
+  db.prepare("UPDATE orders SET payment_expires_at=? WHERE id=?").run(new Date(Date.now() - 1000).toISOString(), expiredOrder.id);
+  await fetch(`${baseUrl}/api/health`);
+  assert.equal(db.prepare('SELECT status FROM orders WHERE id=?').get(expiredOrder.id).status, 'Expired');
+  assert.equal(db.prepare('SELECT used_count FROM coupons WHERE id=?').get(datedCoupon.id).used_count, 0);
+
   const ordersResponse = await fetch(`${baseUrl}/api/admin/orders`, {
     headers: { cookie: cookie.split(';')[0] }
   });
