@@ -211,7 +211,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   invalidGameForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'invalid-game.png');
   const invalidGameOrder = await fetch(`${baseUrl}/api/public/orders`, {
     method: 'POST',
-    headers: { cookie: cookie.split(';')[0] },
+    headers: { cookie: cookie.split(';')[0], 'Idempotency-Key': 'CI-INVALID-GAME-KEY-0001' },
     body: invalidGameForm
   });
   assert.equal(invalidGameOrder.status, 400);
@@ -225,7 +225,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   invalidPlayerForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'invalid-player.png');
   const invalidPlayerOrder = await fetch(`${baseUrl}/api/public/orders`, {
     method: 'POST',
-    headers: { cookie: cookie.split(';')[0] },
+    headers: { cookie: cookie.split(';')[0], 'Idempotency-Key': 'CI-INVALID-PLAYER-KEY-01' },
     body: invalidPlayerForm
   });
   assert.equal(invalidPlayerOrder.status, 400);
@@ -240,7 +240,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   invalidCouponForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'invalid-coupon.png');
   const invalidCouponOrder = await fetch(`${baseUrl}/api/public/orders`, {
     method: 'POST',
-    headers: { cookie: cookie.split(';')[0] },
+    headers: { cookie: cookie.split(';')[0], 'Idempotency-Key': 'CI-INVALID-COUPON-KEY-01' },
     body: invalidCouponForm
   });
   assert.equal(invalidCouponOrder.status, 422);
@@ -255,7 +255,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   form.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'synthetic.png');
   const orderResponse = await fetch(`${baseUrl}/api/public/orders`, {
     method: 'POST',
-    headers: { cookie: cookie.split(';')[0] },
+    headers: { cookie: cookie.split(';')[0], 'Idempotency-Key': 'CI-ORDER-CREATE-KEY-0001' },
     body: form
   });
   assert.equal(orderResponse.status, 201);
@@ -298,7 +298,8 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   prepayForm.append('gameId', String(game.id));
   prepayForm.append('packageId', String(pack.id));
   prepayForm.append('playerId', 'CI-PREPAY-15M');
-  const prepayResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', body: prepayForm });
+  const prepayHeaders = { 'Idempotency-Key': 'CI-PREPAY-CREATE-KEY-0001' };
+  const prepayResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', headers: prepayHeaders, body: prepayForm });
   assert.equal(prepayResponse.status, 201);
   const prepay = await prepayResponse.json();
   assert.equal(Object.hasOwn(prepay, 'checkout_token'), false, 'checkout token must never be exposed in JSON');
@@ -306,6 +307,16 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.ok(checkoutCookie && checkoutCookie.includes('HttpOnly') && checkoutCookie.includes('SameSite=Strict'));
   assert.ok(checkoutCookie.includes('Path=/api/public/orders/' + prepay.order.id + '/slip'));
   const checkoutCookiePair = checkoutCookie.split(';')[0];
+  const prepayReplayResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', headers: prepayHeaders, body: prepayForm });
+  assert.equal(prepayReplayResponse.status, 200);
+  const prepayReplay = await prepayReplayResponse.json();
+  assert.equal(prepayReplay.order.id, prepay.order.id, 'same idempotency key must return the original order');
+  assert.equal(prepayReplay.replayed, true);
+  const replayCookiePair = prepayReplayResponse.headers.get('set-cookie').split(';')[0];
+  const conflictingForm = new FormData();
+  conflictingForm.append('gameId', String(game.id)); conflictingForm.append('packageId', String(pack.id)); conflictingForm.append('playerId', 'CI-PREPAY-DIFFERENT');
+  const conflictResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', headers: prepayHeaders, body: conflictingForm });
+  assert.equal(conflictResponse.status, 409, 'same key with different payload must be rejected');
   assert.equal(prepay.order.status, 'Pending');
   assert.equal(prepay.order.slip_submitted_at, null);
   assert.ok(Date.parse(prepay.order.payment_expires_at) - Date.now() > 14 * 60 * 1000);
@@ -314,7 +325,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   assert.equal(prematureCompletion.status, 409);
   const prepaySlipForm = new FormData();
   prepaySlipForm.append('slip', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3ioAAAAASUVORK5CYII=', 'base64')], { type: 'image/png' }), 'prepay.png');
-  const prepaySlip = await fetch(`${baseUrl}/api/public/orders/${prepay.order.id}/slip`, { method: 'POST', headers: { cookie: checkoutCookiePair }, body: prepaySlipForm });
+  const prepaySlip = await fetch(`${baseUrl}/api/public/orders/${prepay.order.id}/slip`, { method: 'POST', headers: { cookie: replayCookiePair }, body: prepaySlipForm });
   assert.equal(prepaySlip.status, 201);
   assert.match(prepaySlip.headers.get('set-cookie') || '', /Max-Age=0|Expires=/, 'checkout cookie should be cleared after slip submission');
   const prepayCompleted = await fetch(`${baseUrl}/api/admin/orders/${prepay.order.id}/status`, { method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ status: 'Completed' }) });
@@ -330,14 +341,14 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   const datedOrderForm = new FormData();
   datedOrderForm.append('gameId', String(game.id)); datedOrderForm.append('packageId', String(pack.id));
   datedOrderForm.append('playerId', 'CI-DATED-COUPON'); datedOrderForm.append('couponCode', datedCoupon.code);
-  const datedOrderResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', body: datedOrderForm });
+  const datedOrderResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', headers: { 'Idempotency-Key': 'CI-DATED-ORDER-KEY-0001' }, body: datedOrderForm });
   assert.equal(datedOrderResponse.status, 201);
   const datedOrder = (await datedOrderResponse.json()).order;
   assert.equal(datedOrder.payment_expires_at, '2099-12-31T17:00:00.000Z');
   const blockedByReservationForm = new FormData();
   blockedByReservationForm.append('gameId', String(game.id)); blockedByReservationForm.append('packageId', String(pack.id));
   blockedByReservationForm.append('playerId', 'CI-DATED-COUPON-2'); blockedByReservationForm.append('couponCode', datedCoupon.code);
-  const blockedByReservation = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', body: blockedByReservationForm });
+  const blockedByReservation = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', headers: { 'Idempotency-Key': 'CI-DATED-ORDER-KEY-0002' }, body: blockedByReservationForm });
   assert.equal(blockedByReservation.status, 422);
   const db = require('../src/db/sqlite');
   assert.equal(db.prepare('SELECT used_count FROM coupons WHERE id=?').get(datedCoupon.id).used_count, 1);
@@ -347,7 +358,7 @@ test('API baseline: public endpoints, Admin session lifecycle, and protected rou
   const expiredOrderForm = new FormData();
   expiredOrderForm.append('gameId', String(game.id)); expiredOrderForm.append('packageId', String(pack.id));
   expiredOrderForm.append('playerId', 'CI-DATED-EXPIRE'); expiredOrderForm.append('couponCode', datedCoupon.code);
-  const expiredOrderResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', body: expiredOrderForm });
+  const expiredOrderResponse = await fetch(`${baseUrl}/api/public/orders`, { method: 'POST', headers: { 'Idempotency-Key': 'CI-EXPIRED-ORDER-KEY-0001' }, body: expiredOrderForm });
   assert.equal(expiredOrderResponse.status, 201);
   const expiredOrder = (await expiredOrderResponse.json()).order;
   db.prepare("UPDATE orders SET payment_expires_at=? WHERE id=?").run(new Date(Date.now() - 1000).toISOString(), expiredOrder.id);
