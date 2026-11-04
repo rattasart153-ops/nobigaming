@@ -16,8 +16,40 @@ CREATE TABLE IF NOT EXISTS games (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEX
 CREATE TABLE IF NOT EXISTS packages (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE, name TEXT NOT NULL, amount INTEGER NOT NULL, unit TEXT NOT NULL, price REAL NOT NULL CHECK(price >= 0), image_url TEXT DEFAULT '', popular INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS coupons (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE NOT NULL, discount_type TEXT NOT NULL CHECK(discount_type IN ('fixed','percent')), discount_value REAL NOT NULL CHECK(discount_value > 0), min_spend REAL NOT NULL DEFAULT 0, game_id INTEGER REFERENCES games(id) ON DELETE SET NULL, expires_at TEXT, usage_limit INTEGER, used_count INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, created_at TEXT DEFAULT CURRENT_TIMESTAMP, allowed_player_ids TEXT NOT NULL DEFAULT '', min_player_spend REAL NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS promotions (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, subtitle TEXT DEFAULT '', image_url TEXT DEFAULT '', link_url TEXT DEFAULT '#games', active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, starts_at TEXT, ends_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, game_id INTEGER NOT NULL REFERENCES games(id), package_id INTEGER NOT NULL REFERENCES packages(id), player_id TEXT NOT NULL, server_id TEXT DEFAULT '', coupon_id INTEGER REFERENCES coupons(id), subtotal REAL NOT NULL, discount REAL NOT NULL DEFAULT 0, total REAL NOT NULL, slip_path TEXT, status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN ('Pending','Completed','Rejected')), created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS orders (id TEXT PRIMARY KEY, game_id INTEGER NOT NULL REFERENCES games(id), package_id INTEGER NOT NULL REFERENCES packages(id), player_id TEXT NOT NULL, server_id TEXT DEFAULT '', coupon_id INTEGER REFERENCES coupons(id), subtotal REAL NOT NULL, discount REAL NOT NULL DEFAULT 0, total REAL NOT NULL, slip_path TEXT, status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN ('Pending','Completed','Rejected','Expired')), status_reason TEXT, payment_expires_at TEXT, slip_submitted_at TEXT, checkout_token_hash TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
 `);
+
+// Backward-compatible order lifecycle migration. Existing records are preserved.
+let orderColumns = new Set(db.prepare('PRAGMA table_info(orders)').all().map(c => c.name));
+for (const [name, definition] of Object.entries({ status_reason: 'TEXT', payment_expires_at: 'TEXT', slip_submitted_at: 'TEXT', checkout_token_hash: 'TEXT' })) {
+  if (!orderColumns.has(name)) db.exec(`ALTER TABLE orders ADD COLUMN ${name} ${definition}`);
+}
+const orderTableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'").get().sql;
+if (!orderTableSql.includes("'Expired'")) {
+  db.pragma('foreign_keys = OFF');
+  db.exec(`CREATE TABLE orders_lifecycle_new (
+    id TEXT PRIMARY KEY, game_id INTEGER NOT NULL REFERENCES games(id), package_id INTEGER NOT NULL REFERENCES packages(id),
+    player_id TEXT NOT NULL, server_id TEXT DEFAULT '', coupon_id INTEGER REFERENCES coupons(id), subtotal REAL NOT NULL,
+    discount REAL NOT NULL DEFAULT 0, total REAL NOT NULL, slip_path TEXT,
+    status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN ('Pending','Completed','Rejected','Expired')),
+    status_reason TEXT, payment_expires_at TEXT, slip_submitted_at TEXT, checkout_token_hash TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );
+  INSERT INTO orders_lifecycle_new (id,game_id,package_id,player_id,server_id,coupon_id,subtotal,discount,total,slip_path,status,status_reason,payment_expires_at,slip_submitted_at,checkout_token_hash,created_at,updated_at)
+  SELECT id,game_id,package_id,player_id,server_id,coupon_id,subtotal,discount,total,slip_path,
+    CASE WHEN status IN ('Pending','Completed','Rejected') THEN status ELSE 'Rejected' END,
+    status_reason,payment_expires_at,slip_submitted_at,checkout_token_hash,created_at,updated_at FROM orders;
+  DROP TABLE orders;
+  ALTER TABLE orders_lifecycle_new RENAME TO orders;`);
+  db.pragma('foreign_keys = ON');
+}
+db.exec(`CREATE TABLE IF NOT EXISTS coupon_redemptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, coupon_id INTEGER NOT NULL REFERENCES coupons(id),
+  order_id TEXT NOT NULL UNIQUE REFERENCES orders(id), state TEXT NOT NULL CHECK(state IN ('Reserved','Consumed','Released')),
+  reserved_at TEXT NOT NULL, reserved_until TEXT NOT NULL, finalized_at TEXT, released_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_orders_expiry ON orders(status,payment_expires_at,slip_submitted_at);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_capacity ON coupon_redemptions(coupon_id,state);`);
 
 // Backward-compatible coupon-rule migration for existing SQLite databases.
 const couponColumns = new Set(db.prepare('PRAGMA table_info(coupons)').all().map(c => c.name));
