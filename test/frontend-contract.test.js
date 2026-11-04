@@ -8,29 +8,32 @@ const path = require('node:path');
 
 function readInlineScripts(file) {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', file), 'utf8');
-  return [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)].map(match => match[1]);
+  const scripts = [];
+  let cursor = 0;
+  while ((cursor = html.indexOf('<script', cursor)) !== -1) {
+    const openEnd = html.indexOf('>', cursor);
+    const close = html.indexOf('</script>', openEnd + 1);
+    if (openEnd < 0 || close < 0) break;
+    scripts.push(html.slice(openEnd + 1, close));
+    cursor = close + 9;
+  }
+  return scripts;
 }
 
-test('storefront and admin inline scripts parse and use the REST API, not Apps Script RPC', () => {
+test('storefront and admin inline scripts parse and use REST API, not Apps Script RPC', () => {
   for (const file of ['nobitopup.html', 'admin.html']) {
     const scripts = readInlineScripts(file);
     assert.ok(scripts.length > 0, file + ' should contain an inline application script');
     scripts.forEach((source, index) => assert.doesNotThrow(() => new vm.Script(source, { filename: file + '#script-' + index }), file + ' inline script syntax'));
-    const source = scripts.join('\n');
-    assert.doesNotMatch(source, /google\.script\.run|google\.script/);
-    assert.match(source, /fetch\(/);
+    const source = scripts.join('\\n');
+    assert.equal(source.includes('google.script.run'), false);
+    assert.equal(source.includes('google.script'), false);
+    assert.ok(source.includes('fetch('));
   }
-
-  const storefront = readInlineScripts('nobitopup.html').join('\n');
-  assert.match(storefront, /\/api\/public\/catalog/);
-  assert.match(storefront, /\/api\/public\/coupons\/validate/);
-  assert.match(storefront, /\/api\/public\/orders/);
-  assert.match(storefront, /checkout_token/);
-  assert.match(storefront, /payment_expires_at/);
-
-  const admin = readInlineScripts('admin.html').join('\n');
-  assert.match(admin, /credentials:\s*['"]same-origin['"]/);
-  assert.match(admin, /has_slip/);
-  assert.match(admin, /\/api\/admin\/orders\//);
-  assert.doesNotMatch(admin, /nobi_admin_token|slip_file_id/);
+  const storefront = readInlineScripts('nobitopup.html').join('\\n');
+  for (const contract of ['/api/public/catalog', '/api/public/coupons/validate', '/api/public/orders', 'checkout_token', 'payment_expires_at']) assert.ok(storefront.includes(contract), 'missing storefront contract: ' + contract);
+  const admin = readInlineScripts('admin.html').join('\\n');
+  for (const contract of ["credentials:'same-origin'", 'has_slip', '/api/admin/orders/']) assert.ok(admin.includes(contract), 'missing Admin contract: ' + contract);
+  assert.equal(admin.includes('nobi_admin_token'), false);
+  assert.equal(admin.includes('slip_file_id'), false);
 });
