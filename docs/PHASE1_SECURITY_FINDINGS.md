@@ -85,3 +85,13 @@ Status: findings recorded during structural refactoring and security hardening. 
 ## Phase 1 scope note
 
 The Phase 1 changes are structural extractions and characterization tests. The mitigations above apply to the Express baseline only. The browser frontend now uses the Express REST API; the signed Apps Script gateway is a transport scaffold only and is not wired into Express. Sheets/Drive persistence and private media proxy are not yet integrated. Do not enable production orders until the critical/high release gates are closed and the complete frontend-to-backend flow has been tested.
+
+
+## Confirmed Phase 1 policy decisions (2026-11-04)
+
+The user has approved the following target policies:
+- Member Login ID: ASCII English letters and digits only, 4–30 characters, case-insensitive (`^[A-Za-z0-9]{4,30}$`).
+- Member login/IP history and Admin audit logs: retain for 90 days, then delete or irreversibly anonymize.
+- Admin and Member sessions: maximum lifetime 8 hours, idle timeout 30 minutes, revoke on logout or password change.
+
+These decisions close the policy-confirmation blocker for Phase 1. They do not mean that Member authentication, durable session enforcement, or scheduled log-retention enforcement has already been implemented; those belong to later implementation phases. Phase 1 acceptance remains subject to final branch and CI verification. No deployment is authorized.
