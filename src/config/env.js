@@ -13,7 +13,10 @@ const ENV = Object.freeze({
   SESSION_SECRET: process.env.SESSION_SECRET || '',
   ADMIN_USERNAME: process.env.ADMIN_USERNAME || '',
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || '',
-  PROMPTPAY_ID: process.env.PROMPTPAY_ID || ''
+  PROMPTPAY_ID: process.env.PROMPTPAY_ID || '',
+  APPS_SCRIPT_URL: process.env.APPS_SCRIPT_URL || '',
+  APPS_SCRIPT_SHARED_SECRET: process.env.APPS_SCRIPT_SHARED_SECRET || '',
+  APPS_SCRIPT_TIMEOUT_MS: Number(process.env.APPS_SCRIPT_TIMEOUT_MS || 12000)
 });
 
 module.exports = ENV;
