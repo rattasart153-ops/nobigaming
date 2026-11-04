@@ -368,5 +368,3 @@ function updateById_(name,id,patch) {
 }
 
 
-/** Helper used by HtmlService pages; included for future partial templates. */
-function include(filename) { return HtmlService.createHtmlOutputFromFile(filename).getContent(); }
