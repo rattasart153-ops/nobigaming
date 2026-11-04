@@ -56,6 +56,15 @@ Status: findings recorded during read-only review and structural refactoring. Th
 - Impact: CSP does not provide a browser-side mitigation layer for injected script/content. COEP may be disabled for compatibility but should be justified.
 - Required remediation: Inventory inline scripts, external assets, and payment QR rendering; introduce a tested CSP in report-only mode before enforcement.
 
+
+## S-08 — Multer 1.x dependency is deprecated and has known security advisories
+
+- Severity: High until upgraded and retested
+- Evidence: `package.json` permits Multer 1.x (`^1.4.5-lts.1`); the CI install log resolved a 1.x LTS build and npm warned that Multer 1.x is affected by vulnerabilities patched in 2.x.
+- Impact: The upload parser is part of a public order-submission route and an Admin upload route, so parser vulnerabilities can expose the application to denial-of-service or other upload-handling risks.
+- Current action: Recorded; the existing Multer API is retained while upload behavior is characterized.
+- Required remediation: Upgrade to a maintained Multer 2.x release, review migration notes and transitive dependencies, then rerun valid upload, unsupported MIME, oversized upload, malformed multipart, and error-handler tests.
+
 ## Phase 1 scope note
 
 The Phase 1 changes are structural extractions and characterization tests. The findings above are deliberately not silently “fixed” by changing existing frontend contracts. They remain explicit blockers or follow-up requirements for the storage, authentication, and release phases.
