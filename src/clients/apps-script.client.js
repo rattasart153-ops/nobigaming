@@ -24,8 +24,11 @@ function canonicalEnvelope(envelope) {
 function createAppsScriptClient({ url, secret, fetchImpl = globalThis.fetch, timeoutMs = 12000 } = {}) {
   const endpoint = String(url || '').trim();
   const sharedSecret = String(secret || '');
-  if (!endpoint || !/^https:\/\//i.test(endpoint)) {
-    throw new AppsScriptGatewayError('Apps Script gateway URL is not configured', 'GATEWAY_NOT_CONFIGURED', 503);
+  let endpointUrl;
+  try { endpointUrl = new URL(endpoint); } catch (_) {}
+  if (!endpointUrl || endpointUrl.protocol !== 'https:' || endpointUrl.hostname !== 'script.google.com' ||
+      !/^\/macros\/s\/[^/]+\/(?:exec|dev)$/.test(endpointUrl.pathname) || endpointUrl.username || endpointUrl.password) {
+    throw new AppsScriptGatewayError('Apps Script gateway URL must be a Google Apps Script Web App URL', 'GATEWAY_NOT_CONFIGURED', 503);
   }
   if (sharedSecret.length < 32) {
     throw new AppsScriptGatewayError('Apps Script shared secret must contain at least 32 characters', 'GATEWAY_NOT_CONFIGURED', 503);
