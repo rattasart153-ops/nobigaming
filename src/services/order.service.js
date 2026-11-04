@@ -22,7 +22,7 @@ function createOrderService({ db, validateCoupon }) {
     const total = Math.max(0, Math.round((pack.price - discount) * 100) / 100);
     const transaction = db.transaction(() => {
       db.prepare(`INSERT INTO orders(id,game_id,package_id,player_id,server_id,coupon_id,subtotal,discount,total,slip_path,status) VALUES(?,?,?,?,?,?,?,?,?,?, 'Pending')`)
-        .run(id, game.id, pack.id, playerId, String(serverId).trim(), couponId, pack.price, discount, total, `/uploads/${file.filename}`);
+        .run(id, game.id, pack.id, playerId, String(serverId).trim(), couponId, pack.price, discount, total, file.filename);
       if (couponId) db.prepare('UPDATE coupons SET used_count=used_count+1 WHERE id=?').run(couponId);
     });
 
