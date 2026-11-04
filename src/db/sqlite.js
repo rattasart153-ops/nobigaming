@@ -49,7 +49,14 @@ db.exec(`CREATE TABLE IF NOT EXISTS coupon_redemptions (
   reserved_at TEXT NOT NULL, reserved_until TEXT NOT NULL, finalized_at TEXT, released_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_orders_expiry ON orders(status,payment_expires_at,slip_submitted_at);
-CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_capacity ON coupon_redemptions(coupon_id,state);`);
+CREATE INDEX IF NOT EXISTS idx_coupon_redemptions_capacity ON coupon_redemptions(coupon_id,state);
+CREATE TABLE IF NOT EXISTS idempotency_records (
+  key_hash TEXT PRIMARY KEY,
+  request_hash TEXT NOT NULL,
+  order_id TEXT NOT NULL UNIQUE REFERENCES orders(id),
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_idempotency_created_at ON idempotency_records(created_at);`);
 
 // Backward-compatible coupon-rule migration for existing SQLite databases.
 const couponColumns = new Set(db.prepare('PRAGMA table_info(coupons)').all().map(c => c.name));
