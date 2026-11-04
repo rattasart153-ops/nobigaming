@@ -4,8 +4,6 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const generatePayload = require('promptpay-qr');
 const QRCode = require('qrcode');
 
@@ -20,12 +18,8 @@ if (IS_VERCEL) console.warn('[Nobi Topup] Vercel is using ephemeral /tmp storage
 const sessionMiddleware = require('./src/middleware/session');
 const upload = require('./src/middleware/uploads');
 const errorHandler = require('./src/middleware/error-handler');
-app.set('trust proxy', IS_VERCEL ? 1 : false);
-
-app.disable('x-powered-by');
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+const { configureSecurity, createLoginLimiter } = require('./src/middleware/security');
+configureSecurity(app, express, IS_VERCEL);
 app.use(sessionMiddleware);
 app.use('/uploads', express.static(UPLOADS, { maxAge: '1h', dotfiles: 'deny' }));
 app.use(express.static(PUBLIC));
@@ -34,7 +28,7 @@ const db = require('./src/db/sqlite');
 
 const asyncRoute = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 const requireAdmin = (req, res, next) => req.session && req.session.adminId ? next() : res.status(401).json({ error: 'กรุณาเข้าสู่ระบบแอดมินก่อน' });
-const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'พยายามเข้าสู่ระบบหลายครั้งเกินไป กรุณาลองใหม่ภายหลัง' } });
+const loginLimiter = createLoginLimiter();
 const bool = v => v === true || v === 1 || v === '1' || v === 'true' ? 1 : 0;
 const validDate = v => !v || !Number.isNaN(Date.parse(v));
 function getCatalog() {
