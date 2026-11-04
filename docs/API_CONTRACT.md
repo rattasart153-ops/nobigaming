@@ -100,7 +100,7 @@ This is a transport foundation, not the final business-action contract. Some leg
 - A Pending order with a slip submitted strictly before `payment_expires_at` may be marked Completed by Admin even after the payment deadline. If no slip was submitted before the deadline, set `status=Expired` with `status_reason=PAYMENT_TIMEOUT` and release its coupon reservation exactly once. Rejected orders also release Reserved coupon capacity. Consumed reservations remain counted. An idempotent expiry sweep processes abandoned Pending orders; order creation, slip submission and Admin status changes enforce the rules synchronously.
 - On ambiguous create-order result, query with the original key before allowing another checkout.
 - Preserve request_id across retry; generate a fresh nonce and signature timestamp for each transport attempt.
-- Redirects, HTML error pages and malformed JSON are not success.
+- Only the expected Apps Script ContentService 302/303 redirect may be followed, and only after validating the destination as a Google-owned host; the signed POST body must never be forwarded to the redirect target. Any other redirect, HTML error page or malformed JSON is not success.
 
 ## Compatibility gate
 Before migrating a frontend call: inventory exact payload/response; map it to this contract; adapt deliberately; test success, validation, unauthorized, timeout and malformed response; remove the old browser GAS bridge only after all callers pass.
