@@ -4,7 +4,7 @@ const express = require('express');
 const fs = require('node:fs');
 const validateImageFile = require('../middleware/validate-image-file');
 
-function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCatalog, getPaymentInfo, createPendingOrder }) {
+function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCatalog, getPaymentInfo, createPendingOrder, submitSlip }) {
   const router = express.Router();
 
   router.get('/api/health', (req,res) => res.json({ ok: true, service: 'Nobi Topup API' }));
@@ -40,18 +40,29 @@ function createPublicRouter({ db, slipUpload, asyncRoute, validateCoupon, getCat
       discardUpload();
       return res.status(400).json({ error: 'กรุณากรอก UID ให้ถูกต้อง' });
     }
-    if (!req.file) return res.status(400).json({ error: 'กรุณาแนบสลิปการโอนเงิน (PNG/JPG/WebP ไม่เกิน 5 MB)' });
-
     const result = createPendingOrder({
       game,
       pack,
       playerId: String(playerId).trim(),
       serverId,
       couponCode,
-      file: req.file
+      file: req.file || null
     });
     if (!result.ok) return res.status(422).json({ error: result.message });
-    res.status(201).json({ message: 'รับออเดอร์แล้ว รอแอดมินตรวจสอบสลิป', order: result.order });
+    res.status(201).json({ message: result.order.slip_submitted_at ? 'รับออเดอร์และสลิปแล้ว' : 'สร้างออเดอร์แล้ว กรุณาชำระเงินและอัปโหลดสลิปก่อนหมดเวลา', order: result.order, checkout_token: result.checkoutToken });
+  });
+
+  router.post('/api/public/orders/:id/slip', slipUpload.single('slip'), validateImageFile, (req,res) => {
+    if (!req.file) return res.status(400).json({ error: 'กรุณาแนบสลิป PNG/JPG/WebP ไม่เกิน 5 MB' });
+    const authorization = String(req.get('authorization') || '');
+    const checkoutToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+    const result = submitSlip({ orderId: req.params.id, checkoutToken, file: req.file });
+    if (!result.ok) {
+      const status = result.reason === 'not_found' ? 404 : result.reason === 'expired' ? 410 : 409;
+      const message = result.reason === 'expired' ? 'หมดเวลาชำระเงินและอัปโหลดสลิปแล้ว' : result.reason === 'already_submitted' ? 'ออเดอร์นี้มีการส่งสลิปแล้วหรือไม่สามารถแก้ไขได้' : 'ไม่พบออเดอร์หรือสิทธิ์อัปโหลดไม่ถูกต้อง';
+      return res.status(status).json({ error: message, reason: result.reason });
+    }
+    return res.status(201).json({ ok: true, slip_submitted_at: result.slipSubmittedAt });
   });
 
   return router;
