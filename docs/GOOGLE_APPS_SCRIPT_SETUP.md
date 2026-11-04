@@ -22,8 +22,7 @@ This is the first backend foundation for the agreed zero-budget direction: Googl
 6. Save, select `setupNobiDatabase`, and click **Run**. Review and approve the Google permissions. This creates a spreadsheet and a Drive folder, and stores their IDs in Script Properties.
 7. In **Project Settings → Script Properties**, add `NOBI_ADMIN_USERNAME` and `NOBI_ADMIN_PASSWORD` (14+ characters), save, then run `initializeAdmin` once. The bootstrap password property is deleted after the admin is created. Never put the password in source code or chat.
 8. Add `NOBI_GATEWAY_SECRET` as a random secret of at least 32 characters. Configure the exact same value as Vercel's `APPS_SCRIPT_SHARED_SECRET`; never put it in Git or chat.
-9. Do not deploy a public web app yet. First finish the frontend bridge, upload encoding, auth/session storage and end-to-end checks.
-8. After those checks pass, deploy as a Web App using the narrowest viable execution/access settings. Recheck that the slip folder and spreadsheet remain private. Do not share either with “Anyone”.
+9. Do not deploy a public Web App yet. Complete the repository adapter, schema migration, private media proxy, authentication and automated/manual integration tests first. Deployment requires separate explicit approval.
 
 
 ## Vercel and Apps Script integration boundary
@@ -52,19 +51,21 @@ These are Apps Script functions intended to be called by a trusted integration l
 
 ## Known work remaining before launch
 
-- Copy the updated storefront/admin HTML into the two HtmlService files exactly as described above; repository HTML files are not automatically imported into Apps Script.
-- Verify admin-only slip viewing end-to-end; the bridge returns slip bytes only after `requireAdmin_`, and never includes base64 in order-list responses.
-- Add stronger password hashing, session rotation/revocation UX, CSRF/origin strategy suitable for Apps Script, login throttling that survives quota/locking pressure, and admin password change/revoke-all.
-- Fix referential integrity/deletion behavior for games/packages and define coupon usage semantics for rejected/cancelled orders.
-- Validate image signatures, not only claimed MIME type; consider upload memory/runtime limits.
-- Add CRUD/data validation for all fields, uniqueness constraints and migration/seed strategy.
-- Run automated/manual tests for coupon limits under concurrent submissions, duplicate request keys, upload rollback, forged MIME/signatures, private slip authorization, session expiry/revocation, and all storefront/admin flows.
+- Replace the legacy Sheets schema and RPC business logic with the approved versioned data model and focused repositories.
+- Implement Member registration/login, separate Admin/Member sessions, approved coupon access modes and Admin-only IP audit history.
+- Replace SHA-256-only password hashing with a deliberately slow KDF and test its Apps Script runtime cost.
+- Implement coupon reservation/consume/release and payment-deadline lifecycle exactly as approved; the current GAS scaffold does not yet do this.
+- Implement durable idempotency records for orders and gateway actions; the gateway nonce ledger protects transport replay but is not an order idempotency substitute.
+- Implement private Drive subfolders for slips, catalog images and promotion images, plus authorized Vercel proxy delivery. Do not publish Drive files.
+- Complete image decoding/re-encoding, pixel/dimension limits and upload rollback/reconciliation.
+- Implement a Vercel repository adapter and map each Express route to a tested gateway action. SQLite is still the active persistence layer.
+- Run GAS runtime tests for signature failures, stale timestamps, replay, concurrent writes, missing schema, private file access and quota behavior.
 - Confirm Google account quotas and expected traffic before live use.
-- Decide how PromptPay QR generation is retained in the GAS frontend (the existing `promptpay-qr` npm library cannot run inside Apps Script unchanged).
+- Keep PromptPay QR generation in the existing Vercel Node layer unless a separately tested GAS-compatible approach is justified.
 
 ## Data model
 
-Sheets are created for `admins`, `games`, `packages`, `coupons`, `promotions`, `orders`, and `sessions`. Unlike SQLite, IDs are UUIDs; code that assumes numeric IDs must be migrated accordingly.
+Current `Code.gs` still contains a legacy scaffold schema. The target schema is specified in [DATA_MODEL.md](./DATA_MODEL.md), including separate Admin/Member sessions, coupon redemption ledger, order deadlines, idempotency records, audit logs and gateway nonce ledger. The schema migration is not complete.
 
 
 ## เงื่อนไขคูปองเพิ่มเติม
