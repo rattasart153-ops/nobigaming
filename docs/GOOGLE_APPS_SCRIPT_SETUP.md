@@ -29,7 +29,7 @@ This is the first backend foundation for the agreed zero-budget direction: Googl
 
 Do **not** create `Storefront` or `Admin` HtmlService files for the current architecture. The repository's `public/nobitopup.html` and `public/admin.html` are served by Vercel and call same-origin Express REST endpoints. Browser code must never call `google.script.run` or the Apps Script URL.
 
-The new `13_HttpGateway.gs` file adds a signed `doPost(e)` entry point for server-to-server calls. The matching Node client is `src/clients/apps-script.client.js`. The client is intentionally not wired into the current Express routes yet; SQLite remains the active persistence layer until the Sheets repositories, API mapping, and tests are complete.
+The new `13_HttpGateway.gs` file adds a signed `doPost(e)` entry point for server-to-server calls. The legacy HtmlService page renderer has been replaced by a minimal JSON liveness response on GET; browser pages remain hosted by Vercel. The matching Node client is `src/clients/apps-script.client.js`. The client is intentionally not wired into the current Express routes yet; SQLite remains the active persistence layer until the Sheets repositories, API mapping, and tests are complete.
 
 The GAS gateway uses:
 - `NOBI_GATEWAY_SECRET` in Apps Script Script Properties.
