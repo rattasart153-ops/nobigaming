@@ -7,7 +7,7 @@ const path = require('node:path');
 const validateImageFile = require('../middleware/validate-image-file');
 const requireSameOrigin = require('../middleware/require-same-origin');
 
-function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, validDate, privateSlipsDir, legacyUploadsDir }) {
+function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, validDate, privateSlipsDir, legacyUploadsDir, setOrderStatus }) {
   const router = express.Router();
   router.use(requireSameOrigin);
 
@@ -122,8 +122,16 @@ function createAdminRouter({ db, requireAdmin, loginLimiter, upload, bool, valid
     stream.pipe(res);
   });
   router.patch('/api/admin/orders/:id/status', requireAdmin, (req,res) => {
-    const status=String((req.body||{}).status||''); if(!['Pending','Completed','Rejected'].includes(status))return res.status(400).json({error:'สถานะไม่ถูกต้อง'});
-    const r=db.prepare('UPDATE orders SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(status,String(req.params.id)); if(!r.changes)return res.status(404).json({error:'ไม่พบออเดอร์'}); res.json({ok:true,status});
+    const status = String((req.body || {}).status || '');
+    if (!['Pending', 'Completed', 'Rejected'].includes(status)) {
+      return res.status(400).json({ error: 'สถานะไม่ถูกต้อง' });
+    }
+    const result = setOrderStatus(String(req.params.id), status);
+    if (!result.ok && result.reason === 'not_found') return res.status(404).json({ error: 'ไม่พบออเดอร์' });
+    if (!result.ok && result.reason === 'invalid_transition') {
+      return res.status(409).json({ error: 'ออเดอร์ที่ตรวจสอบแล้วไม่สามารถเปลี่ยนสถานะซ้ำได้' });
+    }
+    return res.json({ ok: true, status: result.status });
   });
   router.post('/api/admin/upload', requireAdmin, upload.single('image'), validateImageFile, (req,res) => { if(!req.file)return res.status(400).json({error:'กรุณาเลือกไฟล์ภาพ PNG/JPG/WebP ขนาดไม่เกิน 5 MB'}); res.status(201).json({url:`/uploads/${req.file.filename}`}); });
 
