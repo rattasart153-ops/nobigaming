@@ -81,7 +81,8 @@ function couponEligibility_(coupon, gameId, subtotalSatang, playerId, memberId, 
   };
 }
 
-function validateCoupon(code, gameId, subtotal, playerId, memberId) {
+function validateCoupon(code, gameId, subtotal, playerId, memberId, skipExpirySweep) {
+  if (!skipExpirySweep) expirePendingOrders_();
   const normalized = String(code || '').trim().toUpperCase();
   const amount = Number(subtotal);
   if (!normalized || !Number.isFinite(amount) || amount < 0) {
@@ -95,6 +96,7 @@ function validateCoupon(code, gameId, subtotal, playerId, memberId) {
 }
 
 function couponSuggestions_(gameId, subtotal, playerId, memberId) {
+  expirePendingOrders_();
   const amount = Number(subtotal);
   if (!Number.isFinite(amount) || amount < 0) return {suggestion:null};
   const candidates = repositoryRows_('coupons').map(function(coupon) {
