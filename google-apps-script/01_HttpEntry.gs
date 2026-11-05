@@ -17,7 +17,7 @@ function dispatchGatewayAction_(action, args) {
       catch (error) { return {authenticated:false}; }
     case 'memberLogout': return memberLogout(args.token);
     case 'memberChangePassword': return memberChangePassword(args.token, args.currentPassword, args.newPassword);
-    case 'adminChangePassword': return adminChangePassword(args.token, args.currentPassword, args.newPassword);
+    case 'adminChangePassword': return adminChangePassword(args.token, args.currentPassword, args.newPassword, args.ipAddress);
     case 'adminMe':
       try { requireAdmin_(args.token); return {authenticated:true}; }
       catch (error) { return {authenticated:false}; }
