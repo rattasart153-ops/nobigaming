@@ -165,7 +165,11 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
       });
       clearCheckoutCookie(req, res, req.params.id);
       res.set('Cache-Control', 'no-store');
-      return res.status(201).json({ok:true, slip_submitted_at:result.slip_submitted_at});
+      return res.status(result.already_submitted ? 200 : 201).json({
+        ok:true,
+        already_submitted:Boolean(result.already_submitted),
+        slip_submitted_at:result.slip_submitted_at
+      });
     } finally {
       await removeUpload(req.file);
     }
