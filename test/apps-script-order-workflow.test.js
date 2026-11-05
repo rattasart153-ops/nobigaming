@@ -32,7 +32,7 @@ function makeOrderHarness() {
   let folderAccess = 'PRIVATE';
   const context = {
     Date:FixedDate,
-    NOBI:{MAX_SLIP_BYTES:3*1024*1024,SHEETS:{orders:['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at']}},
+    NOBI:{MAX_SLIP_BYTES:3*1024*1024,SHEETS:{orders:['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at'],coupon_redemptions:['redemption_id','coupon_id','order_id','member_id','player_id','game_id','discount_satang','state','reserved_at','reserved_until','finalized_at','released_at'],idempotency_records:['idempotency_id','scope','request_key','payload_hash','resource_id','state','created_at','expires_at']}},
     LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>{}})},
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='NOBI_PRIVATE_DRIVE_FOLDER_ID'?'private-folder-id':''})},
     Utilities:{
