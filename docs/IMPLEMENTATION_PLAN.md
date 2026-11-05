@@ -66,7 +66,7 @@ Exit: existing API contracts are characterized, security changes are intentional
 - [x] Phase 1 final acceptance review completed: approved policies documented, final CI passed, and `main` remains unchanged. Phase 1 is closed for its stated Express-baseline scope. Phase 2 has been explicitly authorized and is in progress on vercel-drive-setup; no deployment is authorized.
 
 ## Phase 2 — Apps Script gateway and storage
-Progress: Schema v1 business handlers for Catalog, Coupon, Order, Admin and Authentication have been migrated to schema-aware repositories. Member registration/login/session/IP history, Admin sessions, password rotation, coupon eligibility/reservations, order deadlines/idempotency/audit logs, private Drive slip/media storage and Vercel proxy routes are implemented in source. Express production mode now uses the signed Apps Script gateway and fails closed instead of falling back to SQLite. Node tests cover schema setup, PBKDF2 reference output, Vercel storage mode and gateway REST route contracts. Apps Script runtime, quota, concurrency and full browser/device verification remain open.
+Progress: Schema v1 business handlers for Catalog, Coupon, Order, Admin and Authentication have been migrated to schema-aware repositories. Member registration/login/session/IP history, Admin sessions, password rotation, shared HMAC-keyed Sheets rate limits, coupon eligibility/reservations, order deadlines/idempotency/audit logs, private Drive slip/media storage and Vercel proxy routes are implemented in source. Express production mode now uses the signed Apps Script gateway and fails closed instead of falling back to SQLite. Node tests cover schema setup, PBKDF2 reference output, Vercel storage mode and gateway REST route contracts. Apps Script runtime, quota, concurrency and full browser/device verification remain open.
 - [x] Split legacy GAS business logic into focused files and replace the legacy `rpc()` entry with an explicit signed-HTTP action dispatcher; remove HtmlService/browser RPC assumptions.
 - [x] Add signed, version-1 HTTP request envelope and fixed legacy action allowlist (`13_HttpGateway.gs`).
 - [x] Add HMAC-SHA256 verification, timestamp freshness check and nonce replay ledger guarded by ScriptLock.
@@ -87,7 +87,7 @@ The migrated GAS modules pass Node syntax/structure checks and PBKDF2 is verifie
 - [x] Separate Admin and Member authentication, registration, login and logout.
 - [x] PBKDF2-SHA256 password hashing (120,000 iterations) with per-account random salts.
 - [x] Opaque HttpOnly cookie sessions; store token hashes only; enforce 8-hour lifetime, 30-minute idle timeout, revocation and password rotation.
-- [x] Admin and Member login throttling; Admin-only Member IP-history screen and 90-day log retention.
+- [x] Shared HMAC-keyed Sheets login throttling (10/IP/15m), registration throttling (5/IP/15m), account failure throttling (5/15m), Admin-only Member IP-history screen and 90-day log retention.
 - [ ] Benchmark PBKDF2 and verify Apps Script execution/quota behavior in the real runtime.
 
 ## Phase 4 — Storefront workflows (source implementation complete; runtime verification pending)
