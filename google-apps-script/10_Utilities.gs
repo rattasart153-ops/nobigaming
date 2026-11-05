@@ -77,3 +77,34 @@ function pruneExpiredSessionsLocked_(nowMs) {
     });
   });
 }
+
+
+/** Shared cross-instance auth throttling stored in Script Properties, keyed by a one-way IP hash. */
+function consumeAuthIpAttempt_(ipAddress) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const keyName = 'NOBI_AUTH_IP_RATE_STATE';
+    let state = {};
+    try { state = JSON.parse(props.getProperty(keyName) || '{}'); } catch (ignored) { state = {}; }
+    const now = Date.now();
+    const windowMs = 15 * 60 * 1000;
+    Object.keys(state).forEach(function(key) {
+      if (!state[key] || now - Number(state[key].started_at || 0) >= windowMs) delete state[key];
+    });
+    const ipHash = sha256_(String(ipAddress || 'unknown')).slice(0, 32);
+    const bucket = state[ipHash] || {started_at:now,count:0};
+    if (Number(bucket.count || 0) >= 30) throw new Error('RATE_LIMITED');
+    bucket.count = Number(bucket.count || 0) + 1;
+    state[ipHash] = bucket;
+    const keys = Object.keys(state);
+    if (keys.length > 1000) {
+      keys.sort(function(a,b) { return Number(state[a].started_at || 0) - Number(state[b].started_at || 0); });
+      keys.slice(0, keys.length - 1000).forEach(function(key) { delete state[key]; });
+    }
+    props.setProperty(keyName, JSON.stringify(state));
+  } finally {
+    lock.releaseLock();
+  }
+}
