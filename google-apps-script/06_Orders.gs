@@ -27,6 +27,7 @@ function createOrder(payload) {
   lock.waitLock(20000);
   try {
     expirePendingOrdersLocked_(Date.now());
+    pruneExpiredIdempotencyLocked_(Date.now());
     let existingKey = repositoryFindByField_('idempotency_records', 'request_key', key)
       .find(function(item) { return item.scope === 'create_order'; });
     if (existingKey && Date.parse(existingKey.expires_at) <= Date.now()) {
@@ -280,4 +281,14 @@ function expirePendingOrders_() {
   lock.waitLock(15000);
   try { expirePendingOrdersLocked_(Date.now()); }
   finally { lock.releaseLock(); }
+}
+
+
+function pruneExpiredIdempotencyLocked_(nowMs) {
+  repositoryRows_('idempotency_records').filter(function(record) {
+    const expiry = Date.parse(record.expires_at || '');
+    return Number.isFinite(expiry) && expiry <= nowMs;
+  }).forEach(function(record) {
+    repositoryDeleteLocked_('idempotency_records', record.idempotency_id);
+  });
 }
