@@ -352,12 +352,13 @@ test('checkout retry recovers a partially persisted order before returning the o
   assert.throws(()=>context.createOrder(payload),/SIMULATED_REDEMPTION_INSERT_FAILURE/);
   assert.equal(data.orders.length,1);
   assert.equal(data.coupon_redemptions.length,0);
-  assert.equal(data.order_recovery_journal.find(x=>x.order_id===created.order.order_id&&x.operation==='TRANSITION').state,'Pending');
+  const partiallyCreatedOrderId=data.orders[0].order_id;
+  assert.equal(data.order_recovery_journal.find(x=>x.order_id===partiallyCreatedOrderId&&x.operation==='CREATE').state,'Pending');
 
   const retry=context.createOrder(payload);
   assert.equal(retry.duplicate,true);
   assert.equal(retry.order.order_id,data.orders[0].order_id);
   assert.equal(data.coupon_redemptions.length,1);
   assert.equal(data.idempotency_records.length,1);
-  assert.equal(data.order_recovery_journal.find(x=>x.order_id===created.order.order_id&&x.operation==='TRANSITION').state,'Completed');
+  assert.equal(data.order_recovery_journal.find(x=>x.order_id===partiallyCreatedOrderId&&x.operation==='CREATE').state,'Completed');
 });
