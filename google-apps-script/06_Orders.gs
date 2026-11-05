@@ -290,19 +290,27 @@ function applyOrderRecoveryJournalLocked_(journal) {
   try {
     if (journal.operation === 'CREATE') {
       const orderRecord = JSON.parse(String(journal.order_record_json || '{}'));
-      if (!orderRecord.order_id || String(orderRecord.order_id) !== String(journal.order_id)) {
+      const requiredOrderFields = NOBI.SHEETS.orders;
+      if (!orderRecord.order_id || String(orderRecord.order_id) !== String(journal.order_id) ||
+          requiredOrderFields.some(function(field) {
+            return !Object.prototype.hasOwnProperty.call(orderRecord,field);
+          }) || orderRecord.status !== 'Pending' || orderRecord.slip_submitted_at ||
+          !orderRecord.request_key || !orderRecord.checkout_token_hash) {
         throw new Error('RECOVERY_ORDER_PAYLOAD_INVALID');
+      }
+      const idem = JSON.parse(String(journal.idempotency_record_json || '{}'));
+      if (!idem.idempotency_id || idem.scope !== 'create_order' ||
+          String(idem.request_key) !== String(orderRecord.request_key) ||
+          String(idem.resource_id) !== String(journal.order_id) ||
+          !/^[a-f0-9]{64}$/i.test(String(idem.payload_hash || '')) ||
+          !idem.created_at || !idem.expires_at) {
+        throw new Error('RECOVERY_IDEMPOTENCY_PAYLOAD_INVALID');
       }
       const existingOrder = repositoryGetById_('orders',journal.order_id);
       if (!existingOrder) {
         repositoryInsertLocked_('orders',orderRecord);
       } else {
-        const immutableOrderFields = [
-          'order_id','request_key','member_id','game_id','package_id','player_id',
-          'server_id','coupon_id','subtotal_satang','discount_satang','total_satang',
-          'checkout_token_hash'
-        ];
-        const orderConflict = immutableOrderFields.some(function(field) {
+        const orderConflict = requiredOrderFields.some(function(field) {
           return String(existingOrder[field] == null ? '' : existingOrder[field]) !==
             String(orderRecord[field] == null ? '' : orderRecord[field]);
         });
@@ -334,26 +342,38 @@ function applyOrderRecoveryJournalLocked_(journal) {
       } else if (existingRedemptions.length || orderRecord.coupon_id) {
         throw new Error('RECOVERY_UNEXPECTED_REDEMPTION');
       }
-      if (journal.idempotency_record_json) {
-        const idem = JSON.parse(journal.idempotency_record_json);
-        if (String(idem.request_key) !== String(orderRecord.request_key) ||
-            String(idem.resource_id) !== String(journal.order_id) ||
-            idem.scope !== 'create_order') {
-          throw new Error('RECOVERY_IDEMPOTENCY_PAYLOAD_INVALID');
-        }
-        const existingIdem = repositoryFindByField_('idempotency_records','request_key',idem.request_key)
-          .find(function(item) { return item.scope === idem.scope; });
-        if (!existingIdem) repositoryInsertLocked_('idempotency_records',idem);
-        else if (String(existingIdem.resource_id) !== String(journal.order_id) ||
-                 String(existingIdem.payload_hash) !== String(idem.payload_hash)) {
-          throw new Error('RECOVERY_IDEMPOTENCY_CONFLICT');
-        }
+      const existingIdemRows = repositoryFindByField_('idempotency_records','request_key',idem.request_key)
+        .filter(function(item) { return item.scope === idem.scope; });
+      if (existingIdemRows.length > 1) throw new Error('RECOVERY_DUPLICATE_IDEMPOTENCY');
+      const existingIdem = existingIdemRows[0];
+      if (!existingIdem) repositoryInsertLocked_('idempotency_records',idem);
+      else if (String(existingIdem.idempotency_id) !== String(idem.idempotency_id) ||
+               String(existingIdem.resource_id) !== String(journal.order_id) ||
+               String(existingIdem.payload_hash) !== String(idem.payload_hash)) {
+        throw new Error('RECOVERY_IDEMPOTENCY_CONFLICT');
       }
     } else if (journal.operation === 'TRANSITION') {
       const order = repositoryGetById_('orders',journal.order_id);
       if (!order) throw new Error('RECOVERY_ORDER_NOT_FOUND');
       const patch = JSON.parse(String(journal.order_patch_json || '{}'));
       const targetStatus = String(patch.status || '');
+      const allowedPatchFields = {
+        Completed:['status','completed_at','updated_at'],
+        Rejected:['status','rejected_at','status_reason','updated_at'],
+        Expired:['status','status_reason','updated_at']
+      };
+      const allowedFields = allowedPatchFields[targetStatus];
+      if (!allowedFields || Object.keys(patch).some(function(field) {
+        return allowedFields.indexOf(field) === -1;
+      }) || !patch.updated_at ||
+          (targetStatus === 'Completed' && (!patch.completed_at || !order.slip_submitted_at ||
+            !Number.isFinite(Date.parse(order.slip_submitted_at)) ||
+            !Number.isFinite(Date.parse(order.payment_expires_at)) ||
+            Date.parse(order.slip_submitted_at) >= Date.parse(order.payment_expires_at))) ||
+          (targetStatus === 'Rejected' && (!patch.rejected_at || patch.status_reason !== 'ADMIN_REJECTED')) ||
+          (targetStatus === 'Expired' && patch.status_reason !== 'PAYMENT_TIMEOUT')) {
+        throw new Error('RECOVERY_TRANSITION_PAYLOAD_INVALID');
+      }
       if (order.status !== 'Pending' && order.status !== targetStatus) {
         throw new Error('RECOVERY_TERMINAL_STATE_CONFLICT');
       }
