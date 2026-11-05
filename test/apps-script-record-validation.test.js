@@ -51,3 +51,17 @@ test('coupon UID spend requires a game and valid expiry/usage limit values',()=>
     access_type:'public',usage_limit:0
   }),/จำนวนสิทธิ์คูปอง/);
 });
+
+
+test('money thresholds use integer satang and promotion time ranges must be valid',()=>{
+  assert.throws(()=>context.validateRecord_('packages',{
+    game_id:'g1',name:'Pack',amount:10,unit:'Coins',price_satang:10.5
+  }),/ข้อมูลแพ็กเกจไม่ถูกต้อง/);
+  assert.throws(()=>context.validateRecord_('coupons',{
+    code_normalized:'SAVE',discount_type:'fixed',discount_value:10.5,
+    access_type:'public'
+  }),/ข้อมูลส่วนลดไม่ถูกต้อง/);
+  assert.throws(()=>context.validateRecord_('promotions',{
+    title:'Sale',starts_at:'2026-11-06T00:00:00.000Z',ends_at:'2026-11-05T00:00:00.000Z'
+  }),/ช่วงเวลาโปรโมชั่นไม่ถูกต้อง/);
+});
