@@ -244,3 +244,43 @@ test('Schema v1 business modules no longer call legacy field-based Sheets helper
   assert.match(orders, /payment_expires_at/);
   assert.match(orders, /submitOrderSlip/);
 });
+
+
+test('shared Sheets rate limits use keyed IP hashes and enforce fixed-window thresholds', () => {
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'google-apps-script', '10_Utilities.gs'), 'utf8'
+  );
+  const rows = [];
+  let lockCalls = 0;
+  const secret = 'test-shared-secret-for-rate-limit-hmac-123456';
+  const context = {
+    Date,
+    NOBI:{LOG_RETENTION_DAYS:90},
+    LockService:{getScriptLock:()=>({waitLock:()=>{lockCalls++;},releaseLock:()=>{}})},
+    PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='NOBI_GATEWAY_SECRET'?secret:''})},
+    Utilities:{
+      Charset:{UTF_8:'UTF-8'},
+      computeHmacSha256Signature:(value,key)=>Array.from(crypto.createHmac('sha256',String(key)).update(String(value),'utf8').digest()).map(v=>v>127?v-256:v)
+    },
+    repositoryGetById_:(table,id)=>rows.find(row=>row.bucket_key_hash===id)||null,
+    repositoryInsertLocked_:(table,record)=>{rows.push({...record});},
+    repositoryUpdateLocked_:(table,id,patch)=>{const row=rows.find(item=>item.bucket_key_hash===id);Object.assign(row,patch);},
+    repositoryDeleteLocked_:(table,id)=>{const i=rows.findIndex(item=>item.bucket_key_hash===id);if(i>=0)rows.splice(i,1);},
+    repositoryRows_:()=>rows
+  };
+  vm.runInNewContext(source + '\nglobalThis.__consumeAuthIpAttempt = consumeAuthIpAttempt_; globalThis.__consumeRegistrationIpAttempt = consumeRegistrationIpAttempt_; globalThis.__rateLimitHash = rateLimitBucketHash_;',context);
+
+  const ip = '203.0.113.44';
+  const expected = crypto.createHmac('sha256',secret).update('AUTH_IP:' + ip).digest('hex');
+  assert.equal(context.__rateLimitHash('AUTH_IP',ip),expected);
+  for(let i=0;i<10;i++) context.__consumeAuthIpAttempt(ip);
+  assert.throws(()=>context.__consumeAuthIpAttempt(ip),/RATE_LIMITED/);
+  assert.equal(rows[0].attempt_count,10);
+  assert.equal(rows[0].bucket_key_hash,expected);
+  assert.equal(JSON.stringify(rows).includes(ip),false);
+  assert.ok(lockCalls>=11);
+
+  const registerIp='198.51.100.17';
+  for(let i=0;i<5;i++) context.__consumeRegistrationIpAttempt(registerIp);
+  assert.throws(()=>context.__consumeRegistrationIpAttempt(registerIp),/RATE_LIMITED/);
+});
