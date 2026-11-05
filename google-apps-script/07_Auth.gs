@@ -339,3 +339,72 @@ function pruneMemberLoginLogsLocked_(nowMs) {
     if (Number.isFinite(created) && created < cutoff) sheet.deleteRow(row + 1);
   }
 }
+
+
+function memberChangePassword(token, currentPassword, newPassword) {
+  const authenticated = requireMember_(token);
+  const nextPassword = String(newPassword || '');
+  if (nextPassword.length < 10 || nextPassword.length > 200) throw new Error('รหัสผ่านใหม่ต้องมีความยาว 10-200 ตัวอักษร');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const member = repositoryGetById_('members', authenticated.member_id);
+    if (!member || !passwordVerify_(String(currentPassword || ''), member.password_salt, member.password_hash, member.password_algorithm)) {
+      throw new Error('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+    }
+    const now = new Date().toISOString();
+    const salt = Utilities.getUuid() + Utilities.getUuid();
+    repositoryUpdateLocked_('members', member.member_id, {
+      password_hash:passwordHash_(nextPassword, salt),
+      password_salt:salt,
+      password_algorithm:'PBKDF2-SHA256-120000',
+      auth_version:Number(member.auth_version || 1) + 1,
+      updated_at:now
+    });
+    repositoryRows_('member_sessions').filter(function(session) {
+      return String(session.member_id) === String(member.member_id) && !session.revoked_at;
+    }).forEach(function(session) {
+      repositoryUpdateLocked_('member_sessions', session.session_id, {revoked_at:now});
+    });
+    return {ok:true, message:'เปลี่ยนรหัสผ่านแล้ว กรุณาเข้าสู่ระบบใหม่'};
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function adminChangePassword(token, currentPassword, newPassword) {
+  const authenticated = requireAdmin_(token);
+  const nextPassword = String(newPassword || '');
+  if (nextPassword.length < 14 || nextPassword.length > 200) throw new Error('รหัสผ่านใหม่ต้องมีความยาว 14-200 ตัวอักษร');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const admin = repositoryGetById_('admins', authenticated.admin_id);
+    if (!admin || !passwordVerify_(String(currentPassword || ''), admin.password_salt, admin.password_hash, admin.password_algorithm)) {
+      throw new Error('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+    }
+    const now = new Date().toISOString();
+    const salt = Utilities.getUuid() + Utilities.getUuid();
+    repositoryUpdateLocked_('admins', admin.admin_id, {
+      password_hash:passwordHash_(nextPassword, salt),
+      password_salt:salt,
+      password_algorithm:'PBKDF2-SHA256-120000',
+      auth_version:Number(admin.auth_version || 1) + 1,
+      updated_at:now
+    });
+    repositoryRows_('admin_sessions').filter(function(session) {
+      return String(session.admin_id) === String(admin.admin_id) && !session.revoked_at;
+    }).forEach(function(session) {
+      repositoryUpdateLocked_('admin_sessions', session.session_id, {revoked_at:now});
+    });
+    appendAdminAuditLogLocked_({
+      audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
+      action:'ADMIN_PASSWORD_CHANGED', target_type:'admin',
+      target_id:admin.admin_id, request_id:'', ip_address:'',
+      details_json:'{}', created_at:now
+    });
+    return {ok:true, message:'เปลี่ยนรหัสผ่านแล้ว กรุณาเข้าสู่ระบบใหม่'};
+  } finally {
+    lock.releaseLock();
+  }
+}
