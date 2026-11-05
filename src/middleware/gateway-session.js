@@ -29,9 +29,15 @@ function createGatewaySession(client) {
   async function requireAdmin(req, res, next) {
     try {
       const token = readCookie(req, ADMIN_COOKIE);
-      if (!token) return res.status(401).json({error:'กรุณาเข้าสู่ระบบผู้ดูแล'});
+      if (!token) {
+        clearAdminCookie(res);
+        return res.status(401).json({error:'กรุณาเข้าสู่ระบบผู้ดูแล'});
+      }
       const result = await client.call('adminMe', {token});
-      if (!result || !result.authenticated) return res.status(401).json({error:'เซสชันผู้ดูแลหมดอายุ'});
+      if (!result || !result.authenticated) {
+        clearAdminCookie(res);
+        return res.status(401).json({error:'เซสชันผู้ดูแลหมดอายุ'});
+      }
       req.adminToken = token;
       return next();
     } catch (error) { return next(error); }
@@ -40,9 +46,15 @@ function createGatewaySession(client) {
   async function requireMember(req, res, next) {
     try {
       const token = readCookie(req, MEMBER_COOKIE);
-      if (!token) return res.status(401).json({error:'กรุณาเข้าสู่ระบบสมาชิก'});
+      if (!token) {
+        clearMemberCookie(res);
+        return res.status(401).json({error:'กรุณาเข้าสู่ระบบสมาชิก'});
+      }
       const result = await client.call('memberMe', {token});
-      if (!result || !result.authenticated) return res.status(401).json({error:'เซสชันสมาชิกหมดอายุ'});
+      if (!result || !result.authenticated) {
+        clearMemberCookie(res);
+        return res.status(401).json({error:'เซสชันสมาชิกหมดอายุ'});
+      }
       req.memberToken = token;
       req.member = result.member;
       return next();
