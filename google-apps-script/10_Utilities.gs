@@ -79,15 +79,14 @@ function pruneExpiredSessionsLocked_(nowMs) {
 }
 
 
-/** Shared cross-instance auth throttling stored in Script Properties, keyed by a one-way IP hash. */
-function consumeAuthIpAttempt_(ipAddress) {
+/** Shared cross-instance IP throttling stored in Script Properties using one-way IP hashes. */
+function consumeIpRateLimit_(propertyName, ipAddress, limit) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const props = PropertiesService.getScriptProperties();
-    const keyName = 'NOBI_AUTH_IP_RATE_STATE';
     let state = {};
-    try { state = JSON.parse(props.getProperty(keyName) || '{}'); } catch (ignored) { state = {}; }
+    try { state = JSON.parse(props.getProperty(propertyName) || '{}'); } catch (ignored) { state = {}; }
     const now = Date.now();
     const windowMs = 15 * 60 * 1000;
     Object.keys(state).forEach(function(key) {
@@ -95,7 +94,7 @@ function consumeAuthIpAttempt_(ipAddress) {
     });
     const ipHash = sha256_(String(ipAddress || 'unknown')).slice(0, 32);
     const bucket = state[ipHash] || {started_at:now,count:0};
-    if (Number(bucket.count || 0) >= 30) throw new Error('RATE_LIMITED');
+    if (Number(bucket.count || 0) >= limit) throw new Error('RATE_LIMITED');
     bucket.count = Number(bucket.count || 0) + 1;
     state[ipHash] = bucket;
     const keys = Object.keys(state);
@@ -103,8 +102,16 @@ function consumeAuthIpAttempt_(ipAddress) {
       keys.sort(function(a,b) { return Number(state[a].started_at || 0) - Number(state[b].started_at || 0); });
       keys.slice(0, keys.length - 80).forEach(function(key) { delete state[key]; });
     }
-    props.setProperty(keyName, JSON.stringify(state));
+    props.setProperty(propertyName, JSON.stringify(state));
   } finally {
     lock.releaseLock();
   }
+}
+
+function consumeAuthIpAttempt_(ipAddress) {
+  consumeIpRateLimit_('NOBI_AUTH_IP_RATE_STATE', ipAddress, 30);
+}
+
+function consumeRegistrationIpAttempt_(ipAddress) {
+  consumeIpRateLimit_('NOBI_REG_IP_RATE_STATE', ipAddress, 5);
 }
