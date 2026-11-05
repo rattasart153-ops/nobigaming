@@ -136,7 +136,7 @@ function adminUpsert(token, tableName, record) {
   if ((tableName === 'packages' || tableName === 'promotions') && safe.image_url) {
     const mediaMatch = String(safe.image_url).match(/^\/api\/public\/media\/([A-Za-z0-9_-]{10,100})$/);
     if (mediaMatch) safe.image_file_id = mediaMatch[1];
-    else if (/drive\.google\.com|googleusercontent\\.com/i.test(String(safe.image_url))) {
+    else if (/drive\.google\.com|googleusercontent\.com/i.test(String(safe.image_url))) {
       throw new Error('ห้ามใช้ลิงก์ Google Drive โดยตรง ต้องใช้ URL ผ่านระบบสื่อส่วนตัว');
     }
   }
