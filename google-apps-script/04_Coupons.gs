@@ -1,8 +1,9 @@
 /** Coupon eligibility against Schema v1; all persisted money values are satang. */
 
 function couponExpiryCutoff_(expiresAt) {
-  const match = String(expiresAt || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
-  if (!match) return NaN;
+  const expiryText = String(expiresAt || '').trim();
+  const match = expiryText.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+  if (!match || (expiryText.length > 10 && !Number.isFinite(Date.parse(expiryText)))) return NaN;
   const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
   const calendarDate = new Date(Date.UTC(year, month - 1, day));
   if (calendarDate.getUTCFullYear() !== year || calendarDate.getUTCMonth() !== month - 1 ||
