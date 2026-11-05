@@ -1,114 +1,114 @@
-# Nobi Topup — Target Architecture
+# Nobi Topup — Current Architecture and Release Boundaries
 
-Status: architecture baseline only. Not production-ready and does not authorize deployment.
+Status: the source implementation on `vercel-drive-setup` is integrated and covered by Node/GitHub Actions tests. It is **not production-ready** until Apps Script runtime, quota, concurrency and browser/device end-to-end verification pass. No deployment or live database initialization is authorized.
 
 ## Safety and scope
-- Develop only on vercel-drive-setup. Never modify main.
-- Do not deploy Vercel or publish a GAS Web App without separate approval.
-- Use the existing GitHub and Google accounts only.
-- Start with an empty database. No SQLite or upload migration is required.
+
+- Develop only on `vercel-drive-setup`. Never modify `main`.
+- Use the user's existing GitHub and Google accounts; do not require a new paid service.
+- Keep the Sheets spreadsheet, Drive folders and uploaded files private.
 - Never commit credentials, tokens, customer data, real slips, spreadsheet IDs or Drive folder IDs.
-- Keep Sheets, Drive folders and uploaded files private.
+- Use synthetic records and dummy images for tests. Do not accept real payments or slips during verification.
 
-## Target runtime
-Browser → Vercel static pages and Express API → server-side Apps Script client → Apps Script HTTP gateway → Google Sheets and private Google Drive.
+## Runtime architecture
 
-The browser must call only same-origin Vercel routes. It must never call google.script.run, the Apps Script URL, Sheets or Drive directly.
+Browser → Vercel static pages and Express API → signed server-side Apps Script client → Apps Script HTTP gateway → Google Sheets and private Google Drive.
 
-## Component responsibilities
+The browser calls same-origin Vercel routes only. It never calls `google.script.run`, the Apps Script URL, Sheets or Drive directly.
 
 ### Browser
-- Renders storefront and Admin.
-- Calls same-origin /api routes.
-- Sends slip images as multipart uploads.
-- Never stores auth tokens in localStorage or sessionStorage.
-- Never receives Google resource IDs, shared secrets, password hashes, token hashes or public Drive URLs.
+
+- Existing storefront: `public/nobitopup.html`.
+- Existing Admin: `public/admin.html`.
+- Uses same-origin REST routes and multipart image uploads.
+- Never stores Admin, Member or checkout tokens in localStorage/sessionStorage.
+- Receives no Google shared secret, password hash, session-token hash or direct Drive URL.
+- Admin-only IP history and slip views are available only behind Admin authorization.
 
 ### Vercel / Express
-- Serves HTML and static assets.
-- Owns browser-facing routes, cookies, CSRF/origin checks, rate limits, request validation and error mapping.
-- Owns separate Admin and Member browser sessions.
-- Stores only hashes of random opaque session tokens.
-- Calls Apps Script through one server-side client module.
-- Calculates PromptPay QR using the existing Node dependency.
-- Proxies private slip access only after Admin authorization.
-- Does not depend on local durable files, SQLite or local upload folders.
+
+- `server.js` composes the current production gateway routes and the isolated local SQLite characterization fallback.
+- In production/Vercel, both `APPS_SCRIPT_URL` and `APPS_SCRIPT_SHARED_SECRET` are mandatory. If absent, startup fails rather than falling back to SQLite or local durable uploads.
+- `src/clients/apps-script.client.js` is the only server-side Apps Script transport. It signs each request, enforces bounded timeouts, validates response envelopes and trusted ContentService redirects, and does not retry mutations automatically.
+- Express owns browser-facing routes, HttpOnly cookies, same-origin/CSRF checks, request validation, first-layer rate limits and error mapping.
+- Vercel local upload directories are temporary staging only. Images are fully decoded/re-encoded and limited to 3 MB; final files are stored in private Drive.
+- PromptPay QR generation remains in the existing Node payment-info service.
+- SQLite is for local development/characterization only, not production persistence.
 
 ### Google Apps Script
+
 - Sole application component allowed to access Sheets and Drive.
-- Accepts signed server-to-server JSON requests from Vercel only.
-- Uses a fixed action allowlist; never dispatches arbitrary function names from client input.
-- Revalidates critical business rules at the persistence boundary.
-- Uses ScriptLock for short critical read-check-write sections.
-- Stores uploaded files in a private Drive folder.
-- Returns normalized JSON and opaque IDs, never spreadsheet rows or public Drive links.
+- Accepts signed server-to-server JSON requests only; fixed action allowlist, HMAC-SHA256 signature, ±5-minute timestamp freshness and nonce replay protection.
+- Schema v1 business modules use schema-aware repository primitives with exact header checks, allowed fields, immutable primary keys, uniqueness checks and ScriptLock-protected writes.
+- Revalidates identity, prices, coupon eligibility, order deadlines and upload permissions at the persistence boundary.
+- Admin/Member passwords use PBKDF2-SHA256 (120,000 iterations) with per-account salts. This still requires a real Apps Script runtime benchmark.
+- Admin and Member sessions are separate, opaque, token-hash-only records with 8-hour maximum lifetime and 30-minute idle timeout.
+- Shared abuse controls use HMAC-keyed Sheets rate-limit buckets; raw IP/login identifiers are not written to that ledger.
+- Multi-step Sheets/Drive operations use compensating cleanup because Sheets has no SQL transaction.
 
 ### Google Sheets and Drive
-- Sheets are tables with explicit headers and stable string IDs; do not assume SQL transactions, foreign keys or unique constraints.
-- Drive files are private. Sheets store file IDs only.
-- Multi-step Sheets + Drive operations require compensating cleanup and reconciliation because they are not one atomic transaction.
 
-## Vercel source layout
-Keep server.js as the compatibility entry point and local launcher. Move implementation into modules in small behavior-preserving steps.
+- Sheets schema v1 is declared in `google-apps-script/00_Config.gs`; headers are exact and versioned.
+- Sheets are not SQL: no relational transactions, foreign keys or native unique constraints. Application-level checks and ScriptLock serialize critical sections.
+- Orders, idempotency records, coupon reservations, Admin audit logs, Member login/IP history, sessions and shared rate limits are separate tables.
+- Slips live in the configured private slip folder. Product/promotion media live in the configured private media folder.
+- Files remain private in Drive. Storefront-visible images are delivered only through a Vercel proxy after verifying an active package/promotion reference, file privacy and configured folder membership.
+- Private slips are returned only through an authenticated Admin proxy after checking the configured private slip folder.
 
-- src/app.js — Express composition
-- src/config/env.js and constants.js — validated configuration
-- src/routes — health, public, auth, member, admin and upload routes
-- src/middleware — request ID, validation, rate limits, auth guards, security headers and error handler
-- src/clients/apps-script.client.js — only module that calls GAS
-- src/services — auth, member, catalog, coupon, order, admin, upload and payment logic
-- src/repositories — data access facade
-- src/validators — request schemas
-- src/utils — errors, crypto, IDs, money, dates and safe logging
-- public — existing storefront and Admin pages
-- google-apps-script — split GAS source files listed below
-- docs — architecture, data model, API contract and implementation plan
+## Current Apps Script source layout
 
-## Apps Script source layout
-Use separate .gs files in one Apps Script project:
-- 00_Config.gs — current scaffold configuration and legacy sheet header map
-- 01_HttpEntry.gs — explicit signed-HTTP action dispatcher; no browser RPC
-- 02_Database.gs — current legacy database setup and sheet helpers (to be replaced by versioned setup)
-- 03_Catalog.gs — catalog and promotion reads
-- 04_Coupons.gs — current legacy coupon validation/suggestions
-- 05_Payments.gs — payment configuration boundary
-- 06_Orders.gs — current legacy order and slip logic
-- 07_Auth.gs — current legacy Admin authentication/bootstrap
-- 08_Admin.gs — Admin dashboard, orders and CRUD
-- 09_Validation.gs — current legacy record validation
-- 10_Utilities.gs — shared hashing, money, row and serialization helpers
-- 11_Repositories.gs — schema-aware Sheets row access, key uniqueness and lock-aware writes
-- 13_HttpGateway.gs — signed POST verification, nonce replay protection and response envelope
+- `00_Config.gs` — schema v1, session/upload constants.
+- `01_HttpEntry.gs` — explicit signed-HTTP action dispatcher.
+- `02_Database.gs` — non-destructive, versioned Sheets setup and guarded legacy helpers.
+- `03_Catalog.gs` — public catalog and promotion reads.
+- `04_Coupons.gs` — Guest/Member/UID/game eligibility and expiry rules.
+- `05_Payments.gs` — payment configuration boundary.
+- `06_Orders.gs` — idempotent order creation, coupon reservation, deadlines, slip upload and expiry.
+- `07_Auth.gs` — Admin/Member registration, login, sessions and password changes.
+- `08_Admin.gs` — Admin dashboard, order/member controls, CRUD, audit and private Drive proxy.
+- `09_Validation.gs` — schema v1 business-record validation.
+- `10_Utilities.gs` — hashing, rate limits, retention, money and shared helpers.
+- `11_Repositories.gs` — schema-aware Sheets repository primitives.
+- `13_HttpGateway.gs` — signed POST verification, nonce replay protection and response envelope.
+- `Code.gs` — minimal HTTP entry/liveness boundary.
 
-Numeric prefixes are for human reading order, not execution order. Apps Script files share a global namespace; avoid duplicate global names. The numbered module layout above reflects the current migration scaffold; repository adapters, Members and private file modules will be added only after the schema and contracts are implemented. The current Admin password helper is legacy SHA-256-only and must not be treated as production authentication.
+Apps Script files share a global namespace; numeric prefixes are for human reading only, not execution order.
 
-## Security and correctness rules
-- Admin and Member identities and sessions are separate.
-- Cookies use HttpOnly, Secure in production and SameSite=Lax; no token in browser storage.
-- Store only session token hashes. Enforce expiry and revocation on every protected request.
-- Use slow password hashing with per-account salt. Do not ship SHA-256-only password hashing.
-- Bootstrap first Admin from a one-time Script Property and delete it after successful initialization. No default password in source.
-- Derive client IP only from the verified Vercel platform proxy configuration; never trust a client-supplied IP.
-- Admin-only IP history access is audited.
-- Server calculates price, discount and totals from stored records. Never trust browser totals or roles.
-- Order creation uses an idempotency key. Repeated identical requests must not create another order or Drive file.
-- Validate uploaded image signature, MIME type and 5 MB size limit.
-- Private slips are returned only through an authorized Vercel proxy.
-- Use integer satang for money; avoid floating-point arithmetic.
-- Use ISO-8601 UTC timestamps and display in Asia/Bangkok.
-- Centralize environment validation, schemas, error codes and logging.
-- Bound Apps Script call timeouts. Retry only safe reads or mutations protected by stable idempotency keys.
-- Never cache sessions, member data, coupon eligibility, orders or slip content in shared cache.
+## Security and correctness invariants
+
+- Admin and Member identities and sessions are separate. Cookies are HttpOnly, Secure in production and SameSite=Strict.
+- Store only hashes of opaque session tokens. Re-read and validate session/account state while holding ScriptLock before refreshing last-seen.
+- Logout, password changes, account suspension and auth-version changes revoke existing sessions.
+- Bootstrap the first Admin from one-time Script Properties; delete the bootstrap password after initialization. No default credential is stored in source.
+- Derive source IP from the Vercel proxy configuration; Apps Script rejects missing source IP and never trusts a client-supplied IP.
+- Admin-only IP history and slip views are audited.
+- Server calculates price, discount, totals and coupon eligibility from persisted records. Browser values are never authoritative.
+- Order creation requires an idempotency key. Repeating an identical request cannot create a second order or coupon reservation.
+- Payment deadline is enforced on order creation, slip submission and Admin completion.
+- A Pending order with a slip accepted before the deadline may be completed after the deadline. Without an accepted slip before the deadline, it expires and releases its Reserved coupon capacity.
+- Uploads accept PNG/JPEG/WebP only, are fully decoded/re-encoded in Vercel staging and capped at 3 MB; Apps Script independently checks signatures and size.
+- Store all images/slips in private Drive folders; public media access is only through the reference-checked application proxy.
+- Use integer satang for persisted money and ISO-8601 UTC timestamps; interpret coupon date-only expiry in Asia/Bangkok.
+- Never cache sessions, Member data, coupon eligibility, orders or slip content in shared cache.
 
 ## Confirmed coupon rules
-- everyone: Guest and Member can use, subject to other restrictions.
-- member_only: Member only.
-- member_game_spend: Member only, with accumulated Completed spend in a selected game meeting the configured threshold.
-- Spend uses paid total after discount; Pending, Rejected and Guest orders do not count.
-- Coupon redemption game and spend-eligibility game are separate fields.
-- Legacy UID allowlist and UID cumulative spend remain additional independent restrictions.
-- Recheck eligibility inside locked order creation.
-- Coupon reservation/release behavior for Pending and Rejected orders must be decided before implementing the write path.
 
-## Structural readiness gate
-Do not start feature migration until the module boundaries, Sheets schema, browser API contract, GAS request contract, authentication boundaries, order/upload invariants and legacy compatibility map are reviewed.
+- `public`: Guest and Member may use, subject to other restrictions.
+- `member_only`: authenticated Active Member only.
+- `member_game_spend`: Active Member whose Completed, post-discount spend in the configured qualifying game reaches the threshold.
+- UID allowlist and UID cumulative Completed spend in the selected checkout game are independent additional restrictions.
+- Pending, Rejected, Expired and Guest orders do not count toward Member or UID cumulative spend.
+- Coupon usage limits count Reserved and Consumed redemptions.
+- Reservation occurs on Pending; consumption on Completed; release on Rejected/Expired.
+- A coupon with an expiry date remains payable through the end of that date in Thailand; orders without an expiry date use a 15-minute payment window.
+
+## Remaining release gates
+
+- Import all source files into a real Apps Script project and verify syntax/runtime behavior.
+- Benchmark PBKDF2 and Apps Script execution/quota usage.
+- Test bad signatures, stale timestamps, nonce replay, invalid actions and concurrent nonce claims.
+- Test concurrent order/coupon claims, idempotency, slip retries, deadlines and Admin status transitions.
+- Verify private folder/file permissions and reference-checked media with synthetic Drive files.
+- Run full storefront/Admin browser and device end-to-end tests against a synthetic deployment.
+- Verify Vercel function duration and payload limits.
+- Do not run `setupNobiDatabase()`, `initializeAdmin()`, publish the Apps Script Web App or deploy Vercel until the release gates pass and the user explicitly authorizes those actions.
