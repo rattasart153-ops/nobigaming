@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const context = vm.createContext({});
+const context = vm.createContext({DriveApp:{Access:{PRIVATE:'PRIVATE'},getFolderById:id=>({getSharingAccess:()=>id==='shared-folder'?'ANYONE':'PRIVATE'})}});
 vm.runInContext(
   fs.readFileSync(path.join(__dirname,'..','google-apps-script','08_Admin.gs'),'utf8'),
   context,
@@ -37,7 +37,7 @@ test('private Drive file validator accepts files only in the configured folder',
   );
 });
 
-test('private Drive file validator fails closed for missing folder or unsupported file object',()=>{
+test('private Drive file validator fails closed for missing folder, shared folder or unsupported file object',()=>{
   assert.throws(()=>context.assertDriveFileInPrivateFolder_(driveFile(['private-folder']),''),/DRIVE_FOLDER_INVALID/);
-  assert.throws(()=>context.assertDriveFileInPrivateFolder_({},'private-folder'),/DRIVE_FOLDER_INVALID/);
+  assert.throws(()=>context.assertDriveFileInPrivateFolder_({},'private-folder'),/DRIVE_FOLDER_INVALID/);\n  assert.throws(()=>context.assertDriveFileInPrivateFolder_(driveFile(['shared-folder']),'shared-folder'),/DRIVE_FOLDER_NOT_PRIVATE/);
 });
