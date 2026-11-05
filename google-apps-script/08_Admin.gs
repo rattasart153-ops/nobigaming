@@ -205,3 +205,14 @@ function adminDelete(token, tableName, id) {
     lock.releaseLock();
   }
 }
+
+
+function adminMemberLoginLogs(token, memberId, requestedLimit) {
+  requireAdmin_(token);
+  const limit = Math.min(500, Math.max(1, Number(requestedLimit) || 100));
+  return repositoryRows_('member_login_logs').filter(function(log) {
+    return !memberId || String(log.member_id) === String(memberId);
+  }).sort(function(a, b) {
+    return String(b.created_at).localeCompare(String(a.created_at));
+  }).slice(0, limit).map(clean_);
+}
