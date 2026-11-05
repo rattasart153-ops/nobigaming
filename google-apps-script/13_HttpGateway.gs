@@ -196,7 +196,9 @@ function safeGatewayMessage_(error) {
 
 function gatewayErrorCode_(error) {
   const message = String(error && error.message || '');
-  if (/RATE_LIMITED|ลองเข้าสู่ระบบใหม่ภายหลัง/.test(message)) return 'RATE_LIMITED';
+  if (/GATEWAY_NOT_CONFIGURED/.test(message)) return 'GATEWAY_NOT_CONFIGURED';
+  if (/UNTRUSTED_SOURCE_IP/.test(message)) return 'UNTRUSTED_SOURCE_IP';
+  if (/RATE_LIMITED|RATE_LIMIT_STORE_FULL|ลองเข้าสู่ระบบใหม่ภายหลัง/.test(message)) return 'RATE_LIMITED';
   if (/เซสชัน|กรุณาเข้าสู่ระบบ|ชื่อผู้ใช้หรือรหัสผ่าน|Login ID หรือรหัสผ่าน|บัญชีสมาชิกถูกระงับ|สิทธิ์อัปโหลด/.test(message)) return 'UNAUTHENTICATED';
   if (/หมดเวลา|หมดอายุ/.test(message)) return 'RESOURCE_EXPIRED';
   if (/IDEMPOTENCY_CONFLICT|ถูกใช้ครบจำนวน|มีอยู่แล้ว|ไม่สามารถเปลี่ยนสถานะซ้ำ|อ้างอิงอยู่/.test(message)) return 'RESOURCE_CONFLICT';
