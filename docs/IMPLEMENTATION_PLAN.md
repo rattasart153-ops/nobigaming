@@ -78,7 +78,8 @@ Progress: Schema v1 business handlers for Catalog, Coupon, Order, Admin and Auth
 - [x] Migrate Catalog, Coupon, Order, Admin and Auth business handlers to the version 1 repository field model; keep live Sheets initialization blocked until runtime verification is complete.
 - [x] Implement Member/Admin sessions, coupon reservations, order deadlines, audit and idempotency records against the approved Sheets schema.
 - [x] Implement private Drive storage for slips and storefront/catalog/promotion images, plus Admin-authorized slip and reference-checked media proxy delivery.
-- [ ] Add GAS runtime tests for bad signature, stale timestamp, replay, invalid action, missing schema, concurrent nonce claims and quota behavior.
+- [x] Add offline VM tests of the GAS verifier for bad signature, stale timestamp, invalid action, missing nonce schema and replay rejection.
+- [ ] Run the same security checks in an actual Apps Script test deployment, including concurrent nonce claims and quota behavior.
 - [x] Wire the Express production API to the signed Apps Script gateway; add REST route contract tests. Full Apps Script runtime integration remains a separate gate.
 
 The migrated GAS modules pass Node syntax/structure checks and PBKDF2 is verified against Node's reference implementation. They have not yet been imported into or runtime-tested in Apps Script. Benchmark the 120,000-iteration PBKDF2 implementation and test nonce replay, concurrent order/coupon claims, Drive privacy, and quota behavior before any live initialization. Do not call `setupNobiDatabase()` or `initializeAdmin()` until those gates pass. No deployment is authorized.
