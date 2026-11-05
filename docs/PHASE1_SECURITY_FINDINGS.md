@@ -4,12 +4,13 @@ Status: findings recorded during structural refactoring and security hardening. 
 
 ## S-01 — Uploaded files are publicly addressable
 
-- Status: Mitigated in the Express baseline; durable Drive migration remains open.
-- Severity: High before mitigation; production blocker until private Drive storage is integrated.
+- Status: Private Drive storage and application-proxy delivery are implemented in Phase 2 source; real Apps Script/Drive runtime verification remains open.
+- Severity: High before mitigation; still a production blocker until Drive permissions and proxy access are verified in a synthetic Google deployment.
 - Evidence: The previous Express build mounted the whole upload directory at `/uploads` and stored slips under that public path.
 - Remediation in current branch: Public marketing images are stored under a dedicated public subdirectory. Checkout slips are stored in a separate private directory that is not mounted by `express.static`. Admin order lists expose only `has_slip`, never the filesystem path; `GET /api/admin/orders/:id/slip` streams the file only after Admin authentication and sets `Cache-Control: private, no-store` and `X-Content-Type-Options: nosniff`. Legacy `/uploads/<filename>` slip paths are resolvable only through the authenticated endpoint; the old root upload directory is no longer publicly mounted.
 - Verification: CI checks that unauthenticated slip access returns 401, authenticated access returns the image, and the same filename is unavailable under `/uploads/`.
-- Remaining release gate: Replace local private-slip and local public-media storage with private Google Drive storage for all uploaded images before Vercel production, because `/tmp` is ephemeral. Storefront-visible images must be delivered through an application proxy; do not change Drive sharing to Anyone. No deployment is authorized.
+- Phase 2 source remediation: Slips and uploaded catalog/promotion media are stored in private Drive folders. Admin slip retrieval and storefront media delivery use authenticated/reference-checked application proxies; Drive files remain private.
+- Remaining release gate: Verify actual Drive folder/file ACLs, parent-folder ownership, upload limits and proxy authorization in a synthetic Apps Script deployment. No deployment is authorized.
 
 ## S-02 — Upload validation trusts the supplied MIME type
 
@@ -23,17 +24,18 @@ Status: findings recorded during structural refactoring and security hardening. 
 ## S-03 — Session and application data use local SQLite files
 
 - Severity: Critical for Vercel production persistence.
-- Evidence: The application stores its SQLite database and connect-sqlite3 session store under the configured local data directory. On Vercel, the path resolves under `/tmp`.
-- Impact: Vercel instance replacement or scaling can lose or split orders, sessions, and database state.
-- Current action: Warning retained; SQLite is kept only as the characterization baseline.
-- Required remediation: Complete the Apps Script/Sheets persistence adapter and private Drive file storage, then run concurrency, idempotency, quota, and recovery tests before any production use.
+- Evidence: The original baseline stored SQLite data and sessions under the local data directory, which is ephemeral on Vercel.
+- Impact: Instance replacement or scaling could lose or split orders, sessions and database state.
+- Phase 2 source remediation: Vercel production mode now uses the signed Apps Script gateway and refuses SQLite fallback; Apps Script repositories use versioned Google Sheets for durable records and private Drive for files.
+- Remaining release gate: Import and run the Apps Script project, then test concurrency, idempotency, quotas, backups/recovery and failure behavior against synthetic Google resources. The SQLite implementation remains only as a local characterization baseline.
 
 ## S-04 — Login rate limiting is process-local
 
 - Severity: Medium.
-- Evidence: `express-rate-limit` uses its default in-memory store.
-- Impact: Counters are not shared between serverless instances and can reset when an instance is replaced.
-- Phase 1 disposition: Current local/single-process limiter is explicitly classified as development-only. A shared no-new-service strategy using a Sheets ledger guarded by Apps Script ScriptLock is documented in [PHASE1_ABUSE_CONTROL_DESIGN.md](./PHASE1_ABUSE_CONTROL_DESIGN.md). It must be implemented and load/quota-tested as part of the later persistence integration; do not represent the current limiter as globally enforced.
+- Evidence: `express-rate-limit` still uses a process-local in-memory first layer.
+- Impact: That first layer is not shared between Vercel serverless instances and can reset when an instance is replaced.
+- Phase 2 source remediation: A shared HMAC-keyed Sheets ledger guarded by Apps Script ScriptLock now enforces cross-instance Admin/Member login and registration thresholds. The process-local limiter is only an additional first layer.
+- Remaining release gate: Load-test parallel attempts across simulated instances and measure lock contention, Sheet operations, Apps Script quotas and fail-closed behavior before production.
 
 ## S-05 — Cookie-authenticated mutation routes lack explicit CSRF tokens
 
@@ -80,11 +82,12 @@ Status: findings recorded during structural refactoring and security hardening. 
 - Evidence: Admin marketing media and customer payment slips previously shared the same directory and static mount.
 - Remediation: Public Admin uploads now use `uploads/public`; payment slips use a separately configured private directory (`NOBI_PRIVATE_SLIP_DIR`, defaulting to `DATA_DIR/private-slips`). Only the public subdirectory is mounted at `/uploads`.
 - Verification: CI verifies private slip files cannot be fetched from the public upload route and can be retrieved only through the Admin-protected slip endpoint.
-- Remaining release gate: The local Express baseline still uses a public application URL for catalog/marketing images. In the target architecture, store all uploaded image objects in private Drive and proxy only the selected storefront-visible assets through the application without public Drive sharing.
+- Phase 2 source remediation: Uploaded marketing/catalog/promotion assets are stored in private Drive and exposed only through a reference-checked application media proxy; Drive sharing is not made public.
+- Remaining release gate: Verify private ACLs, cross-folder reference rejection and proxy behavior using synthetic Drive files in the real Apps Script runtime.
 
-## Phase 1 scope note
+## Phase 1 scope note — historical baseline
 
-The Phase 1 changes are structural extractions and characterization tests. The mitigations above apply to the Express baseline only. The browser frontend now uses the Express REST API; the signed Apps Script gateway is a transport scaffold only and is not wired into Express. Sheets/Drive persistence and private media proxy are not yet integrated. Do not enable production orders until the critical/high release gates are closed and the complete frontend-to-backend flow has been tested.
+This paragraph records the state at the close of Phase 1 and is superseded by the Phase 2 implementation status above. Phase 1 alone did not include durable Sheets/Drive persistence or a signed gateway connection. Phase 2 has since implemented those integrations in source, but actual Apps Script runtime, Google permissions, concurrency, quota and browser/device verification remain release gates. Do not enable production orders until those gates pass.
 
 
 ## Confirmed Phase 1 policy decisions (2026-11-04)
