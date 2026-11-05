@@ -64,13 +64,13 @@ The legacy local-SQLite route modules remain in `src/routes/public.routes.js` an
 
 | File | Responsibility | P0 finding |
 |---|---|---|
-| `00_Config.gs` | Schema v1, sheet headers, session/log/upload constants | Present |
+| `00_Config.gs` | Schema v2, sheet headers, session/log/upload constants | Present |
 | `01_HttpEntry.gs` | Explicit action dispatcher | Dispatcher exists; it is not a browser facade |
 | `02_Database.gs` | Spreadsheet setup/schema validation | Present; real Sheets behavior unverified |
 | `03_Catalog.gs` | Catalog/promotions | Present |
 | `04_Coupons.gs` | Coupon eligibility and suggestions | Present; business tests use mocks |
 | `05_Payments.gs` | PromptPay response | **Stub: returns configured=false even if PromptPay ID exists** |
-| `06_Orders.gs` | Order creation, deadlines, slips, idempotency | Present; real Drive/Sheets behavior unverified |
+| `06_Orders.gs` | Order creation, deadlines, slips, idempotency and write-ahead recovery journal | P0-R1/R2 implemented; fault recovery covered by automated tests; real Drive/Sheets behavior unverified |
 | `07_Auth.gs` | Admin/member auth and sessions | Present; PBKDF2 performance unverified in Apps Script |
 | `08_Admin.gs` | Admin CRUD, audit, private files | Present; real Drive ACLs unverified |
 | `09_Validation.gs` | Record validation | Present |

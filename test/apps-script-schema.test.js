@@ -250,7 +250,7 @@ test('Apps Script PBKDF2-SHA256 helper matches the Node.js reference implementat
   assert.equal(context.__passwordHash(password, salt), expected);
 });
 
-test('Schema v1 business modules no longer call legacy field-based Sheets helpers', () => {
+test('Schema v2 business modules no longer call legacy field-based Sheets helpers', () => {
   const gasDir = path.join(__dirname, '..', 'google-apps-script');
   const migrated = ['03_Catalog.gs','04_Coupons.gs','06_Orders.gs','07_Auth.gs','08_Admin.gs'];
   for (const file of migrated) {
