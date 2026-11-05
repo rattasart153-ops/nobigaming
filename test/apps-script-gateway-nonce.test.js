@@ -32,7 +32,6 @@ function makeContext(sheet) {
   const context={
     Date,
     NOBI:{},
-    NOBI_GATEWAY:{VERSION:1,MAX_CLOCK_SKEW_MS:5*60*1000,MAX_BODY_CHARS:7*1024*1024,NONCE_RETENTION_MS:10*60*1000,ALLOWED_ACTIONS:[]},
     LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>{}})},
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='NOBI_SHEET_ID'?'sheet-id':'secret'})},
     databaseAssertSchema_:name=>({sheet}),
