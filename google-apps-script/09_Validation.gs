@@ -49,6 +49,17 @@ function validateRecord_(tableName, record) {
     }
   }
 
+  if ((tableName === 'packages' || tableName === 'promotions') && record.image_url) {
+    const imageUrl = String(record.image_url);
+    if (!/^\\/api\\/public\\/media\\/[A-Za-z0-9_-]{10,100}$/.test(imageUrl)) {
+      let image;
+      try { image = new URL(imageUrl); } catch (ignored) {}
+      if (!image || image.protocol !== 'https:' || /drive\\.google\\.com|googleusercontent\\.com/i.test(image.hostname)) {
+        throw new Error('URL รูปภาพต้องเป็น HTTPS หรือ URL ผ่านระบบสื่อส่วนตัว');
+      }
+    }
+  }
+
   if (tableName === 'promotions' && record.link_url) {
     let parsed;
     try { parsed = new URL(String(record.link_url)); } catch (ignored) {}
