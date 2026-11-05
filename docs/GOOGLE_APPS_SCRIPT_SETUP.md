@@ -1,108 +1,131 @@
-# Nobi Topup — Google Apps Script migration (work in progress)
+# Nobi Topup — Google Apps Script / Sheets / Drive Setup
 
-## Scope and safety
+Status: source implementation is present on `vercel-drive-setup`; no live Apps Script project has been initialized or deployed from this repository connection. **Do not run setup, initialize Admin, publish the Web App or accept real orders until the release gates below pass and the user explicitly approves.**
 
-This is the first backend foundation for the agreed zero-budget direction: Google Apps Script + Google Sheets + Google Drive. It is **not a complete migration or production-ready deployment yet**. The existing Express/SQLite app remains unchanged; this branch adds a separate GAS backend so the current app is not broken while migration work continues.
+## Safety and scope
 
-- Work only on `vercel-drive-setup`; never edit `main`.
-- Keep the spreadsheet and Drive folder private.
-- Never commit passwords, Script Properties, session tokens, PromptPay IDs, or real customer slips.
-- Google Sheets is not SQL and offers no relational transactions. Locks help serialize critical writes but cannot make a multi-step Drive + Sheets operation fully transactional.
-- The current login password hash is SHA-256 with a per-user salt. Before production, replace it with a deliberately slow password KDF if a suitable implementation is available in Apps Script, or use Google identity/another established identity provider. Do not treat this scaffold as hardened production authentication.
-- GAS web apps have execution quotas and time limits. Measure actual call volume before relying on this for a live shop.
-- The repository storefront and Admin now use the Express REST API. The signed GAS gateway exists as a separate server-to-server entry point, but the Express repository adapter is not yet wired and no Apps Script deployment has been tested.
+- Work only on `vercel-drive-setup`; never modify `main`.
+- Use the existing Google account. No additional paid service or account is required.
+- Keep the spreadsheet and both Drive folders private.
+- Never commit Script Properties, credentials, spreadsheet IDs, Drive folder IDs, session tokens or customer slips.
+- Sheets is not SQL and does not provide multi-row transactions. ScriptLock serializes critical sections; Drive/Sheets workflows use compensating cleanup.
+- Apps Script quotas and runtime limits must be measured before live traffic.
 
-## Create the Google backend
+## Current architecture
 
-1. Open Google Apps Script while signed in to the Google account you already use: https://script.google.com/
-2. Create a new project named **Nobi Topup Backend**.
-3. Copy **all** `.gs` files from the repository `google-apps-script/` directory into this one Apps Script project, preserving their filenames. The project uses shared global scope across files; do not duplicate functions.
-4. In Project Settings, enable showing the `appsscript.json` manifest; replace it with `google-apps-script/appsscript.json`.
-5. Save the project. The versioned schema initializer is implemented, but **do not run `setupNobiDatabase()` yet**: the legacy business handlers are not yet compatible with the new schema. Wait until repository/authentication adapters and the full integration test suite are complete.
-6. Do not run `initializeAdmin()`; it still belongs to the legacy authentication scaffold and must be replaced by the approved Admin bootstrap flow.
-7. Add `NOBI_GATEWAY_SECRET` only when you are ready to configure the matching Vercel secret. Use a random secret of at least 32 characters; never put it in Git or chat.
-8. Do not deploy a public Web App yet. Complete the private media proxy, repository adapter, hardened authentication and runtime/integration tests first. Deployment requires separate explicit approval.
+Browser → Vercel static pages and Express REST API → signed Apps Script client → Apps Script `doPost(e)` gateway → Sheets and private Drive.
 
+- The storefront and Admin are served by Vercel from `public/nobitopup.html` and `public/admin.html`.
+- Browser code calls same-origin REST routes only; it does not use HtmlService, `google.script.run` or direct Apps Script requests.
+- Express production mode requires `APPS_SCRIPT_URL` and `APPS_SCRIPT_SHARED_SECRET`. It fails closed rather than using SQLite or local file storage.
+- SQLite remains a local development/characterization fallback only.
+- `src/clients/apps-script.client.js` signs requests and validates the gateway response/redirect.
+- Apps Script modules use Schema v1 repositories, separate Admin/Member sessions, coupon reservations, order deadlines, audit/idempotency records, private Drive storage and a fixed action allowlist.
 
-## Vercel and Apps Script integration boundary
+## Source files to copy when runtime testing is authorized
 
-Do **not** create `Storefront` or `Admin` HtmlService files for the current architecture. The repository's `public/nobitopup.html` and `public/admin.html` are served by Vercel and call same-origin Express REST endpoints. Browser code must never call `google.script.run` or the Apps Script URL.
+1. Open Google Apps Script while signed in to the existing Google account: https://script.google.com/
+2. Create one project named **Nobi Topup Backend**.
+3. Copy every `.gs` file from the repository `google-apps-script/` directory into the same Apps Script project, preserving filenames.
+4. Enable the manifest in Project Settings and replace it with `google-apps-script/appsscript.json`.
+5. Save all files. Apps Script files share a global namespace; do not rename or duplicate functions.
+6. Do not create HtmlService `Storefront` or `Admin` files. Vercel hosts both browser pages.
 
-The new `13_HttpGateway.gs` file adds a signed `doPost(e)` entry point for server-to-server calls. The legacy HtmlService page renderer has been replaced by a minimal JSON liveness response on GET; browser pages remain hosted by Vercel. The matching Node client is `src/clients/apps-script.client.js`. The client is intentionally not wired into the current Express routes yet; SQLite remains the active persistence layer until the Sheets repositories, API mapping, and tests are complete.
+## Required private resources
 
-The GAS gateway uses:
-- `NOBI_GATEWAY_SECRET` in Apps Script Script Properties.
-- `APPS_SCRIPT_URL` and the same `APPS_SCRIPT_SHARED_SECRET` in Vercel environment configuration.
-- Protocol version 1 with timestamp, nonce, fixed action name, arguments and HMAC-SHA256 signature.
-- A private `gateway_nonces` sheet and ScriptLock for replay prevention.
+Create these resources manually in the existing Google account only when authorized to initialize the test environment:
 
-Do not paste secrets into GitHub, chat, browser code, or source files. Do not deploy the Apps Script Web App yet. The gateway and business handlers have not been exercised inside a real Apps Script deployment. The old `rpc()` function has been removed; signed HTTP requests enter through `doPost(e)` and the explicit `dispatchGatewayAction_()` action dispatcher.
+- One Google Spreadsheet for Schema v1 data. The first successful `setupNobiDatabase()` creates it if `NOBI_SHEET_ID` is absent, then records its ID in Script Properties.
+- One private Drive folder for payment slips; configure its ID as `NOBI_PRIVATE_DRIVE_FOLDER_ID`.
+- One private Drive folder for catalog and promotion images; configure its ID as `NOBI_PRIVATE_MEDIA_FOLDER_ID`.
 
-## Implemented scaffold functions
+Both folders must have Drive sharing access set to **Restricted / Private**. The code checks folder privacy, file privacy and parent-folder membership before serving protected files. Do not use “Anyone with the link”.
 
-- `setupNobiDatabase()`: schema version 1 initializer; preflights existing headers and version metadata, creates only missing/empty sheets, never clears or appends missing columns, and does not seed data or create Drive folders.
-- `initializeAdmin()`: creates the first admin from editor prompts.
-- `publicCatalog()`, `publicPromotions()`, `validateCoupon()`.
-- `createOrder(payload)`: validates selected active game/package, coupon, idempotency key and image type/size; stores slip in private Drive; records order and increments coupon usage under a script lock.
-- `adminLogin()`, `adminLogout()`, `adminDashboard()`, `adminOrders()`, `adminSlipData()`, `adminSetOrderStatus()`, `adminList()`, `adminUpsert()`, `adminDelete()`.
+## Apps Script Script Properties
 
-These are Apps Script functions intended to be called by a trusted integration layer; they are not all exposed as safe direct HTTP endpoints. Any future client bridge must pass session tokens explicitly and must not expose private slip contents to unauthenticated callers.
+Set values in Project Settings → Script Properties only during the approved test setup:
 
-## Known work remaining before launch
+| Property | Purpose |
+|---|---|
+| `NOBI_GATEWAY_SECRET` | Random secret of at least 32 characters; must exactly match Vercel `APPS_SCRIPT_SHARED_SECRET` |
+| `NOBI_PRIVATE_DRIVE_FOLDER_ID` | Private folder ID for payment slips |
+| `NOBI_PRIVATE_MEDIA_FOLDER_ID` | Private folder ID for catalog/promotion images |
+| `NOBI_ADMIN_USERNAME` | First Admin username, 4–40 ASCII letters/digits/dot/underscore/hyphen |
+| `NOBI_ADMIN_PASSWORD` | One-time bootstrap password, at least 14 characters; deleted after successful `initializeAdmin()` |
 
-- Migrate legacy business handlers to the approved versioned data model and focused repositories.
-- Implement Member registration/login, separate Admin/Member sessions, approved coupon access modes and Admin-only IP audit history.
-- Replace SHA-256-only password hashing with a deliberately slow KDF and test its Apps Script runtime cost.
-- Implement coupon reservation/consume/release and payment-deadline lifecycle exactly as approved; the current GAS scaffold does not yet do this.
-- Implement durable idempotency records for orders and gateway actions; the gateway nonce ledger protects transport replay but is not an order idempotency substitute.
-- Implement private Drive subfolders for slips, catalog images and promotion images, plus authorized Vercel proxy delivery. Do not publish Drive files.
-- Complete image decoding/re-encoding, pixel/dimension limits and upload rollback/reconciliation.
-- Implement a Vercel repository adapter and map each Express route to a tested gateway action. SQLite is still the active persistence layer.
-- Run GAS runtime tests for signature failures, stale timestamps, replay, concurrent writes, missing schema, private file access and quota behavior.
-- Confirm Google account quotas and expected traffic before live use.
-- Keep PromptPay QR generation in the existing Vercel Node layer unless a separately tested GAS-compatible approach is justified.
+`NOBI_SHEET_ID` is written by `setupNobiDatabase()`. Never copy property values into Git, source files or chat.
 
-## Data model
+## Vercel environment variables
 
-The `00_Config.gs` and `02_Database.gs` modules now define and initialize the approved version-1 target headers. Business handlers and repository adapters still need migration to those headers. The target schema is specified in [DATA_MODEL.md](./DATA_MODEL.md), including separate Admin/Member sessions, coupon redemption ledger, order deadlines, idempotency records, audit logs and gateway nonce ledger. The schema migration is not complete.
+Configure only after the synthetic Apps Script deployment is approved:
 
+| Variable | Purpose |
+|---|---|
+| `APPS_SCRIPT_URL` | HTTPS Apps Script Web App URL ending in `/exec` |
+| `APPS_SCRIPT_SHARED_SECRET` | Same value as `NOBI_GATEWAY_SECRET` |
+| `APPS_SCRIPT_TIMEOUT_MS` | Bounded request timeout; current default is 30,000 ms |
+| `PROMPTPAY_ID` | Existing PromptPay identifier used by the Vercel payment-info service |
+| `NODE_ENV` | `production` in production |
 
-## เงื่อนไขคูปองเพิ่มเติม
+Do not put Apps Script secrets in `NEXT_PUBLIC_*` variables, browser code or public build output.
 
-ในหน้าแอดมินของระบบเดิม สามารถกำหนดเงื่อนไขคูปองได้เพิ่มดังนี้:
+## Initialization sequence — gated
 
-- **จำกัดเกม:** เลือกเกมที่คูปองใช้ได้ หรือเว้นว่างเพื่อไม่จำกัดเกม
-- **จำกัด UID เฉพาะ:** ใส่ UID ที่อนุญาต คั่นด้วยจุลภาคหรือขึ้นบรรทัดใหม่ และต้องเลือกเกมด้วย
-- **ยอดเติมสะสมขั้นต่ำของ UID:** ตรวจยอดรวม `total` จากออเดอร์ที่มีสถานะ `Completed` เท่านั้น โดยนับเฉพาะ UID เดียวกันในเกมที่ลูกค้าเลือก ยอด Pending/Rejected ไม่นับ และเป็นยอดหลังหักส่วนลด
-- **ยอดซื้อขั้นต่ำต่อออเดอร์:** ยังคงเป็นเงื่อนไขแยกต่างหากจากยอดเติมสะสม
+The following steps are **not authorized yet**. First complete the runtime and integration tests.
 
-ตัวอย่าง: ตั้งเกม RoV, ยอดเติมสะสมขั้นต่ำ 500 บาท หมายถึง UID นั้นต้องมีออเดอร์ RoV ที่แอดมินอนุมัติสำเร็จรวมกันอย่างน้อย 500 บาทก่อนจึงใช้คูปองได้
+1. Confirm the Apps Script project contains all current source files and manifest.
+2. Confirm both Drive folders are Restricted / Private.
+3. Configure Script Properties for the synthetic test environment.
+4. Run `setupNobiDatabase()` once. It preflights existing headers and schema version, creates missing sheets, and never clears or silently changes incompatible existing data.
+5. Verify Schema v1 headers, including `security_rate_limits`, `gateway_nonces`, `idempotency_records`, `coupon_redemptions`, Admin/Member sessions and audit logs.
+6. Set one-time bootstrap Admin properties and run `initializeAdmin()`. It hashes the password using PBKDF2-SHA256 (120,000 iterations) and deletes the bootstrap password property after success.
+7. Verify the Admin row and password/session flow using synthetic data only.
+8. Deploy the Apps Script Web App only to the approved access setting required for the signed server-to-server Vercel gateway. The browser must never call the Web App directly.
+9. Configure Vercel environment variables and deploy only after separate approval.
 
-หมายเหตุ: กฎดังกล่าวถูกเพิ่มในโค้ดของระบบเดิมและโครงสร้าง GAS แล้ว แต่หน้าเว็บยังไม่ได้ย้ายจาก Express API ไปเชื่อม Apps Script โดยสมบูรณ์ การทดสอบปลายทางจริงยังจำเป็นก่อนใช้งานจริง.
+## Upload and privacy limits
 
-## Current integration status (2026-11-02)
+- PNG/JPEG/WebP only.
+- Vercel staging fully decodes/re-encodes images and caps the processed file at **3 MB**.
+- Apps Script independently validates file signatures and caps slip/media uploads at **3 MB**.
+- 3 MB is intentional: base64 expansion and JSON/multipart overhead must fit within Vercel's function payload limits. Do not raise the cap without a separately designed chunked/direct-upload flow.
+- Slips are stored in the private slip folder and can be fetched only through an authenticated Admin route.
+- Catalog/promotion images are stored in the private media folder and served only when referenced by an active package/promotion record.
+- Direct Drive URLs and externally hosted images are rejected by the Admin record validation path.
 
-- The repository storefront JavaScript now calls the Apps Script RPC bridge for catalog, promotions, coupon validation/suggestions, and order submission. Slip files are converted to base64 in the browser and sent to Apps Script.
-- The admin JavaScript now calls the RPC bridge for login, session check, dashboard, orders, CRUD, status changes, and on-demand slip viewing. Admin tokens are kept in tab-scoped `sessionStorage`; this is not an HttpOnly cookie and XSS defenses remain important.
-- The GAS entry point serves `Storefront` and `Admin` HtmlService files. **You must create those two HTML files manually in the Apps Script editor and paste the matching repository files**; GitHub changes do not automatically update an existing Apps Script project.
-- PromptPay QR generation is not yet implemented in Apps Script. The payment-info bridge reports that it is not configured rather than pretending to return a QR.
-- No live Apps Script deployment, Google account permission check, end-to-end test, concurrency test, or unauthorized-slip test has been performed from this repository connection. Do not accept real customer payments or slips until those tests pass.
+## Coupon and order rules implemented in source
 
+- Guest checkout remains allowed.
+- `public` coupons may be used by Guest and Member; `member_only` and `member_game_spend` require an authenticated Active Member.
+- Member-game spend and UID-game spend count only Completed orders and use post-discount totals. Pending/Rejected/Expired and Guest orders do not count.
+- Optional UID allowlist is checked independently.
+- Coupon capacity is Reserved when Pending, Consumed when Completed, and Released when Rejected/Expired.
+- Orders without a coupon, or with a coupon without an expiry date, have a 15-minute payment deadline.
+- Orders using an expiring coupon may submit payment/slip through 23:59:59.999 Asia/Bangkok on the expiry date.
+- The server enforces deadlines during creation, slip submission and Admin completion. Admin may review a timely submitted slip after the deadline.
+- Identical order retries use the same Idempotency-Key and cannot create duplicate orders/reservations/files. Slip-upload retries return the already accepted submission without creating another Drive file.
 
-## Security and correctness test cases (must pass before accepting payments)
+## Verification required before live use
 
 | Test | Procedure | Expected result |
 |---|---|---|
-| Duplicate order request | Submit the same `request_key` twice, including two near-simultaneous calls | One order row, one slip file, one coupon usage increment; the retry returns the original order |
-| Coupon usage limit | Set a coupon limit of 1 and submit two different requests concurrently | At most one order is accepted with that coupon |
-| UID/game restrictions | Try a whitelisted coupon with another UID or another game | Validation and final order creation both reject it |
-| Cumulative spend | Compare Pending, Rejected and Completed orders for the same UID/game | Only Completed order totals count |
-| Forged image MIME | Upload text or another file while claiming `image/png` | Signature check rejects it |
-| Oversized upload | Upload a file larger than 5 MB | Rejected before Drive persistence |
-| Anonymous slip access | Open the Drive file URL while signed out or in an unrelated Google account | Access denied; folder and files are not shared publicly |
-| Anonymous admin RPC | Call `adminOrders`, `adminSlipData`, `adminSetOrderStatus`, and CRUD RPC without a valid token | Every call fails authorization |
-| Invalid/expired token | Change a token, revoke a session, and test after expiry | Admin calls fail and UI returns to login |
-| Status replay | Approve/reject an already reviewed order and then try to reverse it | A reviewed order cannot be silently rewritten |
-| Persistence | Submit an order, then reload/reopen the web app | Order remains in Sheets and slip remains in private Drive |
+| Schema safety | Initialize a fresh synthetic spreadsheet and repeat setup | Exact Schema v1 headers; repeat is idempotent |
+| Legacy header mismatch | Create a sheet with incompatible headers | Setup fails before altering existing data |
+| Gateway signature | Alter signature, body, timestamp or action | Request rejected |
+| Gateway replay | Replay the same nonce | Second request rejected |
+| Concurrency | Parallel order/coupon claims with usage limit 1 | At most one reservation accepted |
+| Idempotency | Repeat same key/payload, then same key/different payload | Same order on replay; conflict on changed payload |
+| Deadline | Test 15-minute and coupon-expiry boundaries in Asia/Bangkok | Late slip rejected; timely slip can be reviewed later |
+| Slip retry | Repeat accepted slip upload with same token | Existing submission returned; no second Drive file |
+| Drive privacy | Attempt access to shared folder/file and wrong parent folder | Fails closed |
+| Admin authorization | Request slips/IP history without valid Admin session | Rejected and no protected data returned |
+| Session controls | Revoke, suspend, change password, idle and expire sessions | Old sessions fail |
+| Abuse controls | Parallel attempts from multiple simulated Vercel instances | Shared HMAC-keyed Sheets thresholds enforced |
+| Quota/performance | Benchmark PBKDF2, Sheet scans, locks and Drive calls | Runtime stays within Apps Script quotas and time limits |
+| Browser/device | Complete guest/member/admin workflows in real browsers/devices | All flows pass using synthetic data |
 
-Record the test date, deployment version, test account, and observed result. Use synthetic orders and dummy image files only. Never use real customer slips for security testing.
+Record test date, code commit, deployment version and observed result. Never use real customer slips for security testing.
+
+## Important operational limitation
+
+A successful GitHub Actions run proves the Node-side tests passed; it does not prove Apps Script runtime compatibility, Google permissions, Drive privacy, Sheets concurrency or live quotas. Do not accept real customer payments or slips until all release gates pass and deployment is separately approved.
