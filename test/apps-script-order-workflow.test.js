@@ -158,10 +158,13 @@ test('slip upload checks the server deadline and prevents a second upload', () =
   assert.ok(submitted.slip_submitted_at);
   assert.equal(data.orders[0].slip_file_id,'drive-file-1');
   assert.equal(files[0].trashed,false);
-  assert.throws(()=>context.submitOrderSlip({
+  const retry=context.submitOrderSlip({
     order_id:order.order.order_id,checkout_token:order.checkout_token,
     slip:{mimeType:'image/png',base64:png.toString('base64')}
-  }),/ส่งสลิปแล้ว/);
+  });
+  assert.equal(retry.already_submitted,true);
+  assert.equal(retry.slip_submitted_at,submitted.slip_submitted_at);
+  assert.equal(files.length,1,'retry must not create another Drive file');
 });
 
 
