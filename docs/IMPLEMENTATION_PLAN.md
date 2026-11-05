@@ -1,5 +1,7 @@
 # Nobi Topup — Structural Readiness and Implementation Plan
 
+> **Current baseline (2026-11-05):** The active target is Apps Script HtmlService + Google Sheets + private Drive, using the existing Google account only. The current HTML pages still call Express REST routes, while GAS `doGet()` returns JSON and has no HtmlService renderer or callable browser facade. P0 source compatibility audit is in progress. See [P0_COMPATIBILITY_AUDIT.md](./P0_COMPATIBILITY_AUDIT.md). No Google resources or live systems are authorized for creation/deployment.
+
 Status: ordered plan; policy decisions for Phase 0/1 confirmed; no deployment authorization.
 
 ## Phase 0 — Architecture baseline
@@ -148,44 +150,11 @@ Still open: import and test the Apps Script project in its real runtime; benchma
 
 ---
 
-## Architecture decision update — 2026-11-05 (supersedes the Apps Script target)
+## Historical architecture decision — 2026-11-05 (CANCELLED)
 
-The user selected **Option A: Vercel + Database**, with a **free-first** constraint. The target is now **Vercel Express + Neon PostgreSQL + Vercel Blob Private**. Google Apps Script, Google Sheets and Google Drive are no longer the target runtime or persistence layer. Existing GAS source is legacy migration input only until the PostgreSQL port is complete; do not deploy or initialize it.
+> This section records a previously selected Vercel + Neon + Blob option. It was explicitly cancelled after the user required zero cost at every stage. It is retained only as decision history and is not an implementation instruction. Do not provision or use Neon, PostgreSQL hosting, Vercel Blob, Vercel runtime or paid resources.
 
-The authoritative new migration plan is [POSTGRES_MIGRATION_PLAN.md](./POSTGRES_MIGRATION_PLAN.md). This section supersedes Phase 2–6 items below wherever they require Apps Script, Sheets, Drive, or a GAS test deployment. Earlier checklists remain as historical evidence of completed source work, not as current release tasks.
-
-### New phase order
-1. **P0 — Read-only baseline:** verify branch isolation, inventory all GAS/SQLite operations, schema fields, frontend REST contracts, tests and business rules; produce a file-by-file migration matrix.
-2. **P1 — PostgreSQL foundation:** add Neon-compatible Node 22 database driver, transaction-capable connection handling, versioned migrations, constraints, indexes and isolated synthetic test fixtures.
-3. **P2 — Business logic port:** move Catalog, Promotions, Coupons, Orders, Payments, Admin and Member workflows into Node services/repositories; use database transactions and row locks for coupon/order invariants.
-4. **P3 — Authentication and abuse controls:** move Admin/Member accounts, hashed opaque sessions, atomic shared rate limits and audit/IP history to PostgreSQL.
-5. **P4 — Private file storage:** replace Drive with Vercel Blob Private; retain Admin-only slip access and reference-checked catalog media proxy.
-6. **P5 — Compatibility and browser tests:** preserve current storefront/Admin and same-origin REST contracts; test all Guest/Member/Admin workflows on synthetic data.
-7. **P6 — Preview integration:** only after a separate provisioning approval, link a Neon Free database and Private Blob store, set Preview-only environment variables for `vercel-drive-setup`, and run synthetic migrations/seeds.
-8. **P7 — Release readiness:** review free-tier limits, operational recovery, privacy, costs and commercial plan eligibility. Production deployment and live payments require separate approval.
-
-### Current migration status
-- [x] User selected Vercel + Database, free-first.
-- [x] Read current branch `package.json`, `server.js`, `README.md`, architecture and implementation plan.
-- [x] Confirmed current Vercel startup still hard-requires `APPS_SCRIPT_URL` and `APPS_SCRIPT_SHARED_SECRET`; this must be removed only after the PostgreSQL adapter is complete.
-- [x] Recorded the target architecture and ordered migration plan.
-- [ ] Complete P0 operation/schema/route/test inventory and migration matrix.
-- [ ] Implement P1 PostgreSQL foundation and isolated database tests.
-- [ ] Port business logic and authentication.
-- [ ] Implement Private Blob adapter and private proxy routes.
-- [ ] Complete Preview-only integration and browser tests.
-
-### Free-tier and commercial-use guardrails
-- Neon Free and Vercel Blob Hobby allowances are subject to provider limits and may change. Confirm the actual Vercel Marketplace billing mode and quotas before provisioning.
-- Vercel Hobby is intended for personal, non-commercial use. It may be used for development/testing subject to current terms; before a commercial store launch, verify eligibility and obtain approval for any required plan change.
-- No paid add-ons, paid plan upgrades, over-quota configuration, Neon account/database creation, Blob store creation, Production environment changes, or live data initialization without explicit approval.
-- If free-tier compute/storage/transfer limits are exhausted, fail safely with a clear service error. Never fall back to ephemeral SQLite or silently incur charges.
-
-### Unchanged business requirements
-All confirmed Guest checkout, Member Login ID, coupon eligibility, UID/game spend, coupon reservation/consumption/release, payment deadline, Asia/Bangkok expiry, idempotency, 3 MB image validation, private slip/media access, Admin IP-history/audit retention, session lifetime/idle timeout, and manual slip-review rules remain mandatory. See [POSTGRES_MIGRATION_PLAN.md](./POSTGRES_MIGRATION_PLAN.md) for the complete invariant list.
-
-
----
+The active architecture and phase order are defined only by the **Latest architecture decision** section below and [ZERO_COST_MIGRATION_PLAN.md](./ZERO_COST_MIGRATION_PLAN.md). All PostgreSQL phases and free-tier guardrails in this historical section are superseded.
 
 ## Latest architecture decision — 2026-11-05
 
