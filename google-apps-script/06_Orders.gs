@@ -57,7 +57,7 @@ function createOrder(payload) {
     let coupon = null;
     let discountSatang = 0;
     if (couponCode) {
-      const checked = validateCoupon(couponCode, gameId, subtotalSatang / 100, playerId, memberId);
+      const checked = validateCoupon(couponCode, gameId, subtotalSatang / 100, playerId, memberId, true);
       if (!checked.valid) throw new Error(checked.error);
       coupon = repositoryGetById_('coupons', checked.coupon_id);
       if (!coupon) throw new Error('ไม่พบคูปอง');
@@ -271,4 +271,13 @@ function validImageSignature_(bytes, mime) {
       String.fromCharCode.apply(null, b.slice(8, 12)) === 'WEBP';
   }
   return false;
+}
+
+
+/** Public expiry sweep; caller must not already hold ScriptLock. */
+function expirePendingOrders_() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try { expirePendingOrdersLocked_(Date.now()); }
+  finally { lock.releaseLock(); }
 }
