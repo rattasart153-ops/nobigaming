@@ -78,10 +78,11 @@ The following steps are **not authorized yet**. First complete the runtime and i
 3. Configure Script Properties for the synthetic test environment.
 4. Run `setupNobiDatabase()` once. It preflights existing headers and schema version, creates missing sheets, and never clears or silently changes incompatible existing data.
 5. Verify Schema v1 headers, including `security_rate_limits`, `gateway_nonces`, `idempotency_records`, `coupon_redemptions`, Admin/Member sessions and audit logs.
-6. Set one-time bootstrap Admin properties and run `initializeAdmin()`. It hashes the password using PBKDF2-SHA256 (120,000 iterations) and deletes the bootstrap password property after success.
-7. Verify the Admin row and password/session flow using synthetic data only.
-8. Deploy the Apps Script Web App only to the approved access setting required for the signed server-to-server Vercel gateway. The browser must never call the Web App directly.
-9. Configure Vercel environment variables and deploy only after separate approval.
+6. Run `seedDefaultCatalog()` on a fresh spreadsheet to add the legacy nine games and 54 packages. It preserves existing games, seeds packages only when the package table is empty, and records a resumable completion marker. Skip this step if the catalog is being imported or already populated.
+7. Set one-time bootstrap Admin properties and run `initializeAdmin()`. It hashes the password using PBKDF2-SHA256 (120,000 iterations) and deletes the bootstrap password property after success.
+8. Verify the Admin row, seeded catalog and password/session flow using synthetic data only.
+9. Deploy the Apps Script Web App only to the approved access setting required for the signed server-to-server Vercel gateway. The browser must never call the Web App directly.
+10. Configure Vercel environment variables and deploy only after separate approval.
 
 ## Upload and privacy limits
 
