@@ -134,7 +134,8 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     const result = await client.call('adminChangePassword', {
       token:req.adminToken,
       currentPassword:String((req.body || {}).currentPassword || ''),
-      newPassword:String((req.body || {}).newPassword || '')
+      newPassword:String((req.body || {}).newPassword || ''),
+      ipAddress:String(req.ip || '')
     });
     gatewaySession.clearAdminCookie(res);
     return res.json(result);
