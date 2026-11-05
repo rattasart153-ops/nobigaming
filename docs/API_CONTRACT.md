@@ -1,3 +1,5 @@
+> **SUPERSEDED TRANSPORT CONTRACT (2026-11-05):** This document describes the former Vercel Express REST API and Vercel-to-Apps-Script signed gateway. Vercel is no longer part of the approved zero-cost target. Retain this only as a source/behavior reference while building the HtmlService + `google.script.run` compatibility facade. See [ZERO_COST_MIGRATION_PLAN.md](./ZERO_COST_MIGRATION_PLAN.md).
+
 # Nobi Topup — Implemented API Contract
 
 Status: browser-facing routes and the signed Vercel-to-Apps-Script contract are implemented in source on `vercel-drive-setup`. This is not production approval. Apps Script runtime, quota, concurrency and browser/device integration tests remain release gates.
