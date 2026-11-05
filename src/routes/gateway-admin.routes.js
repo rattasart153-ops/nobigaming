@@ -147,7 +147,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     res.json(await client.call('adminOrders', {token:req.adminToken}));
   }));
   router.get('/api/admin/orders/:id/slip', requireAdmin, asyncRoute(async (req, res) => {
-    const result = await client.call('adminSlipData', {token:req.adminToken, orderId:String(req.params.id)});
+    const result = await client.call('adminSlipData', {token:req.adminToken, orderId:String(req.params.id), ipAddress:String(req.ip || '')});
     const bytes = Buffer.from(String(result.base64 || ''), 'base64');
     if (!bytes.length) return res.status(404).json({error:'ไม่พบสลิป'});
     res.set({
@@ -163,7 +163,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     const status = String((req.body || {}).status || '');
     if (!['Completed','Rejected'].includes(status)) return res.status(400).json({error:'สถานะไม่ถูกต้อง'});
     const result = await client.call('adminSetOrderStatus', {
-      token:req.adminToken, orderId:String(req.params.id), status
+      token:req.adminToken, orderId:String(req.params.id), status, ipAddress:String(req.ip || '')
     });
     if (result && result.reason === 'expired') return res.status(409).json({error:'ออเดอร์หมดเวลาแล้วและคืนสิทธิ์คูปองแล้ว'});
     return res.json(result || {ok:true});
@@ -189,7 +189,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     }));
     router.post('/api/admin/' + table, requireAdmin, asyncRoute(async (req, res) => {
       const record = toSchemaRecord(table, req.body || '');
-      const result = await client.call('adminUpsert', {token:req.adminToken, tableName:table, record});
+      const result = await client.call('adminUpsert', {token:req.adminToken, tableName:table, record, ipAddress:String(req.ip || '')});
       return res.status(201).json(result);
     }));
     router.put('/api/admin/' + table + '/:id', requireAdmin, asyncRoute(async (req, res) => {
@@ -199,7 +199,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     }));
     router.delete('/api/admin/' + table + '/:id', requireAdmin, asyncRoute(async (req, res) => {
       const id = String(req.params.id);
-      const result = await client.call('adminDelete', {token:req.adminToken, tableName:table, id});
+      const result = await client.call('adminDelete', {token:req.adminToken, tableName:table, id, ipAddress:String(req.ip || '')});
       return res.json(result || {ok:true});
     }));
   }
@@ -219,7 +219,8 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
       const bytes = await fs.readFile(req.file.path);
       const result = await client.call('adminStoreMedia', {
         token:req.adminToken,
-        media:{name:req.file.originalname, mimeType:req.file.mimetype, base64:bytes.toString('base64')}
+        media:{name:req.file.originalname, mimeType:req.file.mimetype, base64:bytes.toString('base64')},
+        ipAddress:String(req.ip || '')
       });
       return res.status(201).json({url:result.url});
     } finally {
