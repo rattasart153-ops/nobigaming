@@ -191,6 +191,26 @@ function adminUpsert(token, tableName, record, ipAddress) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
+    if (tableName === 'packages' && !repositoryGetById_('games', safe.game_id)) {
+      throw new Error('ไม่พบเกมที่เลือกสำหรับแพ็กเกจ');
+    }
+    if (tableName === 'coupons') {
+      if (safe.game_id && !repositoryGetById_('games', safe.game_id)) {
+        throw new Error('ไม่พบเกมที่เลือกสำหรับคูปอง');
+      }
+      if (safe.member_spend_game_id && !repositoryGetById_('games', safe.member_spend_game_id)) {
+        throw new Error('ไม่พบเกมที่ใช้คำนวณยอดเติมสะสมสมาชิก');
+      }
+    }
+    if ((tableName === 'packages' || tableName === 'promotions') && safe.image_file_id) {
+      const mediaFolderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_MEDIA_FOLDER_ID') || '').trim();
+      if (!mediaFolderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์รูปภาพส่วนตัว');
+      const mediaFile = DriveApp.getFileById(String(safe.image_file_id));
+      assertDriveFileInPrivateFolder_(mediaFile, mediaFolderId);
+      if (mediaFile.getSharingAccess && mediaFile.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+        throw new Error('DRIVE_FILE_NOT_PRIVATE');
+      }
+    }
     const now = new Date().toISOString();
     let id;
     if (record[primaryKey]) {
