@@ -125,7 +125,8 @@ function createAppsScriptClient({ url, secret, fetchImpl = globalThis.fetch, tim
         RESOURCE_CONFLICT:409,
         RESOURCE_EXPIRED:410,
         RATE_LIMITED:429,
-        GATEWAY_NOT_CONFIGURED:503
+        GATEWAY_NOT_CONFIGURED:503,
+        UNTRUSTED_SOURCE_IP:503
       };
       throw new AppsScriptGatewayError(
         String(error.message || 'Apps Script gateway rejected the request'),
