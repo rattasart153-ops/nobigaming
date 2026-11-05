@@ -91,7 +91,7 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
     let fileBytes = null;
     try {
       if (req.file) fileBytes = await fs.readFile(req.file.path);
-      const memberId = await memberIdFromRequest(req);
+      const memberToken = readCookie(req, MEMBER_COOKIE);
       const result = await client.call('createOrder', {
         request_key:idempotencyKey,
         game_id:String(gameId || ''),
@@ -99,7 +99,7 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
         player_id:String(playerId).trim(),
         server_id:String(serverId || '').trim(),
         coupon_code:String(couponCode || '').trim(),
-        member_id:memberId
+        member_token:memberToken
       });
       if (!result || !result.ok || !result.order) {
         return res.status(422).json({error:'ไม่สามารถสร้างออเดอร์ได้'});
