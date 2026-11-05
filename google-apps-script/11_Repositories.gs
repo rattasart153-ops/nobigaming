@@ -153,3 +153,19 @@ function repositoryUpdate_(tableName, id, patch) {
   try { return repositoryUpdateLocked_(tableName, id, patch); }
   finally { lock.releaseLock(); }
 }
+
+
+/** Delete a single schema-keyed row. Caller must already hold ScriptLock. */
+function repositoryDeleteLocked_(tableName, id) {
+  const sheet = repositorySheet_(tableName);
+  const headers = NOBI.SHEETS[tableName];
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) throw new Error('REPOSITORY_PRIMARY_KEY_REQUIRED');
+  const values = sheet.getDataRange().getValues();
+  for (let row = 1; row < values.length; row++) {
+    if (String(values[row][0]) !== normalizedId) continue;
+    sheet.deleteRow(row + 1);
+    return true;
+  }
+  return false;
+}
