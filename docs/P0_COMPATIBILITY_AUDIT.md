@@ -70,14 +70,14 @@ The legacy local-SQLite route modules remain in `src/routes/public.routes.js` an
 | `03_Catalog.gs` | Catalog/promotions | Present |
 | `04_Coupons.gs` | Coupon eligibility and suggestions | Present; business tests use mocks |
 | `05_Payments.gs` | PromptPay response | **Stub: returns configured=false even if PromptPay ID exists** |
-| `06_Orders.gs` | Order creation, deadlines, slips, idempotency and write-ahead recovery journal | P0-R1/R2 implemented; fault recovery covered by automated tests; real Drive/Sheets behavior unverified |
+| `06_Orders.gs` | Order creation, deadlines, slips, idempotency and write-ahead recovery journal | P0-R1 through R3 implemented; expanded write-failure/replay tests added; real Drive/Sheets concurrency remains unverified |
 | `07_Auth.gs` | Admin/member auth and sessions | Present; PBKDF2 performance unverified in Apps Script |
 | `08_Admin.gs` | Admin CRUD, audit, private files | Present; real Drive ACLs unverified |
 | `09_Validation.gs` | Record validation | Present |
 | `10_Utilities.gs` | Hashing, money, retention, rate limits | Present; runtime/performance unverified |
 | `11_Repositories.gs` | Sheets repositories | Present; Sheets atomicity/concurrency unverified |
 | `12_Seed.gs` | Default catalog seed | Present; must only run on an explicitly authorized synthetic database |
-| `13_HttpGateway.gs` | Signed HTTP `doPost()` gateway | Present; target browser transport is not this gateway |
+| `13_HttpGateway.gs` | Signed HTTP `doPost()` gateway | Present; target browser transport is not this gateway |\n| `14_Retention.gs` | 90-day IP/log cleanup and daily trigger setup | Source and mock tests implemented; trigger deliberately not installed on a real Google account |
 | `Code.gs` | Web entry point | **`doGet()` returns JSON via ContentService; it does not render HtmlService** |
 | `appsscript.json` | V8 manifest, Asia/Bangkok | Present; no HtmlService templates are referenced |
 
@@ -98,7 +98,7 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 | P0-04 | High | `paymentInfo_()` is an explicit stub and never returns a QR even when PromptPay is configured | P1/P2: implement compatible PromptPay QR generation without a paid service; test payload/amount correctness before real payment |
 | P0-05 | High | Existing Admin slip and media paths transfer base64 data through Apps Script actions | P1/P3: design bounded upload/download and memory-safe limits; preserve 3 MB upload cap and private Drive access |
 | P0-06 | High | Current frontend/Admin session model assumes Express same-origin cookie sessions; GAS business handlers issue opaque tokens | P1/P2: define secure HtmlService session transport, token lifecycle and XSS protections before switching |
-| P0-07 | High | Sheets has no relational transaction; order + coupon redemption + idempotency rows require recovery after partial writes | P3/P4: test fault injection, recovery and lock contention in actual Apps Script runtime |
+| P0-07 | High | Sheets has no relational transaction; order + coupon redemption + idempotency rows require recovery after partial writes | P0-R1/R2 write-ahead journal, P0-R3 fault-injection tests and immutable-record conflict checks implemented; actual Apps Script concurrency/runtime verification remains open |
 | P0-08 | High | PBKDF2-SHA256 120,000 iteration implementation has only reference/unit coverage; runtime cost unknown | P3: benchmark login latency and execution quotas; do not weaken to SHA-256-only |
 | P0-09 | High | Private Drive access checks and folder boundaries are not verified against real Drive ACLs | P3/P4: test owner, parent-folder sharing, file sharing, cross-folder IDs and authenticated reads |
 | P0-10 | Medium | Frontend API inventory contained a false statement that the current HTML already used GAS RPC; implementation plan contained a cancelled PostgreSQL decision in a section labelled as superseding the Apps Script target | Corrected in this P0 pass; keep historical notes explicitly labelled |
