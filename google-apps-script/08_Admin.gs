@@ -24,7 +24,13 @@ function adminOrders(token) {
     return String(b.created_at).localeCompare(String(a.created_at));
   }).map(function(order) {
     const safe = clean_(order);
+    const game = repositoryGetById_('games', order.game_id);
+    const pack = repositoryGetById_('packages', order.package_id);
+    const coupon = order.coupon_id ? repositoryGetById_('coupons', order.coupon_id) : null;
     safe.id = order.order_id;
+    safe.game_name = game ? game.name : '';
+    safe.package_name = pack ? pack.name : '';
+    safe.coupon_code = coupon ? coupon.code_display : '';
     safe.has_slip = Boolean(order.slip_file_id);
     safe.subtotal = Number(order.subtotal_satang || 0) / 100;
     safe.discount = Number(order.discount_satang || 0) / 100;
@@ -115,7 +121,19 @@ function adminList(token, tableName) {
   if (!['games', 'packages', 'coupons', 'promotions'].includes(String(tableName))) {
     throw new Error('ไม่อนุญาตให้เข้าถึงตารางนี้');
   }
-  return repositoryRows_(tableName).map(clean_);
+  const records = repositoryRows_(tableName);
+  if (tableName === 'coupons') {
+    const redemptions = repositoryRows_('coupon_redemptions');
+    return records.map(function(coupon) {
+      const safe = clean_(coupon);
+      safe.used_count = redemptions.filter(function(item) {
+        return String(item.coupon_id) === String(coupon.coupon_id) &&
+          (item.state === 'Reserved' || item.state === 'Consumed');
+      }).length;
+      return safe;
+    });
+  }
+  return records.map(clean_);
 }
 
 function adminUpsert(token, tableName, record) {
