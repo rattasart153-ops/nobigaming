@@ -75,11 +75,20 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
   function fromSchemaRecord(table, row) {
     const base = {...row};
     if (table === 'games') return {...base, id:row.game_id};
-    if (table === 'packages') return {
-      ...base, id:row.package_id, price:Number(row.price_satang || 0) / 100,
-      image_url:row.image_file_id ? '/api/public/media/' + row.image_file_id : (row.image_url || '')
-    };
+    if (table === 'packages') {
+      delete base.image_file_id;
+      delete base.price_satang;
+      return {
+        ...base, id:row.package_id, price:Number(row.price_satang || 0) / 100,
+        image_url:row.image_file_id ? '/api/public/media/' + row.image_file_id : (row.image_url || '')
+      };
+    }
     if (table === 'coupons') {
+      delete base.allowed_player_ids_json;
+      delete base.min_order_satang;
+      delete base.min_player_spend_satang;
+      delete base.member_min_game_spend_satang;
+      delete base.code_normalized;
       let allowed = [];
       try { allowed = JSON.parse(row.allowed_player_ids_json || '[]'); } catch (_) {}
       return {
@@ -92,10 +101,13 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
         expires_at:row.expires_at || null
       };
     }
-    if (table === 'promotions') return {
-      ...base, id:row.promotion_id,
-      image_url:row.image_file_id ? '/api/public/media/' + row.image_file_id : (row.image_url || '')
-    };
+    if (table === 'promotions') {
+      delete base.image_file_id;
+      return {
+        ...base, id:row.promotion_id,
+        image_url:row.image_file_id ? '/api/public/media/' + row.image_file_id : (row.image_url || '')
+      };
+    }
     return base;
   }
 
