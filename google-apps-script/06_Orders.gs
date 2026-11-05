@@ -389,14 +389,18 @@ function applyOrderRecoveryJournalLocked_(journal) {
       if (order.status !== 'Pending' && order.status !== targetStatus) {
         throw new Error('RECOVERY_TERMINAL_STATE_CONFLICT');
       }
+      const orderRedemptions = repositoryFindByField_('coupon_redemptions','order_id',journal.order_id);
+      if (orderRedemptions.length > 1) throw new Error('RECOVERY_DUPLICATE_REDEMPTIONS');
       if (Boolean(journal.redemption_id) !== Boolean(journal.redemption_patch_json) ||
-          Boolean(order.coupon_id) !== Boolean(journal.redemption_id)) {
+          Boolean(order.coupon_id) !== Boolean(journal.redemption_id) ||
+          Boolean(order.coupon_id) !== Boolean(orderRedemptions.length)) {
         throw new Error('RECOVERY_REDEMPTION_JOURNAL_MISSING');
       }
       if (journal.redemption_id && journal.redemption_patch_json) {
         const redemption = repositoryGetById_('coupon_redemptions',journal.redemption_id);
         if (!redemption) throw new Error('RECOVERY_REDEMPTION_NOT_FOUND');
-        if (String(redemption.order_id) !== String(journal.order_id) ||
+        if (String(redemption.redemption_id) !== String(orderRedemptions[0].redemption_id) ||
+            String(redemption.order_id) !== String(journal.order_id) ||
             String(redemption.coupon_id) !== String(order.coupon_id)) {
           throw new Error('RECOVERY_REDEMPTION_ORDER_MISMATCH');
         }
