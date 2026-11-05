@@ -35,21 +35,40 @@ function adminLogin(username, password, ipAddress) {
   const pass = String(password || '');
   if (!user || !pass) throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
 
-  const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
-  try {
-    const props = PropertiesService.getScriptProperties();
-    const throttleKey = 'NOBI_ADMIN_LOGIN_' + sha256_(normalized).slice(0, 40);
-    const state = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
-    if (Date.now() < Number(state.until || 0)) throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
+  const props = PropertiesService.getScriptProperties();
+  const throttleKey = 'NOBI_ADMIN_LOGIN_' + sha256_(normalized).slice(0, 40);
+  const initialState = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
+  if (Date.now() < Number(initialState.until || 0)) throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
 
-    const admin = repositoryRows_('admins').find(function(item) {
-      return String(item.username_normalized) === normalized && item.status === 'Active';
-    });
-    if (!admin || !passwordVerify_(pass, admin.password_salt, admin.password_hash, admin.password_algorithm)) {
+  // Password KDF is intentionally outside ScriptLock so a slow login cannot
+  // block order creation, coupon reservations, or other users' sessions.
+  const admin = repositoryRows_('admins').find(function(item) {
+    return String(item.username_normalized) === normalized && item.status === 'Active';
+  });
+  const valid = Boolean(admin && passwordVerify_(pass, admin.password_salt, admin.password_hash, admin.password_algorithm));
+  if (!valid) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(15000);
+    try {
+      const state = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
       state.count = Number(state.count || 0) + 1;
       state.until = state.count >= 5 ? Date.now() + 15 * 60 * 1000 : 0;
       props.setProperty(throttleKey, JSON.stringify(state));
+    } finally {
+      lock.releaseLock();
+    }
+    throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const currentState = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
+    if (Date.now() < Number(currentState.until || 0)) throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
+    const currentAdmin = repositoryGetById_('admins', admin.admin_id);
+    if (!currentAdmin || currentAdmin.status !== 'Active' ||
+        String(currentAdmin.password_hash) !== String(admin.password_hash) ||
+        Number(currentAdmin.auth_version) !== Number(admin.auth_version)) {
       throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
 
@@ -60,41 +79,35 @@ function adminLogin(username, password, ipAddress) {
     const expiresAt = new Date(now.getTime() + NOBI.SESSION_MAX_LIFETIME_MS).toISOString();
     repositoryInsertLocked_('admin_sessions', {
       session_id:Utilities.getUuid(),
-      admin_id:admin.admin_id,
+      admin_id:currentAdmin.admin_id,
       token_hash:sha256_(rawToken),
-      auth_version:Number(admin.auth_version || 1),
+      auth_version:Number(currentAdmin.auth_version || 1),
       created_at:createdAt,
       expires_at:expiresAt,
       last_seen_at:createdAt,
       revoked_at:'',
       created_ip:String(ipAddress || '').slice(0, 100)
     });
-    repositoryUpdateLocked_('admins', admin.admin_id, {
+    repositoryUpdateLocked_('admins', currentAdmin.admin_id, {
       last_login_at:createdAt,
       updated_at:createdAt
     });
     appendAdminAuditLogLocked_({
       audit_id:Utilities.getUuid(),
-      admin_id:admin.admin_id,
+      admin_id:currentAdmin.admin_id,
       action:'ADMIN_LOGIN',
       target_type:'admin',
-      target_id:admin.admin_id,
+      target_id:currentAdmin.admin_id,
       request_id:'',
       ip_address:String(ipAddress || '').slice(0, 100),
       details_json:'{}',
       created_at:createdAt
     });
-    return {
-      ok:true,
-      token:rawToken,
-      expires_at:expiresAt,
-      username:admin.username_display
-    };
+    return {ok:true, token:rawToken, expires_at:expiresAt, username:currentAdmin.username_display};
   } finally {
     lock.releaseLock();
   }
 }
-
 function adminLogout(token) {
   const tokenHash = sha256_(String(token || ''));
   const lock = LockService.getScriptLock();
@@ -201,62 +214,88 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
   const agent = String(userAgent || '').slice(0, 300);
   if (!login || !pass) throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
 
-  const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
-  try {
-    const props = PropertiesService.getScriptProperties();
-    const throttleKey = 'NOBI_MEMBER_LOGIN_' + sha256_(normalized).slice(0, 40);
-    const state = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
-    const now = new Date();
-    const nowIso = now.toISOString();
-    if (Date.now() < Number(state.until || 0)) {
-      appendMemberLoginLogLocked_('', normalized, ip, false, 'Failure', 'RATE_LIMITED', agent, nowIso);
-      throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
+  const props = PropertiesService.getScriptProperties();
+  const throttleKey = 'NOBI_MEMBER_LOGIN_' + sha256_(normalized).slice(0, 40);
+  const initialState = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
+  if (Date.now() < Number(initialState.until || 0)) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(15000);
+    try {
+      appendMemberLoginLogLocked_('', normalized, ip, false, 'Failure', 'RATE_LIMITED', agent, new Date().toISOString());
+    } finally {
+      lock.releaseLock();
     }
+    throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
+  }
 
-    const member = repositoryFindByField_('members', 'login_id_normalized', normalized)[0];
-    const valid = Boolean(member && member.status === 'Active' &&
-      passwordVerify_(pass, member.password_salt, member.password_hash, member.password_algorithm));
-    if (!valid) {
+  // PBKDF2 verification stays outside ScriptLock to avoid blocking checkout writes.
+  const member = repositoryFindByField_('members', 'login_id_normalized', normalized)[0];
+  const valid = Boolean(member && member.status === 'Active' &&
+    passwordVerify_(pass, member.password_salt, member.password_hash, member.password_algorithm));
+  if (!valid) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(15000);
+    try {
+      const state = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
       state.count = Number(state.count || 0) + 1;
       state.until = state.count >= 5 ? Date.now() + 15 * 60 * 1000 : 0;
       props.setProperty(throttleKey, JSON.stringify(state));
-      appendMemberLoginLogLocked_(member ? member.member_id : '', normalized, ip, false, 'Failure', 'INVALID_CREDENTIALS', agent, nowIso);
+      appendMemberLoginLogLocked_(member ? member.member_id : '', normalized, ip, false, 'Failure', 'INVALID_CREDENTIALS', agent, new Date().toISOString());
+    } finally {
+      lock.releaseLock();
+    }
+    throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const state = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
+    if (Date.now() < Number(state.until || 0)) {
+      appendMemberLoginLogLocked_(member.member_id, normalized, ip, false, 'Failure', 'RATE_LIMITED', agent, new Date().toISOString());
+      throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
+    }
+    const currentMember = repositoryGetById_('members', member.member_id);
+    if (!currentMember || currentMember.status !== 'Active' ||
+        String(currentMember.password_hash) !== String(member.password_hash) ||
+        Number(currentMember.auth_version) !== Number(member.auth_version)) {
+      appendMemberLoginLogLocked_(member.member_id, normalized, ip, false, 'Failure', 'CREDENTIALS_CHANGED', agent, new Date().toISOString());
       throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
     }
 
     props.deleteProperty(throttleKey);
-    const isNewIp = !member.last_login_ip || String(member.last_login_ip) !== ip;
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const isNewIp = !currentMember.last_login_ip || String(currentMember.last_login_ip) !== ip;
     const rawToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
     const expiresAt = new Date(now.getTime() + NOBI.SESSION_MAX_LIFETIME_MS).toISOString();
     repositoryInsertLocked_('member_sessions', {
       session_id:Utilities.getUuid(),
-      member_id:member.member_id,
+      member_id:currentMember.member_id,
       token_hash:sha256_(rawToken),
-      auth_version:Number(member.auth_version || 1),
+      auth_version:Number(currentMember.auth_version || 1),
       created_at:nowIso,
       expires_at:expiresAt,
       last_seen_at:nowIso,
       revoked_at:'',
       created_ip:ip
     });
-    repositoryUpdateLocked_('members', member.member_id, {
+    repositoryUpdateLocked_('members', currentMember.member_id, {
       last_login_ip:ip,
       last_login_at:nowIso,
       updated_at:nowIso
     });
-    appendMemberLoginLogLocked_(member.member_id, normalized, ip, isNewIp, 'Success', '', agent, nowIso);
+    appendMemberLoginLogLocked_(currentMember.member_id, normalized, ip, isNewIp, 'Success', '', agent, nowIso);
     return {
       ok:true,
       token:rawToken,
       expires_at:expiresAt,
-      member:{member_id:member.member_id, full_name:member.full_name, login_id:member.login_id_display}
+      member:{member_id:currentMember.member_id, full_name:currentMember.full_name, login_id:currentMember.login_id_display}
     };
   } finally {
     lock.releaseLock();
   }
 }
-
 function memberLogout(token) {
   const hash = sha256_(String(token || ''));
   const lock = LockService.getScriptLock();
