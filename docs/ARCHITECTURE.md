@@ -1,98 +1,58 @@
-# Nobi Topup — Target Architecture and Release Boundaries
+# Nobi Topup — Zero-Cost Target Architecture
 
-Status: the user selected a free-first Vercel + Database architecture on 2026-11-05. Target runtime: **Vercel Express + Neon PostgreSQL + Vercel Blob Private**. This is an approved architecture plan, not a statement that the database or Blob store has been provisioned. No production deployment, live database initialization, or live payment processing is authorized.
+Status: user approved switching away from Vercel + Database to strict zero-cost Google architecture on 2026-11-05. Documentation/source planning only; no resource creation, initialization, deployment or live operation is authorized.
 
-## Safety and scope
+## Cost and branch boundaries
 
-- Develop only on `vercel-drive-setup`. Never modify `main`.
-- Keep the existing storefront, Admin UI, same-origin REST paths and response contracts wherever possible.
-- Use synthetic records and dummy images only. Do not accept real payments or slips during testing.
-- Never commit credentials, tokens, customer data, real slips, database URLs, Blob tokens or private file paths.
-- Do not create a Neon account/database or Blob store, set environment variables, enable paid services, or modify Production without separate explicit approval.
-- Vercel Hobby is intended for personal/non-commercial use. Verify plan eligibility before commercial launch.
+- Work only on `vercel-drive-setup`; never modify `main`.
+- Use existing Google and GitHub accounts only.
+- No paid services, billing, payment cards, paid add-ons, Neon, hosted PostgreSQL, Vercel Blob or Vercel runtime.
+- Use only existing Google quotas and Drive capacity. If exhausted, fail closed; never upgrade or silently route to a paid provider.
+- Google may change free quotas/terms; unlimited free service cannot be guaranteed.
+- Synthetic data only; no real customer data, payment credentials or slips.
 
-## Target runtime architecture
+## Target architecture
 
-Browser → Vercel static pages and Express REST API → Neon PostgreSQL + Vercel Blob Private.
+Browser → Apps Script HtmlService → explicit `google.script.run` facade → Apps Script business logic → Sheets + private Drive.
 
-The browser calls same-origin Vercel routes only. It never receives database credentials, Blob tokens, password hashes, session-token hashes, or permanent private-file URLs.
+Apps Script hosts the web app and backend. `google.script.run` is the built-in Apps Script client/server bridge, not a separately subscribed API provider. Sheets is persistent data storage. Drive stores slips and media in Restricted / Private folders. GitHub remains source control.
 
-### Browser
+## Frontend compatibility
 
-- Existing storefront: `public/nobitopup.html`.
-- Existing Admin: `public/admin.html`.
-- Uses same-origin REST routes and multipart image uploads.
-- Never stores Admin, Member or checkout tokens in localStorage/sessionStorage.
-- Admin-only IP history and slip views remain behind Admin authorization.
+Current storefront/Admin call same-origin Express REST endpoints. Add a frontend service adapter mapping UI actions to allowlisted Apps Script functions. Preserve layout, Thai copy, validation, response semantics and business rules. Convert uploads/downloads to bounded Apps Script-compatible patterns. Re-check authorization server-side for every privileged call. Never expose secrets, password hashes, session hashes or private Drive URLs.
 
-### Vercel / Express
+## Apps Script backend
 
-- Express owns all browser-facing REST routes, business logic orchestration, HttpOnly cookies, same-origin/CSRF checks, request validation, rate limits and error mapping.
-- Production persistence will be PostgreSQL. SQLite may remain only as an isolated local characterization adapter; it must never be used for Vercel/production persistence.
-- The current `server.js` still hard-requires `APPS_SCRIPT_URL` and `APPS_SCRIPT_SHARED_SECRET`. Remove this requirement only after the PostgreSQL adapter and migrated business services are complete and tested.
-- Use a Node 22-compatible Neon PostgreSQL driver with a transaction-capable connection strategy. Verify connection lifecycle, pool limits and interactive transaction behavior in Vercel Functions.
-- PromptPay QR generation remains in the existing Node payment-info service. No live PromptPay credential is configured during testing.
-- Vercel local disk is temporary. All persistent uploaded files go to Private Blob.
+Reuse Schema v1 config, repositories, business handlers, coupon/order logic, session controls and Drive privacy helpers after real-runtime verification. Replace the Express signed-HTTP gateway dependency with a narrow HtmlService callable facade. Never expose generic table read/write operations. Validate all arguments and authorization. Use LockService and idempotent recovery for multi-row mutations. Store secrets in Script Properties. Benchmark PBKDF2-SHA256 120,000 iterations before enabling authentication.
 
-### Neon PostgreSQL
+## Data and privacy
 
-PostgreSQL is the source of truth for:
-- Admin and Member accounts, credential metadata, sessions and login/IP history.
-- Games, packages, coupons, coupon eligibility rules, reservations/redemptions and promotions.
-- Orders, order state transitions, payment deadlines and idempotency records.
-- Admin audit events, shared rate-limit buckets, file metadata and schema migration versions.
+Sheets stores Admins, Members, sessions, games, packages, coupons, redemptions, promotions, orders, idempotency, rate limits and audit records. Money is integer satang; timestamps UTC; coupon expiry interpreted in Asia/Bangkok. Drive files/folders remain Restricted / Private; slips are Admin-only; catalog media requires an active reference.
 
-Use versioned SQL migrations, foreign keys, unique/check constraints and indexes. Persist money as integer satang and timestamps in UTC. Interpret date-only coupon expiry in Asia/Bangkok.
+## Business invariants
 
-Use real database transactions and row-level locks for coupon capacity reservation and order transitions. Use unique idempotency constraints for order creation and slip submission. Use atomic upserts for shared rate limiting. Do not depend on process-local memory for shared correctness.
+- Guest checkout; ASCII Member Login ID 4–30, case-insensitive.
+- Coupon modes public/member_only/member_game_spend; UID allowlist and UID cumulative spend are independent.
+- Only Completed post-discount Member orders count toward qualifying spend.
+- Coupon Reserved on Pending, Consumed on Completed, Released on Rejected/Expired.
+- Default payment/slip deadline 15 minutes; expiring coupon orders through end of expiry date Asia/Bangkok.
+- Server computes prices, discounts, totals and deadlines; timely slips may be reviewed later.
+- Sessions max 8h, idle 30m; revoke on logout/password change/suspension.
+- Admin-only IP history; 90-day retention then delete or irreversibly anonymize.
+- Private slips/media; manual Admin slip review only.
 
-### Vercel Blob Private
+## Quota and safe-failure policy
 
-- Create a **Private** Blob store only; never use Public access for slips or private catalog media.
-- Store slips and product/promotion media in separate logical prefixes.
-- Store pathname, content type, byte size, checksum, owner/reference and lifecycle metadata in PostgreSQL. Do not persist or expose public URLs.
-- All reads pass through Express. Slip reads require Admin authorization and audit logging. Catalog media reads require an active package/promotion reference.
-- Preserve PNG/JPEG/WebP validation, full decode/re-encode, and the 3 MB application limit unless a separately tested change is approved.
-- Implement safe retry behavior and orphan-file cleanup. Do not delete referenced files during retries.
-
-## Security and correctness invariants
-
-- Admin and Member identities and sessions are separate. Cookies are HttpOnly, Secure in production and SameSite=Strict.
-- Store only hashes of opaque session tokens. Enforce 8-hour maximum lifetime and 30-minute idle timeout; revoke on logout, password change or account suspension.
-- Preserve PBKDF2-SHA256 password hashing with per-account salts unless a separately reviewed migration is approved.
-- Admin-only IP history and sensitive slip access are audited. Login/IP history and Admin audit records retain 90 days, then delete or irreversibly anonymize.
-- Derive client IP only from the trusted Vercel proxy configuration; never trust a client-supplied IP header without validation.
-- Server calculates package price, discounts, totals and coupon eligibility from persisted records. Browser values are never authoritative.
-- Order creation requires an idempotency key. Identical retries cannot create duplicate orders or coupon reservations.
-- Payment deadline is enforced by the server/database on order creation and slip submission. A slip accepted before the deadline may be reviewed and completed afterward.
-- Orders without a coupon or using a non-expiring coupon have 15 minutes to pay and upload a slip.
-- Orders using an expiring coupon remain payable through the end of that expiry date in Asia/Bangkok, without an additional 15-minute cap.
-- Coupon capacity is Reserved on Pending, Consumed on Completed, and released on Rejected/Expired.
-- Only Completed orders count toward Member/UID cumulative spend, after discount. Pending, Rejected, Expired and Guest orders do not count.
-- Never cache sessions, Member data, coupon eligibility, orders or slip content in a shared cache.
-
-## Confirmed coupon rules
-
-- `public`: Guest and Member may use, subject to other restrictions.
-- `member_only`: authenticated Active Member only.
-- `member_game_spend`: Active Member whose Completed, post-discount spend in the configured qualifying game reaches the threshold.
-- UID allowlist and UID cumulative Completed spend in the selected checkout game are independent additional restrictions.
-- Coupon usage limits count Reserved and Consumed redemptions.
-
-## Legacy source boundary
-
-- `google-apps-script/`, `docs/GOOGLE_APPS_SCRIPT_SETUP.md` and `docs/VERCEL_GOOGLE_SETUP.md` describe the superseded architecture.
-- Treat Apps Script/Sheets/Drive code as migration reference until equivalent PostgreSQL/Blob behavior is implemented and tested.
-- Do not deploy Apps Script, initialize Sheets, create Drive folders, or set Apps Script secrets as part of the new plan.
-- Remove obsolete GAS modules and gateway dependencies only after the migration matrix confirms that every required behavior has a tested replacement.
+Apps Script execution/daily/concurrency limits, Sheets operation volume and Drive capacity are hard constraints. Use bounded operations, pagination, lock timeouts and idempotent recovery. On quota/storage exhaustion, return a controlled unavailable result, avoid unbounded retries, and do not enable paid alternatives.
 
 ## Release gates
 
-1. Complete a read-only mapping of every GAS/SQLite operation, field, route, frontend caller and test.
-2. Implement PostgreSQL migrations, repositories, transaction helpers and disposable synthetic test fixtures.
-3. Port catalog, coupon, order, payment, Admin and Member business logic without breaking REST contracts.
-4. Verify concurrency, idempotency, coupon reservations, order deadlines, authentication, rate limits and session revocation across multiple simulated instances.
-5. Verify Private Blob upload, Admin-only slip reads, reference-checked media reads, token secrecy and orphan cleanup.
-6. Run full storefront/Admin browser tests on synthetic Preview data.
-7. Review quotas, connection lifecycle, Vercel function duration/body limits, backups/restore, privacy and cost controls.
-8. Obtain separate explicit authorization before Production deployment, domain changes, real payment credentials or live order acceptance.
+1. Read-only audit of frontend REST callers, GAS actions and payload/response contracts.
+2. Produce route-to-function compatibility matrix and inspect HtmlService constraints.
+3. Implement allowlisted callable facade and frontend adapter.
+4. Run static/offline tests.
+5. Import into an isolated Apps Script test project only after separate approval.
+6. Benchmark PBKDF2, locks, Sheets scans, file transfer and execution time.
+7. Verify Drive ACLs, Admin-only slip/IP access, session revocation, coupon/order concurrency and quota failure.
+8. Browser/device E2E with synthetic data.
+9. Separate approval required before project/resource creation, spreadsheet initialization, Drive folder creation, Script Properties, deployment, Admin bootstrap or live payments/orders.
