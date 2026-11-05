@@ -83,29 +83,28 @@ Progress: Schema v1 business handlers for Catalog, Coupon, Order, Admin and Auth
 
 The migrated GAS modules pass Node syntax/structure checks and PBKDF2 is verified against Node's reference implementation. They have not yet been imported into or runtime-tested in Apps Script. Benchmark the 120,000-iteration PBKDF2 implementation and test nonce replay, concurrent order/coupon claims, Drive privacy, and quota behavior before any live initialization. Do not call `setupNobiDatabase()` or `initializeAdmin()` until those gates pass. No deployment is authorized.
 
-## Phase 3 — Durable authentication
-- Implement separate Admin and Member auth.
-- Implement slow password KDF and opaque cookie sessions.
-- Store token hashes only; enforce expiry, revocation and rotation.
-- Add login rate limits and Admin-only IP-history audit.
+## Phase 3 — Durable authentication (source implementation complete; runtime verification pending)
+- [x] Separate Admin and Member authentication, registration, login and logout.
+- [x] PBKDF2-SHA256 password hashing (120,000 iterations) with per-account random salts.
+- [x] Opaque HttpOnly cookie sessions; store token hashes only; enforce 8-hour lifetime, 30-minute idle timeout, revocation and password rotation.
+- [x] Admin and Member login throttling; Admin-only Member IP-history screen and 90-day log retention.
+- [ ] Benchmark PBKDF2 and verify Apps Script execution/quota behavior in the real runtime.
 
-## Phase 4 — Storefront workflows
-- Catalog and promotions.
-- Coupon suggestions and validation.
-- Guest and Member checkout.
-- Server-side pricing and eligibility.
-- Enforce 15 minutes for orders without coupons or coupons without expiry; coupon orders with an expiry date remain payable through that date (Asia/Bangkok), with no 15-minute cap. Add idempotent expiry processing and synchronous deadline checks.
-- Idempotent order creation and private slip upload.
-- Reserve coupon capacity when a coupon Pending order is created; consume when Admin marks Completed only if a slip was submitted before the deadline; release on Rejected or Expired. Coupon orders with an expiry date use the coupon-day cutoff; all other orders use 15 minutes.
+## Phase 4 — Storefront workflows (source implementation complete; runtime verification pending)
+- [x] Catalog and promotions from Sheets Schema v1.
+- [x] Coupon suggestions/validation for Guest, Member, UID allowlist, game restrictions and cumulative Member spend per game.
+- [x] Guest and Member checkout with server-side package pricing and eligibility.
+- [x] Enforce 15 minutes for orders without coupons or coupons without expiry; coupon orders with an expiry date remain payable through that date (Asia/Bangkok), with synchronous deadline checks.
+- [x] Idempotent order creation and private Drive slip upload.
+- [x] Reserve coupon capacity on Pending; consume on Completed only if slip was submitted before deadline; release on Rejected/Expired.
 
-## Phase 5 — Admin and frontend integration
-- Admin login/session/dashboard/orders.
-- Status transitions and audit history.
-- Private slip proxy.
-- CRUD for games, packages, coupons and promotions.
-- Member listing and Admin-only IP history.
-- Convert storefront and Admin to same-origin Vercel API.
-- Remove browser-side GAS RPC only after end-to-end verification.
+## Phase 5 — Admin and frontend integration (source implementation complete; end-to-end verification pending)
+- [x] Admin login/session/dashboard/orders and status transitions with audit history.
+- [x] Private slip proxy and private Drive image upload/proxy.
+- [x] CRUD for games, packages, coupons and promotions.
+- [x] Member registration/login UI and Admin-only IP-history screen.
+- [x] Convert storefront and Admin to same-origin Vercel API; remove browser-side GAS RPC.
+- [ ] Verify the complete workflows in real browsers/devices against a synthetic Apps Script test deployment.
 
 ## Phase 6 — Verification and release readiness
 - Unit, integration, security and manual regression tests.
@@ -133,11 +132,14 @@ Exit: all critical tests pass, remaining risks are documented, and user separate
 - Make small reviewable commits and verify every changed file.
 
 
-### Frontend REST integration update (2026-11-04)
-- [x] Replace Storefront Apps Script RPC calls with same-origin Express REST calls for catalog, promotions, coupon validation/suggestions, PromptPay info, checkout creation and slip upload.
-- [x] Adapt checkout UI to create Pending first, then submit a slip using the one-time checkout token; show the server-provided payment deadline and lock order details after reservation.
-- [x] Replace Admin Apps Script RPC/token bridge with HttpOnly cookie-based REST calls.
-- [x] Adapt Admin order list to `has_slip`, private binary slip retrieval, payment deadline and `Expired` status.
+### Frontend REST integration update (2026-11-05)
+- [x] Storefront and Admin use same-origin REST APIs; browser-side Apps Script RPC has been removed.
+- [x] Checkout creates Pending first, then submits a slip using a one-time checkout token; UI displays the server-provided payment deadline.
+- [x] Admin uses HttpOnly cookie sessions, private binary slip retrieval, payment deadline and Expired status.
+- [x] Member registration/login/logout/password-change UI; Guest checkout remains available.
+- [x] Admin coupon editor supports public/member-only/member-game-spend access rules.
+- [x] Admin image upload stores files in private Drive; storefront images are delivered through a reference-checked API proxy.
+- [x] Admin can inspect Member login/IP history; all returned IP details require an authenticated Admin session.
 - [x] Add frontend syntax/contract test and verify it in GitHub Actions.
 
 Still open: import and test the Apps Script project in its real runtime; benchmark PBKDF2 and quotas; run concurrency/replay/security tests; verify Drive permissions; finish real-browser/device end-to-end tests and production CSP/abuse-control review. Frontend and gateway source integration is not production readiness.
