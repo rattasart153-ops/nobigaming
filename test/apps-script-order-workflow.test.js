@@ -178,6 +178,41 @@ test('slip upload checks the server deadline and prevents a second upload', () =
 });
 
 
+test('slip upload preserves the Drive file when the order write committed but its response was lost',()=>{
+  const {context,data,files}=makeOrderHarness();
+  const created=context.createOrder({
+    request_key:'request-key-slip-commit-loss-0001',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-slip-commit-loss',server_id:'',coupon_code:''
+  });
+  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const payload={
+    order_id:created.order.order_id,
+    checkout_token:created.checkout_token,
+    slip:{mimeType:'image/png',base64:png.toString('base64')}
+  };
+  const originalUpdate=context.repositoryUpdateLocked_;
+  let loseResponse=true;
+  context.repositoryUpdateLocked_=(table,id,patch)=>{
+    const result=originalUpdate(table,id,patch);
+    if(table==='orders'&&patch.slip_submitted_at&&loseResponse){
+      loseResponse=false;
+      throw new Error('SIMULATED_SLIP_COMMIT_RESPONSE_LOST');
+    }
+    return result;
+  };
+  assert.throws(()=>context.submitOrderSlip(payload),/SIMULATED_SLIP_COMMIT_RESPONSE_LOST/);
+  assert.equal(data.orders[0].slip_file_id,'drive-file-1');
+  assert.equal(data.orders[0].slip_submitted_at!=='',true);
+  assert.equal(files.length,1);
+  assert.equal(files[0].trashed,false,'a file referenced by a committed order must never be trashed');
+
+  const retry=context.submitOrderSlip(payload);
+  assert.equal(retry.already_submitted,true);
+  assert.equal(retry.slip_submitted_at,data.orders[0].slip_submitted_at);
+  assert.equal(files.length,1,'retry must not create a second Drive file');
+  assert.equal(files[0].trashed,false);
+});
+
 test('member-game coupon requires an authenticated member with completed spend in the qualifying game', () => {
   const {context,data,fixedNow}=makeOrderHarness();
   data.members.push({member_id:'member-1',status:'Active'});

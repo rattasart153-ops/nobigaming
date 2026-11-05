@@ -224,7 +224,16 @@ function submitOrderSlip(payload) {
     return {ok:true, slip_submitted_at:now};
   } catch (error) {
     if (file) {
-      try { file.setTrashed(true); } catch (ignored) {}
+      let linkedToOrder = true;
+      try {
+        const persisted = repositoryGetById_('orders', orderId);
+        linkedToOrder = Boolean(persisted &&
+          String(persisted.slip_file_id || '') === String(file.getId()) &&
+          persisted.slip_submitted_at);
+      } catch (ignored) {}
+      if (!linkedToOrder) {
+        try { file.setTrashed(true); } catch (ignored) {}
+      }
     }
     throw error;
   } finally {
