@@ -44,19 +44,22 @@ function validateRecord_(tableName, record) {
         (!record.member_spend_game_id || Number(record.member_min_game_spend_satang || 0) <= 0)) {
       throw new Error('ต้องกำหนดเกมและยอดเติมสะสมขั้นต่ำสำหรับคูปองสมาชิก');
     }
-    if (record.allowed_player_ids_json && !record.game_id) {
-      throw new Error('ต้องเลือกเกมเมื่อจำกัด UID เฉพาะ');
+    if ((record.allowed_player_ids_json || Number(record.min_player_spend_satang || 0) > 0) && !record.game_id) {
+      throw new Error('ต้องเลือกเกมเมื่อจำกัด UID หรือกำหนดยอดเติมสะสมของ UID');
+    }
+    if (record.expires_at && !Number.isFinite(couponExpiryCutoff_(record.expires_at))) {
+      throw new Error('วันหมดอายุคูปองไม่ถูกต้อง');
+    }
+    if (record.usage_limit !== '' && record.usage_limit !== null && record.usage_limit !== undefined &&
+        (!Number.isSafeInteger(Number(record.usage_limit)) || Number(record.usage_limit) < 1)) {
+      throw new Error('จำนวนสิทธิ์คูปองต้องเป็นจำนวนเต็มตั้งแต่ 1 ขึ้นไป');
     }
   }
 
   if ((tableName === 'packages' || tableName === 'promotions') && record.image_url) {
     const imageUrl = String(record.image_url);
     if (!/^\/api\/public\/media\/[A-Za-z0-9_-]{10,100}$/.test(imageUrl)) {
-      let image;
-      try { image = new URL(imageUrl); } catch (ignored) {}
-      if (!image || image.protocol !== 'https:' || /drive\.google\\.com|googleusercontent\.com/i.test(image.hostname)) {
-        throw new Error('URL รูปภาพต้องเป็น HTTPS หรือ URL ผ่านระบบสื่อส่วนตัว');
-      }
+      throw new Error('รูปภาพต้องอัปโหลดผ่านระบบจัดเก็บส่วนตัวของ Google Drive');
     }
   }
 
