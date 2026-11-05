@@ -19,6 +19,7 @@ function cookieFrom(response) {
 test('Apps Script-backed public and Admin REST routes preserve the browser API contract', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nobi-gateway-routes-'));
   const calls = [];
+  let slipCalls = 0;
   const client = {
     async call(action, args = {}) {
       calls.push({action, args});
@@ -27,6 +28,15 @@ test('Apps Script-backed public and Admin REST routes preserve the browser API c
       if (action === 'coupon') return {valid:true,code:'SAVE',discount:5,total:95};
       if (action === 'couponSuggestions') return {suggestion:null};
       if (action === 'publicMediaData') return {mimeType:'image/png',base64:Buffer.from('png-test').toString('base64')};
+      if (action === 'createOrder') return {
+        ok:true,duplicate:false,
+        order:{id:'NBI-20261105-ABCDEF',order_id:'NBI-20261105-ABCDEF',payment_expires_at:new Date(Date.now()+15*60*1000).toISOString(),slip_submitted_at:null},
+        checkout_token:'checkout-secret-token'
+      };
+      if (action === 'submitOrderSlip') {
+        slipCalls++;
+        return {ok:true,already_submitted:slipCalls>1,slip_submitted_at:'2026-11-05T04:00:00.000Z'};
+      }
       if (action === 'memberLogin') return {
         token:'member-secret-token',expires_at:new Date(Date.now()+3600000).toISOString(),
         member:{member_id:'member-1',full_name:'Member',login_id:'member123'}
@@ -116,5 +126,71 @@ test('Apps Script-backed public and Admin REST routes preserve the browser API c
   } finally {
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(root, {recursive:true, force:true});
+  }
+});
+
+
+test('slip upload keeps a short receipt cookie for safe retry and clears it after replay', async()=>{
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'nobi-slip-retry-'));
+  let slipCalls=0;
+  const client={
+    async call(action,args={}){
+      if(action==='createOrder')return {
+        ok:true,duplicate:false,
+        order:{id:'NBI-20261105-ABCDEF',order_id:'NBI-20261105-ABCDEF',payment_expires_at:new Date(Date.now()+15*60*1000).toISOString(),slip_submitted_at:null},
+        checkout_token:'checkout-secret-token'
+      };
+      if(action==='submitOrderSlip'){
+        slipCalls++;
+        return {ok:true,already_submitted:slipCalls>1,slip_submitted_at:'2026-11-05T04:00:00.000Z'};
+      }
+      if(action==='memberMe')return {authenticated:false};
+      throw new Error('Unexpected action: '+action);
+    }
+  };
+  const app=express();
+  app.use(express.json({limit:'1mb'}));
+  const gatewaySession=createGatewaySession(client);
+  const upload=createUpload(root);
+  app.use(createGatewayPublicRouter({
+    client,slipUpload:upload,getPaymentInfo:async()=>({configured:false}),
+    loginLimiter:(req,res,next)=>next(),gatewaySession
+  }));
+  app.use((error,req,res,next)=>res.status(500).json({error:error.message}));
+  const server=await new Promise(resolve=>{
+    const instance=app.listen(0,'127.0.0.1',()=>resolve(instance));
+  });
+  const base='http://127.0.0.1:'+server.address().port;
+  const origin={Origin:base};
+  try{
+    const created=await fetch(base+'/api/public/orders',{
+      method:'POST',headers:{...origin,'Idempotency-Key':'slip-retry-key-123456'},
+      body:(()=>{const form=new FormData();form.append('gameId','game-1');form.append('packageId','pack-1');form.append('playerId','uid-1');return form;})()
+    });
+    assert.equal(created.status,201);
+    const order=await created.json();
+    const orderCookie=cookieFrom(created);
+    assert.match(orderCookie,/^nobi_checkout_NBI-20261105-ABCDEF=/);
+
+    const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/7b8AAAAASUVORK5CYII=','base64');
+    const uploadForm=()=>{const form=new FormData();form.append('slip',new Blob([png],{type:'image/png'}),'slip.png');return form;};
+    const first=await fetch(base+'/api/public/orders/'+encodeURIComponent(order.order.id)+'/slip',{
+      method:'POST',headers:{...origin,Cookie:orderCookie},body:uploadForm()
+    });
+    assert.equal(first.status,201);
+    const receiptCookie=cookieFrom(first);
+    assert.match(receiptCookie,/^nobi_checkout_NBI-20261105-ABCDEF=/);
+    assert.match(first.headers.get('set-cookie')||'',/Expires=/);
+
+    const retry=await fetch(base+'/api/public/orders/'+encodeURIComponent(order.order.id)+'/slip',{
+      method:'POST',headers:{...origin,Cookie:receiptCookie},body:uploadForm()
+    });
+    assert.equal(retry.status,200);
+    assert.equal((await retry.json()).already_submitted,true);
+    assert.match(retry.headers.get('set-cookie')||'',/Expires=Thu, 01 Jan 1970/);
+    assert.equal(slipCalls,2);
+  }finally{
+    await new Promise(resolve=>server.close(resolve));
+    fs.rmSync(root,{recursive:true,force:true});
   }
 });
