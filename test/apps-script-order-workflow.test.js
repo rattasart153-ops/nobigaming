@@ -122,7 +122,8 @@ test('checkout idempotency returns the same order and rejects a changed payload'
   assert.equal(data.orders.length,1);
   assert.equal(replay.duplicate,true);
   assert.equal(replay.order.order_id,first.order.order_id);
-  assert.equal(replay.checkout_token,null);
+  assert.ok(replay.checkout_token);
+  assert.notEqual(replay.checkout_token,first.checkout_token);
   assert.throws(()=>context.createOrder({...payload,player_id:'uid-different'}),/IDEMPOTENCY_CONFLICT/);
 });
 
