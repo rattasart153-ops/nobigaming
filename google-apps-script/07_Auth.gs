@@ -35,11 +35,7 @@ function adminLogin(username, password, ipAddress) {
   const pass = String(password || '');
   if (!user || !pass) throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
   consumeAuthIpAttempt_(ipAddress);
-
-  const props = PropertiesService.getScriptProperties();
-  const throttleKey = 'NOBI_ADMIN_LOGIN_' + sha256_(normalized).slice(0, 40);
-  const initialState = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
-  if (Date.now() < Number(initialState.until || 0)) throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
+  assertAccountNotBlocked_('ADMIN_ACCOUNT', normalized);
 
   // Password KDF is intentionally outside ScriptLock so a slow login cannot
   // block order creation, coupon reservations, or other users' sessions.
@@ -50,14 +46,8 @@ function adminLogin(username, password, ipAddress) {
   if (!valid) {
     const lock = LockService.getScriptLock();
     lock.waitLock(15000);
-    try {
-      const state = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
-      state.count = Number(state.count || 0) + 1;
-      state.until = state.count >= 5 ? Date.now() + 15 * 60 * 1000 : 0;
-      props.setProperty(throttleKey, JSON.stringify(state));
-    } finally {
-      lock.releaseLock();
-    }
+    try { incrementAccountFailureLocked_('ADMIN_ACCOUNT', normalized, Date.now()); }
+    finally { lock.releaseLock(); }
     throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
   }
 
@@ -65,8 +55,7 @@ function adminLogin(username, password, ipAddress) {
   lock.waitLock(15000);
   try {
     pruneExpiredSessionsLocked_(Date.now());
-    const currentState = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
-    if (Date.now() < Number(currentState.until || 0)) throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
+    assertRateLimitBucketNotBlockedLocked_('ADMIN_ACCOUNT', normalized, Date.now());
     const currentAdmin = repositoryGetById_('admins', admin.admin_id);
     if (!currentAdmin || currentAdmin.status !== 'Active' ||
         String(currentAdmin.password_hash) !== String(admin.password_hash) ||
@@ -74,7 +63,7 @@ function adminLogin(username, password, ipAddress) {
       throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
 
-    props.deleteProperty(throttleKey);
+    resetAccountFailureLocked_('ADMIN_ACCOUNT', normalized);
     const rawToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
     const now = new Date();
     const createdAt = now.toISOString();
@@ -217,19 +206,15 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
   const agent = String(userAgent || '').slice(0, 300);
   if (!login || !pass) throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
   consumeAuthIpAttempt_(ipAddress);
-
-  const props = PropertiesService.getScriptProperties();
-  const throttleKey = 'NOBI_MEMBER_LOGIN_' + sha256_(normalized).slice(0, 40);
-  const initialState = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
-  if (Date.now() < Number(initialState.until || 0)) {
+  try {
+    assertAccountNotBlocked_('MEMBER_ACCOUNT', normalized);
+  } catch (error) {
     const lock = LockService.getScriptLock();
     lock.waitLock(15000);
     try {
       appendMemberLoginLogLocked_('', normalized, ip, false, 'Failure', 'RATE_LIMITED', agent, new Date().toISOString());
-    } finally {
-      lock.releaseLock();
-    }
-    throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
+    } finally { lock.releaseLock(); }
+    throw error;
   }
 
   // PBKDF2 verification stays outside ScriptLock to avoid blocking checkout writes.
@@ -240,14 +225,9 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
     const lock = LockService.getScriptLock();
     lock.waitLock(15000);
     try {
-      const state = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
-      state.count = Number(state.count || 0) + 1;
-      state.until = state.count >= 5 ? Date.now() + 15 * 60 * 1000 : 0;
-      props.setProperty(throttleKey, JSON.stringify(state));
+      incrementAccountFailureLocked_('MEMBER_ACCOUNT', normalized, Date.now());
       appendMemberLoginLogLocked_(member ? member.member_id : '', normalized, ip, false, 'Failure', 'INVALID_CREDENTIALS', agent, new Date().toISOString());
-    } finally {
-      lock.releaseLock();
-    }
+    } finally { lock.releaseLock(); }
     throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
   }
 
@@ -255,11 +235,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
   lock.waitLock(15000);
   try {
     pruneExpiredSessionsLocked_(Date.now());
-    const state = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
-    if (Date.now() < Number(state.until || 0)) {
-      appendMemberLoginLogLocked_(member.member_id, normalized, ip, false, 'Failure', 'RATE_LIMITED', agent, new Date().toISOString());
-      throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
-    }
+    assertRateLimitBucketNotBlockedLocked_('MEMBER_ACCOUNT', normalized, Date.now());
     const currentMember = repositoryGetById_('members', member.member_id);
     if (!currentMember || currentMember.status !== 'Active' ||
         String(currentMember.password_hash) !== String(member.password_hash) ||
@@ -268,7 +244,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
       throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
     }
 
-    props.deleteProperty(throttleKey);
+    resetAccountFailureLocked_('MEMBER_ACCOUNT', normalized);
     const now = new Date();
     const nowIso = now.toISOString();
     const isNewIp = !currentMember.last_login_ip || String(currentMember.last_login_ip) !== ip;
