@@ -355,17 +355,26 @@ function memberChangePassword(token, currentPassword, newPassword) {
   const authenticated = requireMember_(token);
   const nextPassword = String(newPassword || '');
   if (nextPassword.length < 10 || nextPassword.length > 200) throw new Error('รหัสผ่านใหม่ต้องมีความยาว 10-200 ตัวอักษร');
+
+  // Run the expensive KDF outside ScriptLock; re-check the credential snapshot before commit.
+  if (!passwordVerify_(String(currentPassword || ''), authenticated.password_salt,
+      authenticated.password_hash, authenticated.password_algorithm)) {
+    throw new Error('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+  }
+  const salt = Utilities.getUuid() + Utilities.getUuid();
+  const nextHash = passwordHash_(nextPassword, salt);
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
     const member = repositoryGetById_('members', authenticated.member_id);
-    if (!member || !passwordVerify_(String(currentPassword || ''), member.password_salt, member.password_hash, member.password_algorithm)) {
-      throw new Error('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+    if (!member || member.status !== 'Active' ||
+        String(member.password_hash) !== String(authenticated.password_hash) ||
+        Number(member.auth_version) !== Number(authenticated.auth_version)) {
+      throw new Error('ข้อมูลบัญชีเปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่');
     }
     const now = new Date().toISOString();
-    const salt = Utilities.getUuid() + Utilities.getUuid();
     repositoryUpdateLocked_('members', member.member_id, {
-      password_hash:passwordHash_(nextPassword, salt),
+      password_hash:nextHash,
       password_salt:salt,
       password_algorithm:'PBKDF2-SHA256-120000',
       auth_version:Number(member.auth_version || 1) + 1,
@@ -386,17 +395,26 @@ function adminChangePassword(token, currentPassword, newPassword, ipAddress) {
   const authenticated = requireAdmin_(token);
   const nextPassword = String(newPassword || '');
   if (nextPassword.length < 14 || nextPassword.length > 200) throw new Error('รหัสผ่านใหม่ต้องมีความยาว 14-200 ตัวอักษร');
+
+  // Run the expensive KDF outside ScriptLock; re-check the credential snapshot before commit.
+  if (!passwordVerify_(String(currentPassword || ''), authenticated.password_salt,
+      authenticated.password_hash, authenticated.password_algorithm)) {
+    throw new Error('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+  }
+  const salt = Utilities.getUuid() + Utilities.getUuid();
+  const nextHash = passwordHash_(nextPassword, salt);
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
     const admin = repositoryGetById_('admins', authenticated.admin_id);
-    if (!admin || !passwordVerify_(String(currentPassword || ''), admin.password_salt, admin.password_hash, admin.password_algorithm)) {
-      throw new Error('รหัสผ่านปัจจุบันไม่ถูกต้อง');
+    if (!admin || admin.status !== 'Active' ||
+        String(admin.password_hash) !== String(authenticated.password_hash) ||
+        Number(admin.auth_version) !== Number(authenticated.auth_version)) {
+      throw new Error('ข้อมูลบัญชีเปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่');
     }
     const now = new Date().toISOString();
-    const salt = Utilities.getUuid() + Utilities.getUuid();
     repositoryUpdateLocked_('admins', admin.admin_id, {
-      password_hash:passwordHash_(nextPassword, salt),
+      password_hash:nextHash,
       password_salt:salt,
       password_algorithm:'PBKDF2-SHA256-120000',
       auth_version:Number(admin.auth_version || 1) + 1,
