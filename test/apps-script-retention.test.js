@@ -55,9 +55,11 @@ function makeRetentionHarness() {
     ]),
     member_login_logs:new FakeSheet('member_login_logs',[
       {log_id:'member-log-old',ip_address:'192.0.2.1',created_at:'2026-08-01T00:00:00.000Z'},
-      {log_id:'member-log-boundary',ip_address:'192.0.2.2',created_at:cutoff},
-      {log_id:'member-log-invalid',ip_address:'192.0.2.3',created_at:'invalid'},
-      {log_id:'member-log-new',ip_address:'192.0.2.4',created_at:'2026-11-01T00:00:00.000Z'}
+      {log_id:'member-log-new-a',ip_address:'192.0.2.2',created_at:'2026-11-01T00:00:00.000Z'},
+      {log_id:'member-log-boundary',ip_address:'192.0.2.3',created_at:cutoff},
+      {log_id:'member-log-new-b',ip_address:'192.0.2.4',created_at:'2026-11-02T00:00:00.000Z'},
+      {log_id:'member-log-invalid',ip_address:'192.0.2.5',created_at:'invalid'},
+      {log_id:'member-log-new-c',ip_address:'192.0.2.6',created_at:'2026-11-03T00:00:00.000Z'}
     ]),
     admin_audit_logs:new FakeSheet('admin_audit_logs',[
       {audit_id:'admin-log-old',ip_address:'192.0.2.5',created_at:'2026-08-01T00:00:00.000Z'},
@@ -119,7 +121,7 @@ test('90-day cleanup clears aged member and session IP fields and removes expire
   assert.equal(memberSessions.find(x=>x.session_id==='member-session-new').created_ip,'198.51.100.2');
   assert.equal(sheets.admin_sessions.records().find(x=>x.session_id==='admin-session-old').created_ip,'');
 
-  assert.deepEqual(sheets.member_login_logs.records().map(x=>x.log_id),['member-log-new']);
+  assert.deepEqual(sheets.member_login_logs.records().map(x=>x.log_id),['member-log-new-a','member-log-new-b','member-log-new-c']);
   assert.deepEqual(sheets.admin_audit_logs.records().map(x=>x.audit_id),[]);
   assert.equal(result.member_login_logs_deleted,3);
   assert.equal(result.admin_audit_logs_deleted,2);
