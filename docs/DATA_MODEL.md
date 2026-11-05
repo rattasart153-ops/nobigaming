@@ -1,3 +1,5 @@
+> **LEGACY DATA MODEL (2026-11-05):** This document describes the former Google Sheets schema. It is retained only as a field/business-rule mapping source for the PostgreSQL migration and must not be used to initialize a live spreadsheet. The target PostgreSQL model will be defined by versioned SQL migrations under the approved [POSTGRES_MIGRATION_PLAN.md](./POSTGRES_MIGRATION_PLAN.md).
+
 # Nobi Topup — Google Sheets and Drive Data Model
 
 Status: approved target schema baseline; version 1 headers are implemented in `google-apps-script/00_Config.gs` and initialized by `02_Database.gs`. Business repositories are still pending.
