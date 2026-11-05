@@ -1188,9 +1188,13 @@ body {
     </nav>
 
     <div class="header-actions">
+      <button type="button" class="btn-login" id="memberBtn">
+        <svg><use href="#ic-user"/></svg>
+        <span>สมาชิก</span>
+      </button>
       <button type="button" class="btn-login" id="loginBtn">
         <svg><use href="#ic-user"/></svg>
-        <span>เข้าสู่ระบบ</span>
+        <span>แอดมิน</span>
       </button>
       <button type="button" class="nav-toggle" id="navToggle" aria-label="เปิดเมนู" aria-expanded="false" aria-controls="mainNav">
         <svg class="i-menu"><use href="#ic-menu"/></svg>
@@ -2121,6 +2125,78 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
     }
     finally{confirmBtn.disabled=false;confirmBtn.style.opacity="";}
   });
+  // Member account uses an HttpOnly cookie; Guest checkout remains available.
+  const memberModal = $('#memberModal');
+  const memberAuthPanel = $('#memberAuthPanel');
+  const memberProfile = $('#memberProfile');
+  const memberMessage = $('#memberMessage');
+  const memberLoginForm = $('#memberLoginForm');
+  const memberRegisterForm = $('#memberRegisterForm');
+  const memberPasswordForm = $('#memberPasswordForm');
+  let currentMember = null;
+  function showMemberMode(mode) {
+    memberLoginForm.hidden = mode !== 'login';
+    memberRegisterForm.hidden = mode !== 'register';
+    memberAuthPanel.hidden = false;
+    memberProfile.hidden = true;
+    memberMessage.textContent = '';
+  }
+  async function refreshMember() {
+    try {
+      const state = await apiRequest('/api/member/me');
+      currentMember = state.authenticated ? state.member : null;
+    } catch (_) { currentMember = null; }
+    const label = $('#memberBtn span');
+    if (label) label.textContent = currentMember ? currentMember.full_name : 'สมาชิก';
+    return currentMember;
+  }
+  async function openMemberModal() {
+    await refreshMember();
+    memberModal.hidden = false;
+    memberMessage.textContent = '';
+    if (currentMember) {
+      memberAuthPanel.hidden = true;
+      memberProfile.hidden = false;
+      $('#memberProfileName').textContent = 'เข้าสู่ระบบในชื่อ ' + currentMember.full_name + ' (' + currentMember.login_id + ')';
+    } else showMemberMode('login');
+  }
+  $('#memberBtn').addEventListener('click', openMemberModal);
+  $('#closeMemberModal').addEventListener('click', () => { memberModal.hidden = true; });
+  memberModal.addEventListener('click', e => { if (e.target === memberModal) memberModal.hidden = true; });
+  $('#memberLoginTab').addEventListener('click', () => showMemberMode('login'));
+  $('#memberRegisterTab').addEventListener('click', () => showMemberMode('register'));
+  memberLoginForm.addEventListener('submit', async e => {
+    e.preventDefault(); memberMessage.textContent = '';
+    const data = new FormData(memberLoginForm);
+    try {
+      await apiRequest('/api/member/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loginId:data.get('loginId'),password:data.get('password')})});
+      await refreshMember(); memberModal.hidden = true; showToast('เข้าสู่ระบบสมาชิกแล้ว');
+    } catch (error) { memberMessage.textContent = error.message; }
+  });
+  memberRegisterForm.addEventListener('submit', async e => {
+    e.preventDefault(); memberMessage.textContent = '';
+    const data = new FormData(memberRegisterForm);
+    const credentials = {fullName:data.get('fullName'),loginId:data.get('loginId'),password:data.get('password')};
+    try {
+      await apiRequest('/api/member/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(credentials)});
+      await apiRequest('/api/member/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({loginId:credentials.loginId,password:credentials.password})});
+      await refreshMember(); memberModal.hidden = true; showToast('สมัครและเข้าสู่ระบบสมาชิกเรียบร้อย');
+    } catch (error) { memberMessage.textContent = error.message; }
+  });
+  $('#memberLogoutBtn').addEventListener('click', async () => {
+    try { await apiRequest('/api/member/logout', {method:'POST'}); currentMember = null; await refreshMember(); memberModal.hidden = true; showToast('ออกจากระบบสมาชิกแล้ว'); }
+    catch (error) { memberMessage.textContent = error.message; }
+  });
+  memberPasswordForm.addEventListener('submit', async e => {
+    e.preventDefault(); memberMessage.textContent = '';
+    const data = new FormData(memberPasswordForm);
+    try {
+      await apiRequest('/api/member/password', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:data.get('currentPassword'),newPassword:data.get('newPassword')})});
+      currentMember = null; await refreshMember(); memberModal.hidden = true; showToast('เปลี่ยนรหัสผ่านแล้ว กรุณาเข้าสู่ระบบใหม่');
+    } catch (error) { memberMessage.textContent = error.message; }
+  });
+  refreshMember();
+
   // Admin entry opens the real backend dashboard.
   $("#loginBtn").addEventListener("click", () => { window.location.search = "?page=admin"; });
 
