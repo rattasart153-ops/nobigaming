@@ -13,19 +13,23 @@ function createOrder(payload) {
   const packageId = String(payload.package_id || '');
   const playerId = String(payload.player_id || '').trim();
   const serverId = String(payload.server_id || '').trim();
-  const memberId = String(payload.member_id || '').trim();
+  const memberToken = String(payload.member_token || '');
+  const suppliedMemberId = String(payload.member_id || '').trim();
   const couponCode = String(payload.coupon_code || '').trim().toUpperCase();
   if (!gameId || !packageId || !playerId || playerId.length > 100 || serverId.length > 100) {
     throw new Error('ข้อมูลเกม แพ็กเกจ หรือ UID ไม่ถูกต้อง');
   }
 
-  const payloadHash = sha256_(JSON.stringify({
-    game_id:gameId, package_id:packageId, player_id:playerId,
-    server_id:serverId, member_id:memberId, coupon_code:couponCode
-  }));
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
+    const member = memberToken ? requireMemberLocked_(memberToken, Date.now()) : null;
+    if (!member && suppliedMemberId) throw new Error('ไม่อนุญาตให้กำหนดรหัสสมาชิกจากคำขอโดยตรง');
+    const memberId = member ? String(member.member_id) : '';
+    const payloadHash = sha256_(JSON.stringify({
+      game_id:gameId, package_id:packageId, player_id:playerId,
+      server_id:serverId, member_id:memberId, coupon_code:couponCode
+    }));
     expirePendingOrdersLocked_(Date.now());
     pruneExpiredIdempotencyLocked_(Date.now());
     let existingKey = repositoryFindByField_('idempotency_records', 'request_key', key)
