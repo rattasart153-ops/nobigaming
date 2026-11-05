@@ -183,3 +183,25 @@ The authoritative new migration plan is [POSTGRES_MIGRATION_PLAN.md](./POSTGRES_
 
 ### Unchanged business requirements
 All confirmed Guest checkout, Member Login ID, coupon eligibility, UID/game spend, coupon reservation/consumption/release, payment deadline, Asia/Bangkok expiry, idempotency, 3 MB image validation, private slip/media access, Admin IP-history/audit retention, session lifetime/idle timeout, and manual slip-review rules remain mandatory. See [POSTGRES_MIGRATION_PLAN.md](./POSTGRES_MIGRATION_PLAN.md) for the complete invariant list.
+
+
+---
+
+## Latest architecture decision — 2026-11-05
+
+The user requires zero cost at every stage and approved switching away from Option A. The active target is Google Apps Script HtmlService + Google Sheets + private Google Drive, using the existing Google account only. The frontend must use an allowlisted google.script.run facade instead of Vercel REST endpoints. This is a built-in Apps Script bridge, not a separately subscribed API provider.
+
+The Vercel + Neon PostgreSQL + Vercel Blob direction is cancelled. See ZERO_COST_MIGRATION_PLAN.md. The old PostgreSQL plan is historical only.
+
+### New phases
+1. P0 read-only compatibility audit: inventory frontend REST calls, payloads, response shapes, GAS actions, file transfer and Node-only dependencies; produce a port matrix.
+2. P1 Apps Script web facade: HtmlService routing/templates and explicit allowlisted server functions.
+3. P2 frontend adapter: replace Vercel fetch calls with google.script.run while preserving UI and business rules.
+4. P3 runtime/performance: after separate approval, benchmark PBKDF2, Sheets, LockService, file transfer and quotas.
+5. P4 security/business verification: sessions, private Drive, coupon/order invariants, idempotency and recovery.
+6. P5 synthetic browser/device tests.
+7. P6 separate approvals for project/resource creation, initialization, deployment, Admin bootstrap and live payments/orders.
+
+Status: architecture docs updated; P0 audit and port matrix not yet complete; source code has not yet been ported. No Google resources have been created or initialized. No billing enabled. Work remains on vercel-drive-setup; main untouched.
+
+Cost guardrails: no new service, paid tier, billing, card entry, Neon, hosted PostgreSQL, Vercel Blob or Vercel runtime. Use only existing Google quotas/storage. On exhaustion, fail closed; never auto-upgrade. Google may change quotas/terms, so unlimited free service cannot be guaranteed.
