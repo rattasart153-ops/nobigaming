@@ -77,15 +77,35 @@ function deleteExpiredRetentionRows_(tableName, cutoffMs) {
   const headers = NOBI.SHEETS[tableName];
   const timestampIndex = headers.indexOf('created_at');
   if (timestampIndex < 0) throw new Error('RETENTION_SCHEMA_INVALID: ' + tableName);
-  let deleted = 0;
+  const rowsToDelete = [];
   for (let row = values.length - 1; row >= 1; row--) {
     const timestamp = Date.parse(String(values[row][timestampIndex] || ''));
     // Invalid timestamps cannot justify retaining IP-bearing history indefinitely.
-    if (!Number.isFinite(timestamp) || timestamp <= cutoffMs) {
-      sheet.deleteRow(row + 1);
-      deleted++;
-    }
+    if (!Number.isFinite(timestamp) || timestamp <= cutoffMs) rowsToDelete.push(row + 1);
   }
+
+  // Delete contiguous blocks bottom-up to reduce Sheets service calls and
+  // avoid shifting the remaining row indexes during cleanup.
+  let deleted = 0;
+  let blockStart = 0;
+  let blockEnd = 0;
+  rowsToDelete.forEach(function(rowNumber, index) {
+    if (!blockStart) {
+      blockStart = rowNumber;
+      blockEnd = rowNumber;
+    } else if (rowNumber === blockStart - 1) {
+      blockStart = rowNumber;
+    } else {
+      sheet.deleteRows(blockStart, blockEnd - blockStart + 1);
+      deleted += blockEnd - blockStart + 1;
+      blockStart = rowNumber;
+      blockEnd = rowNumber;
+    }
+    if (index === rowsToDelete.length - 1) {
+      sheet.deleteRows(blockStart, blockEnd - blockStart + 1);
+      deleted += blockEnd - blockStart + 1;
+    }
+  });
   return deleted;
 }
 
