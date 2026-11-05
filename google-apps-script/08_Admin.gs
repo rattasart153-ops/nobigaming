@@ -265,7 +265,7 @@ function adminMemberLoginLogs(token, memberId, requestedLimit) {
 
 
 function adminStoreMedia(token, media, ipAddress) {
-  requireAdmin_(token);
+  const admin = requireAdmin_(token);
   media = media || {};
   const mimeType = String(media.mimeType || '');
   if (!media.base64 || !/^image\/(png|jpeg|webp)$/.test(mimeType)) {
@@ -287,7 +287,7 @@ function adminStoreMedia(token, media, ipAddress) {
   lock.waitLock(10000);
   try {
     appendAdminAuditLogLocked_({
-      audit_id:Utilities.getUuid(), admin_id:requireAdmin_(token).admin_id,
+      audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
       action:'UPLOAD_PRIVATE_MEDIA', target_type:'drive_media', target_id:file.getId(),
       request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
       details_json:JSON.stringify({mime_type:mimeType, size_bytes:bytes.length}),
