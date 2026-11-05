@@ -9,7 +9,7 @@ function dispatchGatewayAction_(action, args) {
     case 'paymentInfo': return paymentInfo_(args.amount);
     case 'createOrder': return createOrder(args);
     case 'submitOrderSlip': return submitOrderSlip(args);
-    case 'adminLogin': return adminLogin(args.username, args.password);
+    case 'adminLogin': return adminLogin(args.username, args.password, args.ipAddress);
     case 'adminMe':
       try { requireAdmin_(args.token); return {authenticated:true}; }
       catch (error) { return {authenticated:false}; }
