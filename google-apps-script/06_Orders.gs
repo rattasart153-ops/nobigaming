@@ -180,6 +180,7 @@ function submitOrderSlip(payload) {
   lock.waitLock(20000);
   let file = null;
   try {
+    recoverPendingOrderJournalsLocked_();
     const order = repositoryGetById_('orders', orderId);
     if (!order || !order.checkout_token_hash ||
         !constantTimeHexEqual_(String(order.checkout_token_hash), sha256_(checkoutToken))) {
@@ -334,8 +335,15 @@ function applyOrderRecoveryJournalLocked_(journal) {
     } else {
       throw new Error('RECOVERY_OPERATION_UNSUPPORTED');
     }
+    // Completed journal rows retain only non-sensitive recovery metadata.
+    // Clear duplicated order/member/UID payloads once both sides are consistent.
     repositoryUpdateLocked_('order_recovery_journal',journal.journal_id,{
       state:'Completed',
+      order_record_json:'',
+      idempotency_record_json:'',
+      redemption_record_json:'',
+      order_patch_json:'',
+      redemption_patch_json:'',
       attempts:Number(journal.attempts || 0)+1,
       last_error_code:'',
       updated_at:now
@@ -346,7 +354,8 @@ function applyOrderRecoveryJournalLocked_(journal) {
       repositoryUpdateLocked_('order_recovery_journal',journal.journal_id,{
         state:'Pending',
         attempts:Number(journal.attempts || 0)+1,
-        last_error_code:String(error && error.message || 'RECOVERY_FAILED').slice(0,100),
+        last_error_code:/^[A-Z0-9_:-]{1,100}$/.test(String(error && error.message || ''))
+          ? String(error.message) : 'RECOVERY_FAILED',
         updated_at:now
       });
     } catch (journalError) {}
