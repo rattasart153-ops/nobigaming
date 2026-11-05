@@ -35,7 +35,7 @@ Session policy (CONFIRMED): absolute lifetime is at most 8 hours from creation; 
 ### member_login_logs
 `log_id, member_id, login_id_normalized, ip_address, is_new_ip, login_result, failure_reason_code, user_agent, created_at`
 
-Retention policy (CONFIRMED): retain login/IP history for 90 days, then delete or irreversibly anonymize it. IP history remains Admin-only. The scheduled cleanup removes rows at or beyond the 90-day boundary.
+Retention policy (CONFIRMED): retain login/IP history for 90 days, then delete or irreversibly anonymize it. IP history remains Admin-only. The scheduled cleanup removes rows at or beyond the 90-day boundary using bottom-up contiguous row batches.
 
 ### admin_audit_logs
 `audit_id, admin_id, action, target_type, target_id, request_id, ip_address, details_json, created_at`
@@ -112,7 +112,7 @@ No file or folder is shared as Anyone. Store Drive file IDs only. Slips and othe
 
 ## Retention implementation and activation
 - Source function `runNobiRetentionCleanup()` clears `members.registered_ip` based on member creation time, clears `members.last_login_ip` based on last login time, clears `created_ip` from Member/Admin sessions, and deletes Member login and Admin audit log rows at or beyond 90 days.
-- Invalid or missing timestamps are treated as expired for IP cleanup so IP data is not retained indefinitely without a defensible timestamp.
+- Invalid or missing timestamps are treated as expired for IP cleanup so IP data is not retained indefinitely without a defensible timestamp. Cleanup writes each IP-bearing column in one batch rather than issuing one Sheets write per affected record.
 - `ensureNobiRetentionTrigger()` creates one daily trigger for approximately 03:00 Asia/Bangkok and removes duplicate triggers. It is deliberately not called by database setup. An authorized project owner must run it manually once after deployment; no real Google trigger has been installed by this source change.
 - Actual Apps Script trigger execution, real Sheets retention behavior and runtime quotas remain unverified.
 
