@@ -1,3 +1,5 @@
+> **LEGACY / SUPERSEDED (2026-11-05):** The user selected Vercel + Neon PostgreSQL + Vercel Blob Private. Do not follow this setup guide, create an Apps Script project, initialize Sheets, create Drive folders, or deploy a GAS Web App. This file is retained only as migration reference. The active plan is [POSTGRES_MIGRATION_PLAN.md](./POSTGRES_MIGRATION_PLAN.md).
+
 # Nobi Topup — Google Apps Script / Sheets / Drive Setup
 
 Status: source implementation is present on `vercel-drive-setup`; no live Apps Script project has been initialized or deployed from this repository connection. **Do not run setup, initialize Admin, publish the Web App or accept real orders until the release gates below pass and the user explicitly approves.**
