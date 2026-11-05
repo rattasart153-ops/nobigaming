@@ -77,7 +77,8 @@ The legacy local-SQLite route modules remain in `src/routes/public.routes.js` an
 | `10_Utilities.gs` | Hashing, money, retention, rate limits | Present; runtime/performance unverified |
 | `11_Repositories.gs` | Sheets repositories | Present; Sheets atomicity/concurrency unverified |
 | `12_Seed.gs` | Default catalog seed | Present; must only run on an explicitly authorized synthetic database |
-| `13_HttpGateway.gs` | Signed HTTP `doPost()` gateway | Present; target browser transport is not this gateway |\n| `14_Retention.gs` | 90-day IP/log cleanup and daily trigger setup | Source and mock tests implemented; trigger deliberately not installed on a real Google account |
+| `13_HttpGateway.gs` | Signed HTTP `doPost()` gateway | Present; target browser transport is not this gateway |
+| `14_Retention.gs` | 90-day IP/log cleanup and daily trigger setup | P0-R4 source and mock tests added; trigger deliberately not installed on a real Google account |
 | `Code.gs` | Web entry point | **`doGet()` returns JSON via ContentService; it does not render HtmlService** |
 | `appsscript.json` | V8 manifest, Asia/Bangkok | Present; no HtmlService templates are referenced |
 
