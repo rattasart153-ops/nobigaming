@@ -14,13 +14,23 @@ function dispatchGatewayAction_(action, args) {
     case 'memberLogin': return memberLogin(args.loginId, args.password, args.ipAddress, args.userAgent);
     case 'memberMe':
       try { return memberMe(args.token); }
-      catch (error) { return {authenticated:false}; }
+      catch (error) {
+        if (/เซสชัน|กรุณาเข้าสู่ระบบ|บัญชีสมาชิกถูกระงับ|เพิกถอน/.test(String(error && error.message || ''))) {
+          return {authenticated:false};
+        }
+        throw error;
+      }
     case 'memberLogout': return memberLogout(args.token);
     case 'memberChangePassword': return memberChangePassword(args.token, args.currentPassword, args.newPassword);
     case 'adminChangePassword': return adminChangePassword(args.token, args.currentPassword, args.newPassword, args.ipAddress);
     case 'adminMe':
       try { requireAdmin_(args.token); return {authenticated:true}; }
-      catch (error) { return {authenticated:false}; }
+      catch (error) {
+        if (/เซสชัน|กรุณาเข้าสู่ระบบ|ถูกเพิกถอน/.test(String(error && error.message || ''))) {
+          return {authenticated:false};
+        }
+        throw error;
+      }
     case 'adminLogout': return adminLogout(args.token);
     case 'adminDashboard': return adminDashboard(args.token);
     case 'adminOrders': return adminOrders(args.token);
