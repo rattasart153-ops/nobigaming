@@ -144,27 +144,35 @@ function claimGatewayNonce_(nonce, timestamp) {
     if (!ssId) throw new Error('DATABASE_NOT_INITIALIZED');
     const checked = databaseAssertSchema_('gateway_nonces');
     const sheet = checked.sheet;
+    let lastRow = sheet.getLastRow();
+    const cutoff = Date.now() - NOBI_GATEWAY.NONCE_RETENTION_MS;
 
-    const nonceHash = sha256_(nonce);
-    const lastRow = sheet.getLastRow();
+    // Rows are appended under this lock using server time, so timestamps remain ordered.
+    // Binary-search the first unexpired row instead of scanning an ever-growing sheet.
     if (lastRow > 1) {
-      const rows = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-      for (let i = 0; i < rows.length; i++) {
-        if (String(rows[i][0]) === nonceHash) return false;
+      let low = 2;
+      let high = lastRow + 1;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        const created = Date.parse(String(sheet.getRange(middle, 2).getValue() || ''));
+        if (!Number.isFinite(created)) throw new Error('GATEWAY_NONCE_LEDGER_CORRUPT');
+        if (created >= cutoff) high = middle;
+        else low = middle + 1;
       }
-      // Rows are append-only and timestamp ordered. Prune expired records
-      // periodically to keep replay checks bounded.
-      if (lastRow > 1000) {
-        const cutoff = Date.now() - NOBI_GATEWAY.NONCE_RETENTION_MS;
-        let firstFresh = rows.length;
-        for (let j = 0; j < rows.length; j++) {
-          const created = Date.parse(String(rows[j][1] || ''));
-          if (Number.isFinite(created) && created >= cutoff) { firstFresh = j; break; }
-        }
-        if (firstFresh > 0) sheet.deleteRows(2, firstFresh);
+      if (low > 2) sheet.deleteRows(2, low - 2);
+      lastRow = sheet.getLastRow();
+    }
+
+    const activeRows = Math.max(0, lastRow - 1);
+    if (activeRows >= 5000) throw new Error('NONCE_STORE_FULL');
+    const nonceHash = sha256_(nonce);
+    if (activeRows) {
+      const hashes = sheet.getRange(2, 1, activeRows, 1).getValues();
+      for (let i = 0; i < hashes.length; i++) {
+        if (String(hashes[i][0]) === nonceHash) return false;
       }
     }
-    sheet.appendRow([nonceHash, new Date(timestamp).toISOString()]);
+    sheet.appendRow([nonceHash, new Date().toISOString()]);
     return true;
   } finally {
     lock.releaseLock();
@@ -198,7 +206,7 @@ function gatewayErrorCode_(error) {
   const message = String(error && error.message || '');
   if (/GATEWAY_NOT_CONFIGURED/.test(message)) return 'GATEWAY_NOT_CONFIGURED';
   if (/UNTRUSTED_SOURCE_IP/.test(message)) return 'UNTRUSTED_SOURCE_IP';
-  if (/RATE_LIMITED|RATE_LIMIT_STORE_FULL|ลองเข้าสู่ระบบใหม่ภายหลัง/.test(message)) return 'RATE_LIMITED';
+  if (/RATE_LIMITED|RATE_LIMIT_STORE_FULL|NONCE_STORE_FULL|ลองเข้าสู่ระบบใหม่ภายหลัง/.test(message)) return 'RATE_LIMITED';
   if (/เซสชัน|กรุณาเข้าสู่ระบบ|ชื่อผู้ใช้หรือรหัสผ่าน|Login ID หรือรหัสผ่าน|บัญชีสมาชิกถูกระงับ|สิทธิ์อัปโหลด/.test(message)) return 'UNAUTHENTICATED';
   if (/หมดเวลา|หมดอายุ/.test(message)) return 'RESOURCE_EXPIRED';
   if (/IDEMPOTENCY_CONFLICT|ถูกใช้ครบจำนวน|มีอยู่แล้ว|ไม่สามารถเปลี่ยนสถานะซ้ำ|อ้างอิงอยู่/.test(message)) return 'RESOURCE_CONFLICT';
