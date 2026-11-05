@@ -4,11 +4,12 @@ const NOBI_PASSWORD_ITERATIONS = 120000;
 
 function passwordHash_(password, salt) {
   const saltBytes = Utilities.newBlob(String(salt), 'text/plain').getBytes();
+  const passwordBytes = Utilities.newBlob(String(password), 'text/plain').getBytes();
   const block = saltBytes.concat([0, 0, 0, 1]);
-  let u = Utilities.computeHmacSha256Signature(block, String(password), Utilities.Charset.UTF_8);
+  let u = Utilities.computeHmacSha256Signature(block, passwordBytes);
   const derived = u.slice();
   for (let i = 1; i < NOBI_PASSWORD_ITERATIONS; i++) {
-    u = Utilities.computeHmacSha256Signature(u, String(password), Utilities.Charset.UTF_8);
+    u = Utilities.computeHmacSha256Signature(u, passwordBytes);
     for (let j = 0; j < derived.length; j++) derived[j] = derived[j] ^ u[j];
   }
   return Utilities.base64EncodeWebSafe(derived).replace(/=+$/g, '');
