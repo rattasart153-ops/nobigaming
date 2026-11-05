@@ -1,6 +1,6 @@
 /** Nobi Topup Apps Script configuration and versioned Sheets schema. */
 const NOBI = {
-  SCHEMA_VERSION: 2,
+  SCHEMA_VERSION: 3,
   SCHEMA_VERSION_KEY: 'schema_version',
   SHEETS: {
     admins: ['admin_id','username_normalized','username_display','password_hash','password_salt','password_algorithm','status','auth_version','created_at','updated_at','last_login_at'],
