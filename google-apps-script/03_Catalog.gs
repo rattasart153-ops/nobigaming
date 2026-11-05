@@ -36,7 +36,7 @@ function publicCatalog() {
         amount: Number(pack.amount || 0),
         unit: pack.unit,
         price: Number(pack.price_satang || 0) / 100,
-        image_url: pack.image_url || '',
+        image_url: catalogImageUrl_(pack.image_file_id, pack.image_url),
         popular: truth_(pack.popular),
         active: truth_(pack.active),
         game_name: game ? game.name : ''
@@ -60,11 +60,19 @@ function publicPromotions() {
       id: row.promotion_id,
       title: row.title,
       subtitle: row.subtitle,
-      image_url: row.image_url || '',
+      image_url: catalogImageUrl_(row.image_file_id, row.image_url),
       link_url: row.link_url || '',
       active: truth_(row.active),
       starts_at: row.starts_at,
       ends_at: row.ends_at
     };
   });
+}
+
+
+function catalogImageUrl_(fileId, fallbackUrl) {
+  if (fileId) return '/api/public/media/' + encodeURIComponent(String(fileId));
+  const value = String(fallbackUrl || '').trim();
+  if (/drive\\.google\\.com|googleusercontent\\.com/i.test(value)) return '';
+  return value;
 }
