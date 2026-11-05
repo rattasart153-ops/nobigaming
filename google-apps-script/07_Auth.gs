@@ -73,7 +73,7 @@ function adminLogin(username, password, ipAddress) {
       last_login_at:createdAt,
       updated_at:createdAt
     });
-    repositoryInsertLocked_('admin_audit_logs', {
+    appendAdminAuditLogLocked_({
       audit_id:Utilities.getUuid(),
       admin_id:admin.admin_id,
       action:'ADMIN_LOGIN',
