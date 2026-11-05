@@ -205,6 +205,24 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     }));
   }
 
+  router.get('/api/admin/members', requireAdmin, asyncRoute(async (req, res) => {
+    const result = await client.call('adminMembers', {
+      token:req.adminToken,
+      search:String(req.query.search || ''),
+      limit:Number(req.query.limit || 200)
+    });
+    return res.json(result);
+  }));
+  router.patch('/api/admin/members/:id/status', requireAdmin, asyncRoute(async (req, res) => {
+    const result = await client.call('adminSetMemberStatus', {
+      token:req.adminToken,
+      memberId:String(req.params.id),
+      status:String((req.body || {}).status || ''),
+      ipAddress:String(req.ip || '')
+    });
+    return res.json(result);
+  }));
+
   router.get('/api/admin/member-login-logs', requireAdmin, asyncRoute(async (req, res) => {
     const result = await client.call('adminMemberLoginLogs', {
       token:req.adminToken,
