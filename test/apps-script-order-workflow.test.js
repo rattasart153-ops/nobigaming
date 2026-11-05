@@ -602,3 +602,25 @@ test('recovery does not reopen a journal when finalization committed but the wri
   assert.equal(data.order_recovery_journal[0].state,'Completed');
   assert.equal(data.order_recovery_journal[0].order_patch_json,'');
 });
+
+
+test('checkout holds ScriptLock across recovery journal and all primary record writes',()=>{
+  const {context}=makeOrderHarness();
+  let held=false,acquired=0,released=0;
+  context.LockService.getScriptLock=()=>({
+    waitLock(){if(held) throw new Error('LOCK_REENTRY');held=true;acquired++;},
+    releaseLock(){held=false;released++;}
+  });
+  const originalInsert=context.repositoryInsertLocked_;
+  context.repositoryInsertLocked_=(table,record)=>{
+    assert.equal(held,true,'all business writes must occur while ScriptLock is held');
+    return originalInsert(table,record);
+  };
+  context.createOrder({
+    request_key:'request-key-lock-assert-0001',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-lock',server_id:'',coupon_code:''
+  });
+  assert.equal(acquired,1);
+  assert.equal(released,1);
+  assert.equal(held,false);
+});
