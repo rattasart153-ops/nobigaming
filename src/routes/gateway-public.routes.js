@@ -15,6 +15,15 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
   async function removeUpload(file) {
     if (file && file.path) await fs.unlink(file.path).catch(() => {});
   }
+  function clearCheckoutCookie(req, res, orderId) {
+    const id = String(orderId).replace(/[^A-Za-z0-9_-]/g, '');
+    res.clearCookie('nobi_checkout_' + id, {
+      httpOnly:true,
+      secure:process.env.NODE_ENV === 'production' || Boolean(req.secure),
+      sameSite:'strict',
+      path:'/api/public/orders/' + encodeURIComponent(String(orderId)) + '/slip'
+    });
+  }
 
   async function memberIdFromRequest(req) {
     const token = readCookie(req, MEMBER_COOKIE);
@@ -124,6 +133,7 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
             }
           });
           slipSubmittedAt = submitted.slip_submitted_at || null;
+          clearCheckoutCookie(req, res, order.id);
         }
       }
 
@@ -153,6 +163,7 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
         checkout_token:checkoutToken,
         slip:{name:req.file.originalname, mimeType:req.file.mimetype, base64:bytes.toString('base64')}
       });
+      clearCheckoutCookie(req, res, req.params.id);
       res.set('Cache-Control', 'no-store');
       return res.status(201).json({ok:true, slip_submitted_at:result.slip_submitted_at});
     } finally {
