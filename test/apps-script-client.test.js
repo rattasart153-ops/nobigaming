@@ -124,3 +124,72 @@ test('all Apps Script modules parse and define unique top-level functions', () =
     }
   }
 });
+
+
+function makeGatewayVerifier({schemaAvailable=true}={}) {
+  const rows=[['nonce_hash','created_at']];
+  const sheet={
+    getLastRow:()=>rows.length,
+    getRange:(row,column,rowCount=1,columnCount=1)=>({
+      getValue:()=>rows[row-1]?.[column-1]??'',
+      getValues:()=>Array.from({length:rowCount},(_,r)=>Array.from({length:columnCount},(_,c)=>rows[row+r-1]?.[column+c-1]??''))
+    }),
+    deleteRows:(start,count)=>rows.splice(start-1,count),
+    appendRow:row=>rows.push(row.slice())
+  };
+  const context={
+    Date,
+    PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='NOBI_GATEWAY_SECRET'?secret:'test-sheet-id'})},
+    Utilities:{
+      computeHmacSha256Signature:(value,key)=>Array.from(crypto.createHmac('sha256',key).update(value).digest()).map(byte=>byte>127?byte-256:byte)
+    },
+    LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>{}})},
+    databaseAssertSchema_:name=>{
+      if(!schemaAvailable||name!=='gateway_nonces')throw new Error('GATEWAY_SCHEMA_MISSING');
+      return {sheet};
+    },
+    sha256_:value=>crypto.createHash('sha256').update(String(value)).digest('hex')
+  };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'..','google-apps-script','13_HttpGateway.gs'),'utf8'),context,{filename:'13_HttpGateway.gs'});
+  return {context,rows};
+}
+
+function signedGatewayEnvelope(overrides={}) {
+  const envelope={
+    version:1,
+    timestamp:Date.now(),
+    nonce:'nonce-for-gateway-test-123456',
+    action:'catalog',
+    args:{},
+    ...overrides
+  };
+  envelope.signature=crypto.createHmac('sha256',secret).update(canonicalEnvelope(envelope)).digest('hex');
+  return envelope;
+}
+
+test('GAS gateway rejects bad signatures, stale timestamps and unlisted actions before claiming a nonce',()=>{
+  const {context,rows}=makeGatewayVerifier();
+  const bad=signedGatewayEnvelope({nonce:'nonce-bad-signature-123456'});
+  bad.signature='0'.repeat(64);
+  assert.equal(context.verifyGatewayEnvelope_(bad).error.code,'INVALID_SIGNATURE');
+  assert.equal(context.verifyGatewayEnvelope_(signedGatewayEnvelope({
+    timestamp:Date.now()-10*60*1000,nonce:'nonce-stale-request-123456'
+  })).error.code,'STALE_REQUEST');
+  assert.equal(context.verifyGatewayEnvelope_(signedGatewayEnvelope({
+    action:'deleteEverything',nonce:'nonce-invalid-action-123456'
+  })).error.code,'ACTION_NOT_ALLOWED');
+  assert.equal(rows.length,1,'rejected requests must not consume nonce records');
+});
+
+test('GAS gateway fails closed when the nonce ledger schema is missing and rejects replayed signed requests',()=>{
+  const missing=makeGatewayVerifier({schemaAvailable:false});
+  assert.throws(()=>missing.context.verifyGatewayEnvelope_(signedGatewayEnvelope({
+    nonce:'nonce-missing-schema-123456'
+  })),/GATEWAY_SCHEMA_MISSING/);
+  const valid=makeGatewayVerifier();
+  const envelope=signedGatewayEnvelope({nonce:'nonce-valid-replay-123456'});
+  assert.equal(valid.context.verifyGatewayEnvelope_(envelope).ok,true);
+  assert.equal(valid.context.verifyGatewayEnvelope_(envelope).error.code,'REPLAYED_REQUEST');
+  assert.equal(valid.rows.length,2,'only the first signed request should claim a nonce');
+});
