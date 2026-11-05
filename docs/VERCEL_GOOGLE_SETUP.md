@@ -1,3 +1,5 @@
+> **เอกสารเดิม / ถูกแทนที่แล้ว (2026-11-05):** ผู้ใช้เลือก Vercel + Neon PostgreSQL + Vercel Blob Private แล้ว ไม่ต้องทำตามคู่มือนี้ ไม่ต้องสร้าง Apps Script API, Sheets หรือ Drive สำหรับสถาปัตยกรรมใหม่ ไฟล์นี้เก็บไว้เป็นข้อมูลอ้างอิงระหว่างย้ายระบบเท่านั้น ดูแผนปัจจุบันที่ [POSTGRES_MIGRATION_PLAN.md](./POSTGRES_MIGRATION_PLAN.md)
+
 # Nobi Topup — Vercel + Google Apps Script / Sheets / Drive
 
 สถานะเอกสาร: คู่มือสถาปัตยกรรมและการตั้งค่าล่วงหน้า **ยังไม่ใช่คำสั่ง Deploy หรือเปิดใช้ระบบจริง**
