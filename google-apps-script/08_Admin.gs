@@ -48,7 +48,11 @@ function adminSlipData(token, orderId, ipAddress) {
   const admin = requireAdmin_(token);
   const order = repositoryGetById_('orders', orderId);
   if (!order || !order.slip_file_id) throw new Error('ไม่พบสลิป');
+  const slipFolderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_DRIVE_FOLDER_ID') || '').trim();
+  if (!slipFolderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์สลิปส่วนตัว');
   const file = DriveApp.getFileById(String(order.slip_file_id));
+  assertDriveFileInPrivateFolder_(file, slipFolderId);
+  if (file.getSharingAccess && file.getSharingAccess() !== DriveApp.Access.PRIVATE) throw new Error('DRIVE_FILE_NOT_PRIVATE');
   const blob = file.getBlob();
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -276,7 +280,7 @@ function adminStoreMedia(token, media, ipAddress) {
   }
   const bytes = Utilities.base64Decode(String(media.base64).replace(/^data:[^,]+,/, ''));
   if (!bytes.length || bytes.length > NOBI.MAX_SLIP_BYTES || !validImageSignature_(bytes, mimeType)) {
-    throw new Error('ไฟล์ภาพไม่ถูกต้องหรือมีขนาดเกิน 5 MB');
+    throw new Error('ไฟล์ภาพไม่ถูกต้องหรือมีขนาดเกิน 3 MB');
   }
   const folderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_MEDIA_FOLDER_ID') || '').trim();
   if (!folderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์ Drive ส่วนตัวสำหรับรูปภาพ');
@@ -308,6 +312,19 @@ function adminStoreMedia(token, media, ipAddress) {
   return {ok:true, file_id:file.getId(), url:'/api/public/media/' + file.getId()};
 }
 
+function assertDriveFileInPrivateFolder_(file, folderId) {
+  const expected = String(folderId || '').trim();
+  if (!expected || !file || typeof file.getParents !== 'function') throw new Error('DRIVE_FOLDER_INVALID');
+  const parents = file.getParents();
+  let found = false;
+  while (parents.hasNext()) {
+    const parent = parents.next();
+    if (String(parent.getId()) === expected) found = true;
+  }
+  if (!found) throw new Error('DRIVE_FILE_OUTSIDE_PRIVATE_FOLDER');
+  return true;
+}
+
 function publicMediaData(fileId) {
   const id = String(fileId || '').trim();
   if (!id) throw new Error('ไม่พบรูปภาพ');
@@ -317,7 +334,10 @@ function publicMediaData(fileId) {
     return truth_(item.active) && String(item.image_file_id) === id;
   });
   if (!referenced) throw new Error('ไม่พบรูปภาพ');
+  const mediaFolderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_MEDIA_FOLDER_ID') || '').trim();
+  if (!mediaFolderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์รูปภาพส่วนตัว');
   const file = DriveApp.getFileById(id);
+  assertDriveFileInPrivateFolder_(file, mediaFolderId);
   if (file.getSharingAccess && file.getSharingAccess() !== DriveApp.Access.PRIVATE) {
     throw new Error('DRIVE_FILE_NOT_PRIVATE');
   }
