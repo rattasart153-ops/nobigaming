@@ -1,4 +1,4 @@
-/** Order lifecycle backed by Schema v1, with idempotent checkout and coupon reservations. */
+/** Order lifecycle backed by the versioned Sheets schema, with idempotent checkout and coupon reservations. */
 
 const NOBI_PAYMENT_WINDOW_MS = 15 * 60 * 1000;
 
