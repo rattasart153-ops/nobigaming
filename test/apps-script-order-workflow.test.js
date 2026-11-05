@@ -238,3 +238,32 @@ test('slip upload fails closed when the configured Drive folder is shared',()=>{
   assert.equal(files.length,0);
   assert.equal(data.orders[0].slip_submitted_at,'');
 });
+
+
+test('checkout derives Member ID from the verified session and rejects caller-supplied identity',()=>{
+  const {context,data}=makeOrderHarness();
+  data.members.push({member_id:'member-1',status:'Active'});
+  const result=context.createOrder({
+    request_key:'request-key-00000007',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-123',server_id:'',coupon_code:'',
+    member_token:'valid-member-token',member_id:'attacker-controlled-id'
+  });
+  assert.equal(data.orders[0].member_id,'member-1');
+  assert.equal(result.ok,true);
+  assert.throws(()=>context.createOrder({
+    request_key:'request-key-00000008',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-123',server_id:'',coupon_code:'',
+    member_id:'member-1'
+  }),/ไม่อนุญาตให้กำหนดรหัสสมาชิก/);
+});
+
+test('checkout rejects an expired Member session instead of silently downgrading it to Guest',()=>{
+  const {context,data}=makeOrderHarness();
+  data.members.push({member_id:'member-1',status:'Active'});
+  assert.throws(()=>context.createOrder({
+    request_key:'request-key-00000009',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-123',server_id:'',coupon_code:'',
+    member_token:'expired-token'
+  }),/เซสชันสมาชิกหมดอายุ/);
+  assert.equal(data.orders.length,0);
+});
