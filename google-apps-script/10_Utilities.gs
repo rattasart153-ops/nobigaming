@@ -79,39 +79,116 @@ function pruneExpiredSessionsLocked_(nowMs) {
 }
 
 
-/** Shared cross-instance IP throttling stored in Script Properties using one-way IP hashes. */
-function consumeIpRateLimit_(propertyName, ipAddress, limit) {
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    const props = PropertiesService.getScriptProperties();
-    let state = {};
-    try { state = JSON.parse(props.getProperty(propertyName) || '{}'); } catch (ignored) { state = {}; }
-    const now = Date.now();
-    const windowMs = 15 * 60 * 1000;
-    Object.keys(state).forEach(function(key) {
-      if (!state[key] || now - Number(state[key].started_at || 0) >= windowMs) delete state[key];
-    });
-    const ipHash = sha256_(String(ipAddress || 'unknown')).slice(0, 32);
-    const bucket = state[ipHash] || {started_at:now,count:0};
-    if (Number(bucket.count || 0) >= limit) throw new Error('RATE_LIMITED');
-    bucket.count = Number(bucket.count || 0) + 1;
-    state[ipHash] = bucket;
-    const keys = Object.keys(state);
-    if (keys.length > 80) {
-      keys.sort(function(a,b) { return Number(state[a].started_at || 0) - Number(state[b].started_at || 0); });
-      keys.slice(0, keys.length - 80).forEach(function(key) { delete state[key]; });
+/** HMAC-hash bucket identities; never persist raw IP addresses or login identifiers. */
+function rateLimitBucketHash_(scope, identity) {
+  const secret = String(PropertiesService.getScriptProperties().getProperty('NOBI_GATEWAY_SECRET') || '');
+  if (secret.length < 32) throw new Error('GATEWAY_NOT_CONFIGURED');
+  const signature = Utilities.computeHmacSha256Signature(
+    String(scope) + ':' + String(identity),
+    secret,
+    Utilities.Charset.UTF_8
+  );
+  return signature.map(function(byte) {
+    return ('0' + ((byte + 256) % 256).toString(16)).slice(-2);
+  }).join('');
+}
+
+/** Caller must hold ScriptLock. Uses a fixed 15-minute window in the shared Sheets ledger. */
+function consumeRateLimitBucketLocked_(scope, identity, limit, nowMs) {
+  const now = Number(nowMs) || Date.now();
+  const nowIso = new Date(now).toISOString();
+  const bucketHash = rateLimitBucketHash_(scope, identity);
+  const existing = repositoryGetById_('security_rate_limits', bucketHash);
+  const windowMs = 15 * 60 * 1000;
+  let record;
+
+  if (!existing) {
+    record = {
+      bucket_key_hash:bucketHash,
+      window_start:nowIso,
+      attempt_count:1,
+      blocked_until:Number(limit) <= 1 ? new Date(now + windowMs).toISOString() : '',
+      updated_at:nowIso
+    };
+    repositoryInsertLocked_('security_rate_limits', record);
+  } else {
+    const blockedUntil = Date.parse(existing.blocked_until || '');
+    if (Number.isFinite(blockedUntil) && blockedUntil > now) throw new Error('RATE_LIMITED');
+    const windowStart = Date.parse(existing.window_start || '');
+    if (!Number.isFinite(windowStart) || now - windowStart >= windowMs) {
+      record = {window_start:nowIso,attempt_count:1,blocked_until:'',updated_at:nowIso};
+    } else {
+      const count = Number(existing.attempt_count || 0);
+      if (count >= Number(limit)) {
+        repositoryUpdateLocked_('security_rate_limits', bucketHash, {
+          blocked_until:new Date(now + windowMs).toISOString(),
+          updated_at:nowIso
+        });
+        throw new Error('RATE_LIMITED');
+      }
+      record = {
+        attempt_count:count + 1,
+        blocked_until:count + 1 >= Number(limit) ? new Date(now + windowMs).toISOString() : existing.blocked_until,
+        updated_at:nowIso
+      };
     }
-    props.setProperty(propertyName, JSON.stringify(state));
-  } finally {
-    lock.releaseLock();
+    repositoryUpdateLocked_('security_rate_limits', bucketHash, record);
+  }
+
+  const rows = repositoryRows_('security_rate_limits');
+  if (rows.length > 1000) {
+    const cutoff = now - 24 * 60 * 60 * 1000;
+    rows.filter(function(row) {
+      return Date.parse(row.updated_at || '') < cutoff;
+    }).slice(0, 250).forEach(function(row) {
+      repositoryDeleteLocked_('security_rate_limits', row.bucket_key_hash);
+    });
+  }
+  if (rows.length > 5000) throw new Error('RATE_LIMIT_STORE_FULL');
+}
+
+/** Caller must hold ScriptLock. */
+function assertRateLimitBucketNotBlockedLocked_(scope, identity, nowMs) {
+  const hash = rateLimitBucketHash_(scope, identity);
+  const record = repositoryGetById_('security_rate_limits', hash);
+  const blockedUntil = record ? Date.parse(record.blocked_until || '') : NaN;
+  if (Number.isFinite(blockedUntil) && blockedUntil > (Number(nowMs) || Date.now())) {
+    throw new Error('RATE_LIMITED');
   }
 }
 
+/** Caller must hold ScriptLock. */
+function incrementAccountFailureLocked_(scope, identity, nowMs) {
+  consumeRateLimitBucketLocked_(scope, identity, 5, nowMs);
+}
+
+/** Caller must hold ScriptLock. */
+function resetAccountFailureLocked_(scope, identity) {
+  const hash = rateLimitBucketHash_(scope, identity);
+  repositoryDeleteLocked_('security_rate_limits', hash);
+}
+
 function consumeAuthIpAttempt_(ipAddress) {
-  consumeIpRateLimit_('NOBI_AUTH_IP_RATE_STATE', ipAddress, 30);
+  const ip = String(ipAddress || '').trim();
+  if (!ip) throw new Error('UNTRUSTED_SOURCE_IP');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try { consumeRateLimitBucketLocked_('AUTH_IP', ip, 10, Date.now()); }
+  finally { lock.releaseLock(); }
 }
 
 function consumeRegistrationIpAttempt_(ipAddress) {
-  consumeIpRateLimit_('NOBI_REG_IP_RATE_STATE', ipAddress, 5);
+  const ip = String(ipAddress || '').trim();
+  if (!ip) throw new Error('UNTRUSTED_SOURCE_IP');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try { consumeRateLimitBucketLocked_('REGISTER_IP', ip, 5, Date.now()); }
+  finally { lock.releaseLock(); }
+}
+
+function assertAccountNotBlocked_(scope, identity) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try { assertRateLimitBucketNotBlockedLocked_(scope, identity, Date.now()); }
+  finally { lock.releaseLock(); }
 }
