@@ -103,7 +103,7 @@ The following steps are **not authorized yet**. First complete the runtime and i
 - Orders without a coupon, or with a coupon without an expiry date, have a 15-minute payment deadline.
 - Orders using an expiring coupon may submit payment/slip through 23:59:59.999 Asia/Bangkok on the expiry date.
 - The server enforces deadlines during creation, slip submission and Admin completion. Admin may review a timely submitted slip after the deadline.
-- Identical order retries use the same Idempotency-Key and cannot create duplicate orders/reservations/files. Slip-upload retries return the already accepted submission without creating another Drive file.
+- Identical order retries use the same Idempotency-Key and cannot create duplicate orders/reservations/files. After slip acceptance, a scoped receipt cookie remains for five minutes; a retry returns the existing submission without creating another Drive file, then clears the cookie.
 
 ## Verification required before live use
 
