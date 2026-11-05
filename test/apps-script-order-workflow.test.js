@@ -451,6 +451,7 @@ test('TRANSITION recovery retries redemption, order and journal-finalization wri
 test('TRANSITION recovery remains pending and fail-closed when its referenced redemption is missing', () => {
   const {context,data}=makeOrderHarness();
   data.orders.push({order_id:'order-missing-redemption',coupon_id:'coupon-missing',status:'Pending'});
+  data.coupon_redemptions.push({redemption_id:'redemption-other-id',order_id:'order-missing-redemption',coupon_id:'coupon-missing',state:'Reserved'});
   const journal=context.createOrderRecoveryJournalLocked_({
     order_id:'order-missing-redemption',operation:'TRANSITION',
     order_patch:{status:'Rejected',rejected_at:'2026-11-05T04:30:00.000Z',status_reason:'ADMIN_REJECTED',updated_at:'2026-11-05T04:30:00.000Z'},
@@ -509,9 +510,10 @@ test('replayed same-key checkout requests preserve one order in the single-threa
 test('TRANSITION recovery refuses to mutate a coupon redemption belonging to another order',()=>{
   const {context,data}=makeOrderHarness();
   data.orders.push({order_id:'order-expected',coupon_id:'coupon-1',status:'Pending'});
-  data.coupon_redemptions.push({
-    redemption_id:'redemption-wrong-order',order_id:'order-other',coupon_id:'coupon-1',state:'Reserved'
-  });
+  data.coupon_redemptions.push(
+    {redemption_id:'redemption-expected',order_id:'order-expected',coupon_id:'coupon-1',state:'Reserved'},
+    {redemption_id:'redemption-wrong-order',order_id:'order-other',coupon_id:'coupon-1',state:'Reserved'}
+  );
   const journal=context.createOrderRecoveryJournalLocked_({
     order_id:'order-expected',operation:'TRANSITION',
     order_patch:{status:'Rejected',rejected_at:'2026-11-05T04:40:00.000Z',status_reason:'ADMIN_REJECTED',updated_at:'2026-11-05T04:40:00.000Z'},
@@ -521,6 +523,7 @@ test('TRANSITION recovery refuses to mutate a coupon redemption belonging to ano
   });
   assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/RECOVERY_REDEMPTION_ORDER_MISMATCH/);
   assert.equal(context.repositoryGetById_('orders','order-expected').status,'Pending');
+  assert.equal(context.repositoryGetById_('coupon_redemptions','redemption-expected').state,'Reserved');
   assert.equal(context.repositoryGetById_('coupon_redemptions','redemption-wrong-order').state,'Reserved');
   assert.equal(data.order_recovery_journal[0].state,'Pending');
 });
