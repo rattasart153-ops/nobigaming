@@ -70,9 +70,9 @@ function createOrder(payload) {
     const deadlineMs = Number.isFinite(couponCutoff) ? couponCutoff : nowMs + NOBI_PAYMENT_WINDOW_MS;
     if (deadlineMs <= nowMs) throw new Error('คูปองหมดอายุแล้ว');
     const deadline = new Date(deadlineMs).toISOString();
-    const orderId = Utilities.getUuid();
     const orderNumber = 'NBI-' + Utilities.formatDate(now, 'Asia/Bangkok', 'yyyyMMddHHmmss') +
       '-' + Utilities.getUuid().slice(0, 6).toUpperCase();
+    const orderId = orderNumber;
     const checkoutToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
     const totalSatang = Math.max(0, subtotalSatang - discountSatang);
 
