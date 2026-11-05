@@ -43,9 +43,9 @@ function makeOrderHarness() {
       Access:{PRIVATE:'PRIVATE'}, Permission:{VIEW:'VIEW'},
       getFolderById:()=>({createFile:blob=>{
         const file={id:'drive-file-'+(files.length+1),blob,trashed:false,
-          getId(){return this.id;},setSharing(){},setTrashed(value){this.trashed=value;}};
+          getId(){return this.id;},getSharingAccess(){return 'PRIVATE';},setSharing(){},setTrashed(value){this.trashed=value;}};
         files.push(file); return file;
-      }})
+      },getSharingAccess:()=> 'PRIVATE'})
     },
     repositoryRows_:table=>data[table] || [],
     repositoryFindByField_:(table,field,value)=>(data[table]||[]).filter(row=>String(row[field])===String(value)),
