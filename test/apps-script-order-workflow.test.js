@@ -305,7 +305,7 @@ test('recovery journal idempotently finalizes Completed and Rejected order/coupo
   for(const status of ['Completed','Rejected']) {
     const id='order-'+status.toLowerCase();
     data.orders.push({
-      order_id:id,status:'Pending',slip_submitted_at:'2026-11-05T04:10:00.000Z',
+      order_id:id,coupon_id:'coupon-'+status.toLowerCase(),status:'Pending',slip_submitted_at:'2026-11-05T04:10:00.000Z',
       payment_expires_at:'2026-11-05T04:30:00.000Z',updated_at:now
     });
     data.coupon_redemptions.push({
@@ -417,7 +417,7 @@ test('TRANSITION recovery retries redemption, order and journal-finalization wri
     const {context,data}=makeOrderHarness();
     const now='2026-11-05T04:20:00.000Z';
     const orderId='order-transition-'+failedPoint;
-    data.orders.push({order_id:orderId,status:'Pending',updated_at:now});
+    data.orders.push({order_id:orderId,coupon_id:'coupon-'+failedPoint,status:'Pending',updated_at:now});
     data.coupon_redemptions.push({
       redemption_id:'redemption-'+failedPoint,order_id:orderId,state:'Reserved'
     });
@@ -450,7 +450,7 @@ test('TRANSITION recovery retries redemption, order and journal-finalization wri
 
 test('TRANSITION recovery remains pending and fail-closed when its referenced redemption is missing', () => {
   const {context,data}=makeOrderHarness();
-  data.orders.push({order_id:'order-missing-redemption',status:'Pending'});
+  data.orders.push({order_id:'order-missing-redemption',coupon_id:'coupon-missing',status:'Pending'});
   const journal=context.createOrderRecoveryJournalLocked_({
     order_id:'order-missing-redemption',operation:'TRANSITION',
     order_patch:{status:'Rejected',status_reason:'ADMIN_REJECTED'},
@@ -500,4 +500,24 @@ test('replayed checkout calls with the same idempotency key preserve one order',
   assert.equal(data.orders.length,1);
   assert.equal(data.idempotency_records.length,1);
   assert.equal(results.filter(result=>result.duplicate).length,2);
+});
+
+
+test('TRANSITION recovery refuses to mutate a coupon redemption belonging to another order',()=>{
+  const {context,data}=makeOrderHarness();
+  data.orders.push({order_id:'order-expected',coupon_id:'coupon-1',status:'Pending'});
+  data.coupon_redemptions.push({
+    redemption_id:'redemption-wrong-order',order_id:'order-other',coupon_id:'coupon-1',state:'Reserved'
+  });
+  const journal=context.createOrderRecoveryJournalLocked_({
+    order_id:'order-expected',operation:'TRANSITION',
+    order_patch:{status:'Rejected',status_reason:'ADMIN_REJECTED'},
+    redemption_id:'redemption-wrong-order',
+    redemption_patch:{state:'Released',released_at:'2026-11-05T04:40:00.000Z'},
+    created_at:'2026-11-05T04:40:00.000Z'
+  });
+  assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/RECOVERY_REDEMPTION_ORDER_MISMATCH/);
+  assert.equal(context.repositoryGetById_('orders','order-expected').status,'Pending');
+  assert.equal(context.repositoryGetById_('coupon_redemptions','redemption-wrong-order').state,'Reserved');
+  assert.equal(data.order_recovery_journal[0].state,'Pending');
 });
