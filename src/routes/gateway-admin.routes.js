@@ -179,6 +179,10 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
         converted.forEach(row => {
           const game = games.find(item => String(item.id) === String(row.game_id));
           row.game_name = game ? game.name : '';
+          if (table === 'coupons') {
+            const qualifyingGame = games.find(item => String(item.id) === String(row.member_spend_game_id));
+            row.member_spend_game_name = qualifyingGame ? qualifyingGame.name : '';
+          }
         });
       }
       return res.json(converted);
