@@ -417,7 +417,7 @@ test('TRANSITION recovery retries redemption, order and journal-finalization wri
     const {context,data}=makeOrderHarness();
     const now='2026-11-05T04:20:00.000Z';
     const orderId='order-transition-'+failedPoint;
-    data.orders.push({order_id:orderId,coupon_id:'coupon-'+failedPoint,status:'Pending',updated_at:now});
+    data.orders.push({order_id:orderId,coupon_id:'coupon-'+failedPoint,status:'Pending',slip_submitted_at:'2026-11-05T04:10:00.000Z',payment_expires_at:'2026-11-05T04:30:00.000Z',updated_at:now});
     data.coupon_redemptions.push({
       redemption_id:'redemption-'+failedPoint,order_id:orderId,coupon_id:'coupon-'+failedPoint,state:'Reserved'
     });
@@ -453,7 +453,7 @@ test('TRANSITION recovery remains pending and fail-closed when its referenced re
   data.orders.push({order_id:'order-missing-redemption',coupon_id:'coupon-missing',status:'Pending'});
   const journal=context.createOrderRecoveryJournalLocked_({
     order_id:'order-missing-redemption',operation:'TRANSITION',
-    order_patch:{status:'Rejected',status_reason:'ADMIN_REJECTED'},
+    order_patch:{status:'Rejected',rejected_at:'2026-11-05T04:30:00.000Z',status_reason:'ADMIN_REJECTED',updated_at:'2026-11-05T04:30:00.000Z'},
     redemption_id:'redemption-does-not-exist',
     redemption_patch:{state:'Released'},
     created_at:'2026-11-05T04:30:00.000Z'
@@ -514,7 +514,7 @@ test('TRANSITION recovery refuses to mutate a coupon redemption belonging to ano
   });
   const journal=context.createOrderRecoveryJournalLocked_({
     order_id:'order-expected',operation:'TRANSITION',
-    order_patch:{status:'Rejected',status_reason:'ADMIN_REJECTED'},
+    order_patch:{status:'Rejected',rejected_at:'2026-11-05T04:40:00.000Z',status_reason:'ADMIN_REJECTED',updated_at:'2026-11-05T04:40:00.000Z'},
     redemption_id:'redemption-wrong-order',
     redemption_patch:{state:'Released',released_at:'2026-11-05T04:40:00.000Z'},
     created_at:'2026-11-05T04:40:00.000Z'
@@ -522,5 +522,39 @@ test('TRANSITION recovery refuses to mutate a coupon redemption belonging to ano
   assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/RECOVERY_REDEMPTION_ORDER_MISMATCH/);
   assert.equal(context.repositoryGetById_('orders','order-expected').status,'Pending');
   assert.equal(context.repositoryGetById_('coupon_redemptions','redemption-wrong-order').state,'Reserved');
+  assert.equal(data.order_recovery_journal[0].state,'Pending');
+});
+
+
+test('CREATE recovery rejects a missing idempotency payload before inserting the order',()=>{
+  const {context,data}=makeOrderHarness();
+  const order={
+    order_id:'order-no-idem',order_number:'NBI-NO-IDEM',request_key:'request-key-no-idem-0001',
+    member_id:'',game_id:'game-1',package_id:'pack-1',player_id:'uid-no-idem',server_id:'',
+    coupon_id:'',subtotal_satang:10000,discount_satang:0,total_satang:10000,
+    slip_file_id:'',slip_mime_type:'',slip_size_bytes:0,slip_submitted_at:'',
+    checkout_token_hash:'expected-hash',status:'Pending',status_reason:'',
+    payment_expires_at:'2026-11-05T04:15:00.000Z',created_at:'2026-11-05T04:00:00.000Z',
+    updated_at:'2026-11-05T04:00:00.000Z',completed_at:'',rejected_at:''
+  };
+  const journal=context.createOrderRecoveryJournalLocked_({
+    order_id:order.order_id,operation:'CREATE',order_record:order,
+    created_at:order.created_at
+  });
+  assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/RECOVERY_IDEMPOTENCY_PAYLOAD_INVALID/);
+  assert.equal(data.orders.length,0);
+  assert.equal(data.order_recovery_journal[0].state,'Pending');
+});
+
+test('TRANSITION recovery rejects unsupported status and unexpected patch fields',()=>{
+  const {context,data}=makeOrderHarness();
+  data.orders.push({order_id:'order-invalid-transition',coupon_id:'',status:'Pending'});
+  const journal=context.createOrderRecoveryJournalLocked_({
+    order_id:'order-invalid-transition',operation:'TRANSITION',
+    order_patch:{status:'Cancelled',updated_at:'2026-11-05T04:40:00.000Z',admin_override:true},
+    created_at:'2026-11-05T04:40:00.000Z'
+  });
+  assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/RECOVERY_TRANSITION_PAYLOAD_INVALID/);
+  assert.equal(context.repositoryGetById_('orders','order-invalid-transition').status,'Pending');
   assert.equal(data.order_recovery_journal[0].state,'Pending');
 });
