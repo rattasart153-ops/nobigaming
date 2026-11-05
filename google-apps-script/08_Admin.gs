@@ -133,10 +133,15 @@ function adminUpsert(token, tableName, record) {
     if (NOBI.SHEETS[tableName].indexOf(field) === -1) throw new Error('ฟิลด์ไม่ถูกต้อง: ' + field);
     safe[field] = record[field];
   });
-  if ((tableName === 'packages' || tableName === 'promotions') && safe.image_url) {
-    const mediaMatch = String(safe.image_url).match(/^\/api\/public\/media\/([A-Za-z0-9_-]{10,100})$/);
-    if (mediaMatch) safe.image_file_id = mediaMatch[1];
-    else if (/drive\.google\.com|googleusercontent\.com/i.test(String(safe.image_url))) {
+  if ((tableName === 'packages' || tableName === 'promotions') &&
+      Object.prototype.hasOwnProperty.call(record, 'image_file_id')) {
+    throw new Error('ห้ามกำหนด image_file_id โดยตรง กรุณาใช้ URL รูปภาพที่อัปโหลดผ่านระบบ');
+  }
+  if (tableName === 'packages' || tableName === 'promotions') {
+    const imageUrl = String(safe.image_url || '').trim();
+    const mediaMatch = imageUrl.match(/^\/api\/public\/media\/([A-Za-z0-9_-]{10,100})$/);
+    safe.image_file_id = mediaMatch ? mediaMatch[1] : '';
+    if (/drive\.google\.com|googleusercontent\.com/i.test(imageUrl)) {
       throw new Error('ห้ามใช้ลิงก์ Google Drive โดยตรง ต้องใช้ URL ผ่านระบบสื่อส่วนตัว');
     }
   }
