@@ -24,13 +24,13 @@ function dispatchGatewayAction_(action, args) {
     case 'adminLogout': return adminLogout(args.token);
     case 'adminDashboard': return adminDashboard(args.token);
     case 'adminOrders': return adminOrders(args.token);
-    case 'adminSlipData': return adminSlipData(args.token, args.orderId);
-    case 'adminSetOrderStatus': return adminSetOrderStatus(args.token, args.orderId, args.status);
+    case 'adminSlipData': return adminSlipData(args.token, args.orderId, args.ipAddress);
+    case 'adminSetOrderStatus': return adminSetOrderStatus(args.token, args.orderId, args.status, args.ipAddress);
     case 'adminList': return adminList(args.token, args.tableName);
-    case 'adminUpsert': return adminUpsert(args.token, args.tableName, args.record);
-    case 'adminDelete': return adminDelete(args.token, args.tableName, args.id);
+    case 'adminUpsert': return adminUpsert(args.token, args.tableName, args.record, args.ipAddress);
+    case 'adminDelete': return adminDelete(args.token, args.tableName, args.id, args.ipAddress);
     case 'adminMemberLoginLogs': return adminMemberLoginLogs(args.token, args.memberId, args.limit);
-    case 'adminStoreMedia': return adminStoreMedia(args.token, args.media);
+    case 'adminStoreMedia': return adminStoreMedia(args.token, args.media, args.ipAddress);
     case 'publicMediaData': return publicMediaData(args.fileId);
     default: throw new Error('Action is not allowed');
   }
