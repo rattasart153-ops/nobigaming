@@ -292,11 +292,11 @@ test('recovery journal completes expiry after a transient coupon write failure',
   assert.throws(()=>context.expirePendingOrdersLocked_(fixedNow+16*60*1000),/SIMULATED_SHEETS_WRITE_FAILURE/);
   assert.equal(data.orders[0].status,'Pending');
   assert.equal(data.coupon_redemptions[0].state,'Reserved');
-  assert.equal(data.order_recovery_journal[0].state,'Pending');
+  assert.equal(data.order_recovery_journal.find(x=>x.order_id===created.order.order_id&&x.operation==='TRANSITION').state,'Pending');
   context.expirePendingOrdersLocked_(fixedNow+16*60*1000);
   assert.equal(data.orders[0].status,'Expired');
   assert.equal(data.coupon_redemptions[0].state,'Released');
-  assert.equal(data.order_recovery_journal[0].state,'Completed');
+  assert.equal(data.order_recovery_journal.find(x=>x.order_id===created.order.order_id&&x.operation==='TRANSITION').state,'Completed');
 });
 
 test('recovery journal idempotently finalizes Completed and Rejected order/coupon pairs', () => {
@@ -352,12 +352,12 @@ test('checkout retry recovers a partially persisted order before returning the o
   assert.throws(()=>context.createOrder(payload),/SIMULATED_REDEMPTION_INSERT_FAILURE/);
   assert.equal(data.orders.length,1);
   assert.equal(data.coupon_redemptions.length,0);
-  assert.equal(data.order_recovery_journal[0].state,'Pending');
+  assert.equal(data.order_recovery_journal.find(x=>x.order_id===created.order.order_id&&x.operation==='TRANSITION').state,'Pending');
 
   const retry=context.createOrder(payload);
   assert.equal(retry.duplicate,true);
   assert.equal(retry.order.order_id,data.orders[0].order_id);
   assert.equal(data.coupon_redemptions.length,1);
   assert.equal(data.idempotency_records.length,1);
-  assert.equal(data.order_recovery_journal[0].state,'Completed');
+  assert.equal(data.order_recovery_journal.find(x=>x.order_id===created.order.order_id&&x.operation==='TRANSITION').state,'Completed');
 });

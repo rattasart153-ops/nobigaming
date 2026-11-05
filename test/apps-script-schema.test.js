@@ -142,8 +142,8 @@ test('schema v1 database upgrades to v2 by adding the recovery journal without c
   assert.equal(upgraded.schemaVersion, 2);
   assert.deepEqual(games.rows[1], ['game-1','RoV','moba','Arena of Valor',true,1,'2026-11-04T00:00:00.000Z','2026-11-04T00:00:00.000Z']);
   assert.deepEqual(
-    spreadsheet.getSheetByName('order_recovery_journal').rows[0],
-    context.__nobi.SHEETS.order_recovery_journal
+    Array.from(spreadsheet.getSheetByName('order_recovery_journal').rows[0]),
+    Array.from(context.__nobi.SHEETS.order_recovery_journal)
   );
   assert.equal(metadata.rows[1][1], '2');
 });
