@@ -579,3 +579,26 @@ test('TRANSITION recovery rejects attempts to mutate immutable redemption fields
   assert.equal(data.coupon_redemptions[0].state,'Reserved');
   assert.equal(data.orders[0].status,'Pending');
 });
+
+
+test('recovery does not reopen a journal when finalization committed but the write response failed',()=>{
+  const {context,data}=makeOrderHarness();
+  data.orders.push({order_id:'order-uncertain-finalize',coupon_id:'',status:'Pending'});
+  const journal=context.createOrderRecoveryJournalLocked_({
+    order_id:'order-uncertain-finalize',operation:'TRANSITION',
+    order_patch:{status:'Rejected',rejected_at:'2026-11-05T04:40:00.000Z',status_reason:'ADMIN_REJECTED',updated_at:'2026-11-05T04:40:00.000Z'},
+    created_at:'2026-11-05T04:40:00.000Z'
+  });
+  const originalUpdate=context.repositoryUpdateLocked_;
+  context.repositoryUpdateLocked_=(table,id,patch)=>{
+    const result=originalUpdate(table,id,patch);
+    if(table==='order_recovery_journal'&&patch.state==='Completed') {
+      throw new Error('SIMULATED_RESPONSE_LOST_AFTER_COMMIT');
+    }
+    return result;
+  };
+  assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/SIMULATED_RESPONSE_LOST_AFTER_COMMIT/);
+  assert.equal(data.orders[0].status,'Rejected');
+  assert.equal(data.order_recovery_journal[0].state,'Completed');
+  assert.equal(data.order_recovery_journal[0].order_patch_json,'');
+});
