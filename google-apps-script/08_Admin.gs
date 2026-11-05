@@ -133,6 +133,13 @@ function adminUpsert(token, tableName, record) {
     if (NOBI.SHEETS[tableName].indexOf(field) === -1) throw new Error('ฟิลด์ไม่ถูกต้อง: ' + field);
     safe[field] = record[field];
   });
+  if ((tableName === 'packages' || tableName === 'promotions') && safe.image_url) {
+    const mediaMatch = String(safe.image_url).match(/^\\/api\\/public\\/media\\/([A-Za-z0-9_-]{10,100})$/);
+    if (mediaMatch) safe.image_file_id = mediaMatch[1];
+    else if (/drive\\.google\\.com|googleusercontent\\.com/i.test(String(safe.image_url))) {
+      throw new Error('ห้ามใช้ลิงก์ Google Drive โดยตรง ต้องใช้ URL ผ่านระบบสื่อส่วนตัว');
+    }
+  }
   validateRecord_(tableName, safe);
 
   const lock = LockService.getScriptLock();
@@ -215,4 +222,46 @@ function adminMemberLoginLogs(token, memberId, requestedLimit) {
   }).sort(function(a, b) {
     return String(b.created_at).localeCompare(String(a.created_at));
   }).slice(0, limit).map(clean_);
+}
+
+
+function adminStoreMedia(token, media) {
+  requireAdmin_(token);
+  media = media || {};
+  const mimeType = String(media.mimeType || '');
+  if (!media.base64 || !/^image\\/(png|jpeg|webp)$/.test(mimeType)) {
+    throw new Error('กรุณาแนบไฟล์ PNG/JPG/WebP');
+  }
+  const bytes = Utilities.base64Decode(String(media.base64).replace(/^data:[^,]+,/, ''));
+  if (!bytes.length || bytes.length > NOBI.MAX_SLIP_BYTES || !validImageSignature_(bytes, mimeType)) {
+    throw new Error('ไฟล์ภาพไม่ถูกต้องหรือมีขนาดเกิน 5 MB');
+  }
+  const folderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_MEDIA_FOLDER_ID') || '').trim();
+  if (!folderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์ Drive ส่วนตัวสำหรับรูปภาพ');
+  const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+  const file = DriveApp.getFolderById(folderId).createFile(
+    Utilities.newBlob(bytes, mimeType, 'nobi-media-' + Utilities.getUuid() + '.' + ext)
+  );
+  file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  return {ok:true, file_id:file.getId(), url:'/api/public/media/' + file.getId()};
+}
+
+function publicMediaData(fileId) {
+  const id = String(fileId || '').trim();
+  if (!id) throw new Error('ไม่พบรูปภาพ');
+  const referenced = repositoryRows_('packages').some(function(item) {
+    return truth_(item.active) && String(item.image_file_id) === id;
+  }) || repositoryRows_('promotions').some(function(item) {
+    return truth_(item.active) && String(item.image_file_id) === id;
+  });
+  if (!referenced) throw new Error('ไม่พบรูปภาพ');
+  const file = DriveApp.getFileById(id);
+  const blob = file.getBlob();
+  const mimeType = blob.getContentType();
+  if (!/^image\\/(png|jpeg|webp)$/.test(mimeType)) throw new Error('ชนิดไฟล์รูปภาพไม่รองรับ');
+  return {
+    name:file.getName(),
+    mimeType:mimeType,
+    base64:Utilities.base64Encode(blob.getBytes())
+  };
 }
