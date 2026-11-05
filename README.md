@@ -1,6 +1,6 @@
 # Nobi Topup — Full-Stack starter
 
-เว็บไซต์เติมเกมภาษาไทย พร้อมหน้าร้าน, ระบบคูปอง, QR PromptPay, การแนบสลิป, Admin Panel และ SQLite
+เว็บไซต์เติมเกมภาษาไทย พร้อมหน้าร้าน ระบบสมาชิก/คูปอง QR PromptPay การแนบสลิป และ Admin Panel โดย Branch นี้เตรียมสถาปัตยกรรม Vercel + Google Apps Script + Sheets + Drive แล้ว (SQLite เหลือไว้สำหรับ local development/characterization เท่านั้น)
 
 ## ความต้องการ
 - Node.js 20 ขึ้นไป
@@ -18,13 +18,17 @@
    ```
 6. API health check อยู่ที่ `http://localhost:3000/api/health`.
 
-**สถานะปัจจุบัน:** หน้า Storefront และ Admin ใน Branch นี้เชื่อมกับ Express REST API แล้ว (ไม่เรียก Google Apps Script RPC โดยตรง) โดย Checkout สร้าง Pending ก่อนและส่งสลิปผ่าน endpoint แยก ส่วน Admin ใช้ HttpOnly cookie และ endpoint ดูสลิปแบบ private; Checkout ใช้ HttpOnly cookie แบบจำกัด path และ Idempotency-Key ป้องกันคำขอซ้ำ อย่างไรก็ตาม Express ยังใช้ SQLite/ไฟล์ในเครื่องเป็นฐานชั่วคราว ยังไม่ได้เชื่อม Sheets/Drive และยังไม่พร้อม Deploy หรือรับเงินจริง
+**สถานะปัจจุบัน:** หน้า Storefront และ Admin เชื่อมกับ Express REST API แบบ same-origin แล้ว โดย Express production mode ใช้ signed Apps Script HTTP Gateway เพื่อให้ Apps Script จัดการ Business Logic, Google Sheets และ Google Drive; ระบบปฏิเสธการ fallback ไป SQLite เมื่อขาด gateway configuration ส่วน SQLite/ไฟล์ในเครื่องใช้เฉพาะ local development และ characterization เท่านั้น Source integration มี Node/GitHub Actions tests ครอบคลุม แต่ยังไม่ผ่านการทดสอบใน Apps Script runtime จริง, Google permissions, concurrency/quota และ browser/device end-to-end จึงยังไม่พร้อม Deploy หรือรับเงินจริง
 
-## Google Apps Script migration (in progress)
+## Google Apps Script + Sheets + Drive
 
-The zero-budget migration foundation is in `google-apps-script/`. Setup notes: [Google Apps Script setup guide](docs/GOOGLE_APPS_SCRIPT_SETUP.md).
+โค้ด Backend อยู่ใน `google-apps-script/` และเชื่อมผ่าน Signed HTTP Gateway จาก Express เท่านั้น ดูขั้นตอนและข้อจำกัดที่ [Google Apps Script setup guide](docs/GOOGLE_APPS_SCRIPT_SETUP.md) และ [Vercel + Google setup](docs/VERCEL_GOOGLE_SETUP.md)
 
-**Important:** the repository HTML pages currently target the Express REST API. The Apps Script RPC implementation remains a separate legacy path and is not the active frontend adapter. The signed version-1 Apps Script HTTP gateway and matching Node client are now present, with HMAC authentication, timestamp checks and a ScriptLock-protected nonce ledger. The client is not yet wired into Express. The Google Sheets repository adapter, private Drive media proxy, durable sessions/storage, approved member/coupon features, GAS runtime tests and full browser/device end-to-end tests are still incomplete. Do not use this for real customer payments.
+- Apps Script ใช้ Schema v1 repository สำหรับ Catalog, Coupon, Order, Admin และ Authentication
+- Sheets เก็บข้อมูลถาวร ส่วนสลิปและรูปภาพเก็บใน Drive แบบ Private
+- Vercel ส่งสลิปผ่าน Admin-authorized proxy และส่งรูปภาพหน้าร้านผ่าน reference-checked media proxy
+- ระบบสมาชิก Guest checkout, coupon eligibility/reservation, order deadline, idempotency, audit และ shared rate-limit ถูก implement ใน source แล้ว
+- GitHub Actions ตรวจ Node-side tests; ยังต้องทดสอบ Apps Script runtime จริง, PBKDF2/quota, concurrency, Drive permissions และ browser/device end-to-end ด้วยข้อมูลสังเคราะห์ก่อนใช้งานจริง
 
 ## การตั้งค่าบัญชีแอดมินและ Session
 - ต้องกำหนด `ADMIN_USERNAME`, `ADMIN_PASSWORD` และ `SESSION_SECRET` ในไฟล์ `.env` ก่อนเริ่มระบบทุกสภาพแวดล้อม
@@ -39,15 +43,15 @@ The zero-budget migration foundation is in `google-apps-script/`. Setup notes: [
 - คูปองแบบลดจำนวนเงินหรือเปอร์เซ็นต์, ยอดขั้นต่ำ, เกมที่ใช้ได้, วันหมดอายุ และจำนวนครั้ง
 - ระบบตรวจสอบและแนะนำคูปองที่ประหยัดที่สุดตามเกมและยอดที่เลือก
 - QR PromptPay ตามยอดสุทธิ เมื่อกำหนด `PROMPTPAY_ID`
-- สร้างออเดอร์พร้อม UID/Server ID และอัปโหลดสลิป PNG/JPG/WebP ขนาดไม่เกิน 5 MB
+- สร้างออเดอร์พร้อม UID/Server ID และอัปโหลดสลิป PNG/JPG/WebP ขนาดไม่เกิน 3 MB
 - Admin Panel สำหรับตรวจสอบสลิปและเปลี่ยนสถานะ Pending / Completed / Rejected พร้อม CRUD เกม แพ็กเกจ คูปอง และโปรโมชั่น
-- SQLite เก็บข้อมูลใน `data/nobitopup.sqlite`
+- SQLite (`data/nobitopup.sqlite`) ใช้เฉพาะ local development/characterization; Vercel production ต้องใช้ Apps Script + Sheets เท่านั้น
 
 ## ข้อควรทราบก่อนเปิดให้บริการจริง
 - ระบบตรวจสอบสลิปเป็นการตรวจด้วยคนผ่าน Admin Panel ไม่ได้ยืนยันการโอนจากธนาคารโดยอัตโนมัติ
 - ยังไม่ได้เชื่อม API ผู้ให้บริการเติมเกมเพื่อส่งคำสั่งเติมโดยอัตโนมัติ สถานะ Completed เป็นการอนุมัติของแอดมิน
 - ต้องตั้งค่า `PROMPTPAY_ID` ของร้านเองก่อนแสดง QR สำหรับรับเงิน อย่าใช้ QR หรือบัญชีของบุคคลอื่น
-- ไฟล์สลิปที่รับผ่าน Express จะถูกเก็บแยกจากไฟล์ภาพสาธารณะ และอ่านได้ผ่าน Admin-only API เท่านั้น
+- ใน production สลิปและรูปภาพถูกเก็บใน Drive แบบ Private; สลิปอ่านได้ผ่าน Admin-only API เท่านั้น ส่วนรูปหน้าร้านอ่านผ่าน media proxy หลังตรวจว่ามีการอ้างอิงจาก package/promotion ที่ active
 - ใช้ HTTPS, สำรองฐานข้อมูลและไฟล์สลิป, จำกัดสิทธิ์เข้าถึงเซิร์ฟเวอร์ และตรวจสอบนโยบายเก็บข้อมูลส่วนบุคคล
 - Admin API ตรวจสอบ Origin สำหรับคำขอเปลี่ยนแปลงข้อมูล และส่ง Content Security Policy แบบ Report-Only เพื่อเก็บผลก่อนบังคับใช้
 
