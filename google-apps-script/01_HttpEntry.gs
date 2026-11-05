@@ -10,6 +10,12 @@ function dispatchGatewayAction_(action, args) {
     case 'createOrder': return createOrder(args);
     case 'submitOrderSlip': return submitOrderSlip(args);
     case 'adminLogin': return adminLogin(args.username, args.password, args.ipAddress);
+    case 'memberRegister': return memberRegister(args.fullName, args.loginId, args.password, args.ipAddress);
+    case 'memberLogin': return memberLogin(args.loginId, args.password, args.ipAddress, args.userAgent);
+    case 'memberMe':
+      try { return memberMe(args.token); }
+      catch (error) { return {authenticated:false}; }
+    case 'memberLogout': return memberLogout(args.token);
     case 'adminMe':
       try { requireAdmin_(args.token); return {authenticated:true}; }
       catch (error) { return {authenticated:false}; }
@@ -21,6 +27,7 @@ function dispatchGatewayAction_(action, args) {
     case 'adminList': return adminList(args.token, args.tableName);
     case 'adminUpsert': return adminUpsert(args.token, args.tableName, args.record);
     case 'adminDelete': return adminDelete(args.token, args.tableName, args.id);
+    case 'adminMemberLoginLogs': return adminMemberLoginLogs(args.token, args.memberId, args.limit);
     default: throw new Error('Action is not allowed');
   }
 }
