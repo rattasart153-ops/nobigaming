@@ -212,10 +212,18 @@ function submitOrderSlip(payload) {
     const folderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_DRIVE_FOLDER_ID') || '').trim();
     if (!folderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์ Drive ส่วนตัว');
     const ext = slip.mimeType === 'image/png' ? 'png' : slip.mimeType === 'image/webp' ? 'webp' : 'jpg';
-    file = DriveApp.getFolderById(folderId).createFile(
+    const folder = DriveApp.getFolderById(folderId);
+    if (folder.getSharingAccess && folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+      throw new Error('DRIVE_FOLDER_NOT_PRIVATE');
+    }
+    file = folder.createFile(
       Utilities.newBlob(bytes, slip.mimeType, String(order.order_number) + '.' + ext)
     );
     file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
+    if (file.getSharingAccess && file.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+      file.setTrashed(true);
+      throw new Error('DRIVE_FILE_NOT_PRIVATE');
+    }
     const now = new Date().toISOString();
     repositoryUpdateLocked_('orders', orderId, {
       slip_file_id:file.getId(),
