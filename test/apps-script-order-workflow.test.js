@@ -309,7 +309,7 @@ test('recovery journal idempotently finalizes Completed and Rejected order/coupo
       payment_expires_at:'2026-11-05T04:30:00.000Z',updated_at:now
     });
     data.coupon_redemptions.push({
-      redemption_id:'redemption-'+status.toLowerCase(),order_id:id,state:'Reserved'
+      redemption_id:'redemption-'+status.toLowerCase(),order_id:id,coupon_id:'coupon-'+status.toLowerCase(),state:'Reserved'
     });
     const patch=status==='Completed'
       ? {status:'Completed',completed_at:now,updated_at:now}
@@ -419,7 +419,7 @@ test('TRANSITION recovery retries redemption, order and journal-finalization wri
     const orderId='order-transition-'+failedPoint;
     data.orders.push({order_id:orderId,coupon_id:'coupon-'+failedPoint,status:'Pending',updated_at:now});
     data.coupon_redemptions.push({
-      redemption_id:'redemption-'+failedPoint,order_id:orderId,state:'Reserved'
+      redemption_id:'redemption-'+failedPoint,order_id:orderId,coupon_id:'coupon-'+failedPoint,state:'Reserved'
     });
     const journal=context.createOrderRecoveryJournalLocked_({
       order_id:orderId,operation:'TRANSITION',
