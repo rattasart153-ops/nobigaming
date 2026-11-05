@@ -1,58 +1,83 @@
-# Nobi Topup — API Contract
+# Nobi Topup — Implemented API Contract
 
-Status: proposed contract. Verify exact legacy payloads and response shapes before replacing existing frontend calls.
+Status: browser-facing routes and the signed Vercel-to-Apps-Script contract are implemented in source on `vercel-drive-setup`. This is not production approval. Apps Script runtime, quota, concurrency and browser/device integration tests remain release gates.
 
 ## Browser-facing Vercel routes
 
 Public:
-- GET /api/health
-- GET /api/public/catalog
-- GET /api/public/promotions
-- GET /api/public/coupons/suggestions
-- POST /api/public/coupons/validate
-- GET /api/public/payment-info
-- POST /api/public/orders (creates Pending checkout; slip upload is optional at creation)
-- POST /api/public/orders/:orderId/slip (multipart upload; order-scoped HttpOnly checkout cookie required)
-
-Authentication:
-- POST /api/admin/login
-- POST /api/admin/logout
-- GET /api/admin/me
-- POST /api/member/register
-- POST /api/member/login
-- POST /api/member/logout
-- GET /api/member/me
+- `GET /api/health`
+- `GET /api/public/catalog`
+- `GET /api/public/promotions`
+- `GET /api/public/coupons/suggestions`
+- `POST /api/public/coupons/validate`
+- `GET /api/public/payment-info`
+- `POST /api/public/orders` — creates a Pending order; a slip may be included in the same multipart request or uploaded later.
+- `POST /api/public/orders/:orderId/slip` — requires the order-scoped HttpOnly checkout cookie.
+- `GET /api/public/media/:fileId` — serves only active catalog/promotion images referenced in Sheets and stored in the configured private Drive media folder.
 
 Member:
-- GET /api/member/orders
-- GET /api/member/orders/:orderId
+- `POST /api/member/register`
+- `POST /api/member/login`
+- `POST /api/member/logout`
+- `GET /api/member/me`
+- `POST /api/member/password`
 
 Admin:
-- GET /api/admin/dashboard
-- GET /api/admin/orders
-- PATCH /api/admin/orders/:orderId/status
-- GET /api/admin/orders/:orderId/slip
-- GET /api/admin/members
-- GET /api/admin/members/:memberId/ip-history
-- CRUD routes for games, packages, coupons and promotions under /api/admin/*
+- `POST /api/admin/login`
+- `POST /api/admin/logout`
+- `GET /api/admin/me`
+- `POST /api/admin/password`
+- `GET /api/admin/dashboard`
+- `GET /api/admin/orders`
+- `PATCH /api/admin/orders/:orderId/status`
+- `GET /api/admin/orders/:orderId/slip`
+- `GET /api/admin/members`
+- `PATCH /api/admin/members/:memberId/status`
+- `GET /api/admin/member-login-logs`
+- `GET|POST|PUT|DELETE /api/admin/games`
+- `GET|POST|PUT|DELETE /api/admin/packages`
+- `GET|POST|PUT|DELETE /api/admin/coupons`
+- `GET|POST|PUT|DELETE /api/admin/promotions`
+- `POST /api/admin/upload` — Admin-only private Drive image upload.
 
-Member identity is derived from the verified session, never from a browser-supplied member ID. IP history and private slip routes require Admin authorization and audit logging.
+There are no Member order-history endpoints in the current API. Do not promise or call them until implemented and tested.
 
-## Browser request rules
-- JSON uses application/json.
-- Upload uses multipart/form-data; browser must not set the multipart boundary manually.
-- Mutations require CSRF/origin protection appropriate to same-site cookie authentication.
-- Auth cookies are HttpOnly and never returned in JSON.
-- Admin and Member cookies are separate.
-- Order creation requires an `Idempotency-Key` generated once per checkout attempt and reused only for retries of the same payload. The server stores a SHA-256 key digest, a canonical request fingerprint and the resulting order ID in the same immediate SQLite transaction as order creation. Concurrent requests using the same key serialize through that transaction and must return one shared order ID, never create duplicate coupon reservations. Reuse with the same fingerprint returns the original order and reissues the scoped checkout cookie only while the order is still Pending and has no submitted slip; reuse with a different fingerprint returns 409. Expired original attempts return 410. The browser may persist the non-secret key and order ID in sessionStorage, but never the checkout token.
-- Server derives identity, price, discount, totals and coupon eligibility.
-- Orders without a coupon, and orders using a coupon without an expiry date, have a 15-minute payment deadline. An order using a coupon with an expiry date may be paid and have its slip submitted until the exclusive cutoff at 00:00 Asia/Bangkok on the day after the coupon expiry date; do not impose an additional 15-minute cap. The coupon expiry date is inclusive. The server stores this immutable deadline as `payment_expires_at`. Order creation generates a one-time checkout token; store only its SHA-256 hash. Return the raw token only in an HttpOnly, SameSite=Strict cookie scoped to that order's slip-upload path, expiring at payment_expires_at. Never return the token in JSON or store it in browser storage. Slip submission uses the scoped cookie. After acceptance, shorten its expiry to five minutes so a client that missed the response can safely retry and receive an `already_submitted` result; the token cannot submit a second slip.
+## Browser request and cookie rules
+
+- Browser pages call same-origin Vercel routes only. Browser code must never call the Apps Script URL, `google.script.run`, Sheets or Drive directly.
+- JSON uses `application/json`; uploads use `multipart/form-data`. Do not set the multipart boundary manually.
+- Mutations pass same-origin checks. Cross-site Fetch Metadata and mismatched/missing Origin are rejected.
+- Admin and Member use separate HttpOnly cookies, Secure in production, SameSite=Strict. Session tokens are never returned in JSON or stored in browser storage.
+- Admin and Member sessions store only SHA-256 token hashes in Sheets; maximum lifetime is 8 hours and idle timeout is 30 minutes. Logout, password change, suspension and auth-version changes revoke existing sessions.
+- Order checkout uses a separate HttpOnly, SameSite=Strict cookie scoped to that order's slip endpoint and expiring at the server-provided payment deadline.
+
+## Order creation and slip lifecycle
+
+- Every checkout request supplies an `Idempotency-Key` of 16–128 characters. The server fingerprints the canonical order payload and stores the request key, payload hash and resulting order ID in Sheets for 90 days.
+- Repeating the same key with the same payload returns the same order. If the order is still Pending and has no slip, the server rotates and reissues the one-time checkout token in the scoped cookie. Reusing the key with a different payload returns a conflict.
+- The server derives package price, discount, totals, member identity and coupon eligibility from persisted records and the verified Member cookie. Client-supplied totals or member IDs are not authoritative.
+- Orders without a coupon, and orders using a coupon without an expiry date, have a 15-minute payment deadline.
+- Orders using an expiring coupon remain payable and eligible for slip submission through 23:59:59.999 Asia/Bangkok on the coupon expiry date. The stored deadline is the exclusive next-day 00:00 Asia/Bangkok cutoff. No additional 15-minute cap applies.
+- The server enforces the deadline synchronously when creating an order, submitting a slip and approving an order. A slip must be accepted before the deadline; Admin may review and complete it later.
+- Coupon capacity is Reserved when a Pending order is created, Consumed only when the order is Completed, and Released when the order is Rejected or expires. Sheets writes are serialized with ScriptLock; multi-row writes use compensating updates because Sheets has no SQL transaction.
+- Slip upload is limited to PNG/JPEG/WebP, fully decoded/re-encoded in the Vercel staging layer, and capped at 3 MB to stay below Vercel function payload limits. Apps Script independently checks size and file signature.
+- A repeated slip submission using the same valid checkout token returns the existing accepted submission and does not create a second Drive file. A successful upload clears the browser cookie.
+- Slips are stored in the configured private Drive slip folder. Admin retrieval requires a valid Admin session and checks the configured private folder and file privacy.
+
+## Coupon eligibility
+
+- `public`: Guest and Member, subject to other restrictions.
+- `member_only`: authenticated Active Member only.
+- `member_game_spend`: authenticated Active Member whose Completed, post-discount spend in the configured qualifying game reaches the threshold.
+- Optional UID allowlist and UID cumulative Completed spend in the selected checkout game are additional independent restrictions.
+- Pending, Rejected, Expired and Guest orders do not count toward Member or UID cumulative spend.
+- Usage limits count Reserved and Consumed redemptions. Eligibility is rechecked under the checkout ScriptLock before reservation.
 
 ## Vercel-to-Apps-Script request envelope
 
-The repository gateway currently implements protocol version 1 in `google-apps-script/13_HttpGateway.gs` and `src/clients/apps-script.client.js`.
+Implemented in `google-apps-script/13_HttpGateway.gs` and `src/clients/apps-script.client.js`.
 
-Signed JSON body fields:
+Signed JSON fields:
 - `version`: integer, currently 1
 - `timestamp`: Unix epoch milliseconds
 - `nonce`: cryptographically random base64url value, unique per transport attempt
@@ -60,47 +85,40 @@ Signed JSON body fields:
 - `args`: action-specific object
 - `signature`: lowercase hexadecimal HMAC-SHA256
 
-The signature covers the exact canonical JSON representation of `version,timestamp,nonce,action,args` in that order. The shared secret exists only in Vercel environment variable `APPS_SCRIPT_SHARED_SECRET` and Apps Script Script Property `NOBI_GATEWAY_SECRET`; it is never sent to the browser or committed. The GAS endpoint validates the secret, timestamp freshness (±5 minutes), signature, nonce replay and action allowlist before dispatch.
+The signature covers canonical JSON property order `version,timestamp,nonce,action,args`. The shared secret exists only in Vercel environment variable `APPS_SCRIPT_SHARED_SECRET` and Apps Script Script Property `NOBI_GATEWAY_SECRET`. GAS validates the secret, ±5-minute timestamp freshness, signature, nonce replay and fixed action allowlist before dispatch.
 
-The nonce ledger is the private `gateway_nonces` sheet created by `setupNobiDatabase()`. A ScriptLock serializes replay checks and inserts. This is an initial bounded-replay control, not a claim of unlimited throughput; monitor sheet growth and Apps Script quotas.
+The gateway returns a signed-protocol JSON envelope:
+- Success: `ok=true, version=1, result`
+- Failure: `ok=false, version=1, error.code, error.message`
 
-Apps Script Web App ContentService does not provide arbitrary HTTP status mapping. The gateway therefore returns a JSON envelope and the Vercel client must inspect `ok`, `version` and `error.code`; a transport-level HTTP 200 is not proof of application success.
+ContentService does not provide arbitrary HTTP status mapping; the Node client must inspect the JSON envelope. It follows only the expected Google-owned ContentService 302/303 redirect and never forwards the signed POST body to the redirect destination.
 
-## Response envelope
-Success fields: `ok=true, version=1, result`.
-Failure fields: `ok=false, version=1, error.code, error.message`.
+## Shared abuse controls
 
-Never expose stack traces, spreadsheet IDs, Drive IDs, password hashes, tokens or secret configuration.
+- Express has a process-local first-layer limiter; it is not treated as global protection across Vercel instances.
+- Apps Script enforces shared HMAC-keyed Sheets buckets: 10 combined Admin/Member login attempts per source IP per 15 minutes; 5 registrations per source IP per 15 minutes; and 5 failed password attempts per account per 15 minutes.
+- Raw IP addresses and login IDs are not stored in the rate-limit ledger. Member IP history and Admin audit logs are separate protected records with 90-day retention.
+- Apps Script requires a trusted source IP passed by the Vercel server; the browser cannot override it in JSON.
 
-## Current gateway action allowlist
+## Error mapping
 
-The gateway currently accepts this fixed transitional action allowlist and routes it through `dispatchGatewayAction_()` in `01_HttpEntry.gs`. These action names preserve the current server-side compatibility surface; they are not browser RPC and are not the final repository action contract:
-- `catalog`, `promotions`, `coupon`, `couponSuggestions`, `paymentInfo`, `createOrder`
-- `adminLogin`, `adminMe`, `adminLogout`, `adminDashboard`, `adminOrders`, `adminSlipData`, `adminSetOrderStatus`, `adminList`, `adminUpsert`, `adminDelete`
-
-This is a transport foundation, not the final business-action contract. The handlers still use the older Sheets schema and do not implement the approved Member, reservation, payment-deadline, or private-media proxy behavior. Do not expose the Web App or connect production routes until each action has a reviewed adapter, authorization boundary and contract test. The target action names above remain design intent, not an assertion that those handlers already exist.
-
-## HTTP status mapping
-- 200 successful read/update; 201 created.
-- 400 malformed or invalid request.
-- 401 missing, invalid or expired session.
-- 403 authenticated but insufficient permission.
-- 404 resource not found, without leaking protected resource existence.
-- 409 idempotency conflict, duplicate key or invalid status transition.
-- 410 checkout payment window expired; late slip submissions are rejected.
-- 413 upload too large; 415 unsupported or forged media.
-- 429 rate limit.
-- 502/503 Apps Script unavailable or dependency failure.
-- 500 unexpected internal error with request ID.
+The Node client maps known gateway errors to 401, 409, 410, 422, 429 or 503 as appropriate. Transport failures, invalid JSON, unsafe redirects and unknown gateway errors fail closed as 502. Apps Script stack traces, spreadsheet IDs, Drive IDs, hashes, tokens and secrets are not returned.
 
 ## Timeout and retry rules
-- Bound every Apps Script call timeout.
-- Retry only transient reads or mutations protected by a stable idempotency key.
-- Never retry order creation with a new key after an ambiguous timeout.
-- A Pending order with a slip submitted strictly before `payment_expires_at` may be marked Completed by Admin even after the payment deadline. If no slip was submitted before the deadline, set `status=Expired` with `status_reason=PAYMENT_TIMEOUT` and release its coupon reservation exactly once. Rejected orders also release Reserved coupon capacity. Consumed reservations remain counted. An idempotent expiry sweep processes abandoned Pending orders; order creation, slip submission and Admin status changes enforce the rules synchronously.
-- On ambiguous create-order result, query with the original key before allowing another checkout.
-- Preserve request_id across retry; generate a fresh nonce and signature timestamp for each transport attempt.
-- Only the expected Apps Script ContentService 302/303 redirect may be followed, and only after validating the destination as a Google-owned host; the signed POST body must never be forwarded to the redirect target. Any other redirect, HTML error page or malformed JSON is not success.
 
-## Compatibility gate
-Before migrating a frontend call: inventory exact payload/response; map it to this contract; adapt deliberately; test success, validation, unauthorized, timeout and malformed response; remove the old browser GAS bridge only after all callers pass.
+- Every Apps Script call has a bounded timeout (configured through `APPS_SCRIPT_TIMEOUT_MS`; default 30 seconds in the current Vercel environment config).
+- The client does not automatically retry mutations.
+- An ambiguous order-creation result must be retried only with the original Idempotency-Key and identical payload.
+- Each transport retry gets a fresh nonce, timestamp and signature; the order idempotency key remains stable.
+- Do not accept live orders until Apps Script runtime, quota, concurrent-write and browser/device tests pass.
+
+## Release gates
+
+- Import the complete `google-apps-script/` source into one Apps Script project and verify syntax/runtime compatibility.
+- Test signature failure, stale timestamp, replay, invalid action, missing schema and concurrent nonce claims.
+- Test concurrent coupon reservations, idempotent order retries, payment deadlines, slip upload retries and order status transitions.
+- Benchmark PBKDF2-SHA256 at 120,000 iterations and verify Apps Script execution time/quotas.
+- Verify private Drive folder/file permissions and media reference checks using synthetic files.
+- Run browser/device end-to-end tests against a synthetic Apps Script deployment.
+- Verify Vercel function duration and payload constraints before any live launch.
+- Do not initialize production Sheets, publish the Web App or deploy Vercel without separate explicit approval.
