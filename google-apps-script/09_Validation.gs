@@ -20,8 +20,8 @@ function validateRecord_(tableName, record) {
   });
 
   if (tableName === 'packages') {
-    if (!Number.isFinite(Number(record.amount)) || Number(record.amount) <= 0 ||
-        !Number.isFinite(Number(record.price_satang)) || Number(record.price_satang) < 0) {
+    if (!Number.isSafeInteger(Number(record.amount)) || Number(record.amount) <= 0 ||
+        !Number.isSafeInteger(Number(record.price_satang)) || Number(record.price_satang) < 0) {
       throw new Error('ข้อมูลแพ็กเกจไม่ถูกต้อง');
     }
   }
@@ -29,6 +29,7 @@ function validateRecord_(tableName, record) {
   if (tableName === 'coupons') {
     if (!['fixed', 'percent'].includes(String(record.discount_type)) ||
         !Number.isFinite(Number(record.discount_value)) || Number(record.discount_value) <= 0 ||
+        (record.discount_type === 'fixed' && !Number.isSafeInteger(Number(record.discount_value))) ||
         (record.discount_type === 'percent' && Number(record.discount_value) > 100)) {
       throw new Error('ข้อมูลส่วนลดไม่ถูกต้อง');
     }
@@ -36,7 +37,8 @@ function validateRecord_(tableName, record) {
       throw new Error('รูปแบบสิทธิ์คูปองไม่ถูกต้อง');
     }
     ['min_order_satang', 'member_min_game_spend_satang', 'min_player_spend_satang'].forEach(function(field) {
-      if (record[field] !== undefined && (!Number.isFinite(Number(record[field])) || Number(record[field]) < 0)) {
+      if (record[field] !== undefined &&
+          (!Number.isSafeInteger(Number(record[field])) || Number(record[field]) < 0)) {
         throw new Error('เงื่อนไขยอดใช้จ่ายไม่ถูกต้อง');
       }
     });
@@ -60,6 +62,15 @@ function validateRecord_(tableName, record) {
     const imageUrl = String(record.image_url);
     if (!/^\/api\/public\/media\/[A-Za-z0-9_-]{10,100}$/.test(imageUrl)) {
       throw new Error('รูปภาพต้องอัปโหลดผ่านระบบจัดเก็บส่วนตัวของ Google Drive');
+    }
+  }
+
+  if (tableName === 'promotions') {
+    const starts = record.starts_at ? Date.parse(record.starts_at) : NaN;
+    const ends = record.ends_at ? Date.parse(record.ends_at) : NaN;
+    if ((record.starts_at && !Number.isFinite(starts)) || (record.ends_at && !Number.isFinite(ends)) ||
+        (Number.isFinite(starts) && Number.isFinite(ends) && ends < starts)) {
+      throw new Error('ช่วงเวลาโปรโมชั่นไม่ถูกต้อง');
     }
   }
 
