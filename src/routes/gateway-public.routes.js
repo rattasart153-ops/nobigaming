@@ -216,8 +216,9 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
   router.get('/api/member/me', asyncRoute(async (req, res) => {
     const token = readCookie(req, MEMBER_COOKIE);
     if (!token) return res.json({authenticated:false});
-    try { return res.json(await client.call('memberMe', {token})); }
-    catch (_) { return res.json({authenticated:false}); }
+    const result = await client.call('memberMe', {token});
+    if (!result || !result.authenticated) gatewaySession.clearMemberCookie(res);
+    return res.json(result || {authenticated:false});
   }));
   router.post('/api/member/password', gatewaySession.requireMember, asyncRoute(async (req, res) => {
     const result = await client.call('memberChangePassword', {
