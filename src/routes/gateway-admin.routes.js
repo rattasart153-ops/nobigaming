@@ -233,7 +233,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
   }));
 
   router.post('/api/admin/upload', requireAdmin, upload.single('image'), validateImageFile, asyncRoute(async (req, res) => {
-    if (!req.file) return res.status(400).json({error:'กรุณาเลือกไฟล์ภาพ PNG/JPG/WebP ขนาดไม่เกิน 5 MB'});
+    if (!req.file) return res.status(400).json({error:'กรุณาเลือกไฟล์ภาพ PNG/JPG/WebP ขนาดไม่เกิน 3 MB'});
     try {
       const bytes = await fs.readFile(req.file.path);
       const result = await client.call('adminStoreMedia', {
