@@ -182,3 +182,31 @@ test('member-game coupon requires an authenticated member with completed spend i
   assert.equal(context.couponEligibility_(coupon,'game-1',10000,'uid-123','',fixedNow).valid,false);
   assert.equal(context.couponEligibility_(coupon,'game-1',10000,'uid-other','member-1',fixedNow).valid,false);
 });
+
+
+test('UID cumulative spend coupon is enforced per game using Completed orders only',()=>{
+  const {context,data,fixedNow}=makeOrderHarness();
+  data.orders.push(
+    {order_id:'uid-completed-1',member_id:'',player_id:'uid-123',game_id:'game-1',status:'Completed',total_satang:30000},
+    {order_id:'uid-pending',member_id:'',player_id:'uid-123',game_id:'game-1',status:'Pending',total_satang:50000},
+    {order_id:'uid-other-game',member_id:'',player_id:'uid-123',game_id:'game-2',status:'Completed',total_satang:50000}
+  );
+  const coupon={
+    coupon_id:'uid-spend',code_normalized:'UIDSAVE',code_display:'UIDSAVE',
+    discount_type:'fixed',discount_value:1000,access_type:'public',
+    game_id:'game-1',min_player_spend_satang:25000,
+    active:true,expires_at:'',min_order_satang:0,usage_limit:''
+  };
+  const eligible=context.couponEligibility_(coupon,'game-1',10000,'uid-123','',fixedNow);
+  assert.equal(eligible.valid,true);
+  coupon.min_player_spend_satang=40000;
+  const insufficient=context.couponEligibility_(coupon,'game-1',10000,'uid-123','',fixedNow);
+  assert.equal(insufficient.valid,false);
+  assert.match(insufficient.error,/ยอดเติมสะสม/);
+});
+
+test('coupon expiry rejects impossible calendar dates and remains inclusive through Bangkok day end',()=>{
+  const {context}=makeOrderHarness();
+  assert.ok(Number.isNaN(context.couponExpiryCutoff_('2026-02-31')));
+  assert.equal(context.couponExpiryCutoff_('2026-11-05'),Date.parse('2026-11-05T17:00:00.000Z'));
+});
