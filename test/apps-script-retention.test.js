@@ -24,7 +24,8 @@ class FakeSheet {
     const sheet=this;
     return {setValue(value){sheet.rows[row-1][column-1]=value;}};
   }
-  deleteRow(row) { this.rows.splice(row-1,1); }\n  deleteRows(start,count) { this.rows.splice(start-1,count); }
+  deleteRow(row) { this.rows.splice(row-1,1); }
+  deleteRows(start,count) { this.rows.splice(start-1,count); }
   records() {
     return this.rows.slice(1).map(row=>Object.fromEntries(headers[this.name].map((key,index)=>[key,row[index]])));
   }
