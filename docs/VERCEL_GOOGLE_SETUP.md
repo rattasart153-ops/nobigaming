@@ -31,7 +31,7 @@
 - Orders
 - Admin audit logs
 - Idempotency records
-- Gateway nonces และ system metadata
+- Gateway nonces, HMAC-keyed shared rate-limit buckets และ system metadata
 
 เงินที่เก็บใน Schema v1 ใช้หน่วยสตางค์ (ฟิลด์ที่ลงท้ายด้วย _satang) เพื่อหลีกเลี่ยงปัญหาทศนิยม
 
@@ -79,6 +79,7 @@
 - Admin และ Member sessions เก็บ token hash, อายุสูงสุด 8 ชั่วโมง, idle timeout 30 นาที และ revoke เมื่อ logout/เปลี่ยนรหัสผ่าน
 - Member Login ID เป็น ASCII English letters/digits 4–30 ตัว ไม่แยกตัวพิมพ์เล็ก/ใหญ่
 - Admin ดู Member login/IP history ได้; เก็บประวัติและ Admin audit logs 90 วัน
+- Shared login IP throttling ใช้ Sheets ledger ที่เก็บ HMAC bucket hash เท่านั้น: login 10 ครั้ง/15 นาที, registration 5 ครั้ง/15 นาที และ account failures 5 ครั้ง/15 นาที
 - รหัสผ่านใช้ PBKDF2-SHA256 120,000 iterations; ต้อง benchmark ใน Apps Script runtime จริงก่อนใช้งาน
 - สลิปและรูปภาพเก็บใน Drive แบบ Private และส่งผ่าน API proxy ที่ตรวจสิทธิ์
 
