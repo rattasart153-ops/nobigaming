@@ -176,6 +176,7 @@ function memberRegister(fullName, loginId, password, ipAddress) {
   if (!name || name.length > 100 || !/^[A-Za-z0-9]{4,30}$/.test(login) || pass.length < 10 || pass.length > 200) {
     throw new Error('กรุณากรอกชื่อ Login ID (ภาษาอังกฤษ/ตัวเลข 4-30 ตัว) และรหัสผ่านอย่างน้อย 10 ตัวอักษร');
   }
+  consumeRegistrationIpAttempt_(ipAddress);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
