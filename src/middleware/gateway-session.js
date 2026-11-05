@@ -26,39 +26,27 @@ function cookieOptions(req, expiresAt) {
 }
 
 function createGatewaySession(client) {
-  async function requireAdmin(req, res, next) {
-    try {
-      const token = readCookie(req, ADMIN_COOKIE);
-      if (!token) {
-        clearAdminCookie(res);
-        return res.status(401).json({error:'กรุณาเข้าสู่ระบบผู้ดูแล'});
-      }
-      const result = await client.call('adminMe', {token});
-      if (!result || !result.authenticated) {
-        clearAdminCookie(res);
-        return res.status(401).json({error:'เซสชันผู้ดูแลหมดอายุ'});
-      }
-      req.adminToken = token;
-      return next();
-    } catch (error) { return next(error); }
+  function requireAdmin(req, res, next) {
+    const token = readCookie(req, ADMIN_COOKIE);
+    if (!token) {
+      clearAdminCookie(res);
+      return res.status(401).json({error:'กรุณาเข้าสู่ระบบผู้ดูแล'});
+    }
+    // Do not spend a separate GAS request on adminMe here. The protected
+    // action below receives this token and performs authoritative validation.
+    req.adminToken = token;
+    return next();
   }
 
-  async function requireMember(req, res, next) {
-    try {
-      const token = readCookie(req, MEMBER_COOKIE);
-      if (!token) {
-        clearMemberCookie(res);
-        return res.status(401).json({error:'กรุณาเข้าสู่ระบบสมาชิก'});
-      }
-      const result = await client.call('memberMe', {token});
-      if (!result || !result.authenticated) {
-        clearMemberCookie(res);
-        return res.status(401).json({error:'เซสชันสมาชิกหมดอายุ'});
-      }
-      req.memberToken = token;
-      req.member = result.member;
-      return next();
-    } catch (error) { return next(error); }
+  function requireMember(req, res, next) {
+    const token = readCookie(req, MEMBER_COOKIE);
+    if (!token) {
+      clearMemberCookie(res);
+      return res.status(401).json({error:'กรุณาเข้าสู่ระบบสมาชิก'});
+    }
+    // Member-changing actions validate the token inside their GAS handler.
+    req.memberToken = token;
+    return next();
   }
 
   async function optionalMemberId(req) {

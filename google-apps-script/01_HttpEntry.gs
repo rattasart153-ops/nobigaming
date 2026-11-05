@@ -1,11 +1,24 @@
+/** Resolve an optional Member identity from a verified server-side session. */
+function gatewayOptionalMemberId_(token) {
+  if (!String(token || '')) return '';
+  try {
+    const member = requireMember_(token);
+    return String(member.member_id || '');
+  } catch (error) {
+    const message = String(error && error.message || '');
+    if (/セッション|ログイン|アカウント|ถูกระงับ|เพิกถอน|ไม่มีการใช้งาน/.test(message)) return '';
+    throw error;
+  }
+}
+
 /** HTTP-only action dispatcher. Browser clients use the Vercel REST API. */
 function dispatchGatewayAction_(action, args) {
   args = args || {};
   switch (String(action || '')) {
     case 'catalog': return publicCatalog();
     case 'promotions': return publicPromotions();
-    case 'coupon': return validateCoupon(args.code, args.gameId, args.subtotal, args.playerId, args.memberId);
-    case 'couponSuggestions': return couponSuggestions_(args.gameId, args.subtotal, args.playerId, args.memberId);
+    case 'coupon': return validateCoupon(args.code, args.gameId, args.subtotal, args.playerId, gatewayOptionalMemberId_(args.member_token));
+    case 'couponSuggestions': return couponSuggestions_(args.gameId, args.subtotal, args.playerId, gatewayOptionalMemberId_(args.member_token));
     case 'paymentInfo': return paymentInfo_(args.amount);
     case 'createOrder': return createOrder(args);
     case 'submitOrderSlip': return submitOrderSlip(args);

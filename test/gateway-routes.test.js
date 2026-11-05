@@ -48,7 +48,10 @@ test('Apps Script-backed public and Admin REST routes preserve the browser API c
         token:'admin-secret-token',expires_at:new Date(Date.now()+3600000).toISOString(),username:'Admin'
       };
       if (action === 'adminMe') return {authenticated:true};
-      if (action === 'adminDashboard') return {orders:3,pending:1,completed:2,revenue:50};
+      if (action === 'adminDashboard') {
+        assert.equal(args.token,'admin-secret-token');
+        return {orders:3,pending:1,completed:2,revenue:50};
+      }
       if (action === 'adminMemberLoginLogs') return [{ip_address:'203.0.113.10',login_result:'Success'}];
       if (action === 'adminLogout' || action === 'memberLogout') return {ok:true};
       throw new Error('Unexpected action: ' + action);
@@ -103,6 +106,16 @@ test('Apps Script-backed public and Admin REST routes preserve the browser API c
     assert.match(memberCookie, /^nobi_member_session=/);
     const memberMe = await fetch(base + '/api/member/me', {headers:{Cookie:memberCookie}});
     assert.equal((await memberMe.json()).authenticated, true);
+    const memberMeCallsBeforeCoupon = calls.filter(item => item.action === 'memberMe').length;
+    const memberCoupon = await fetch(base + '/api/public/coupons/validate', {
+      method:'POST', headers:{...origin,Cookie:memberCookie,'Content-Type':'application/json'},
+      body:JSON.stringify({code:'SAVE',gameId:'game-1',subtotal:100,playerId:'uid-1'})
+    });
+    assert.equal(memberCoupon.status,200);
+    const couponCall = calls.filter(item => item.action === 'coupon').at(-1);
+    assert.equal(couponCall.args.member_token,'member-secret-token');
+    assert.equal(calls.filter(item => item.action === 'memberMe').length,memberMeCallsBeforeCoupon,
+      'coupon validation must not issue a separate memberMe GAS request');
 
     const adminLogin = await fetch(base + '/api/admin/login', {
       method:'POST', headers:{...origin,'Content-Type':'application/json'},
@@ -123,6 +136,10 @@ test('Apps Script-backed public and Admin REST routes preserve the browser API c
     assert.ok(calls.some(item => item.action === 'coupon'));
     assert.ok(calls.some(item => item.action === 'adminMemberLoginLogs'));
     assert.ok(calls.some(item => item.action === 'memberMe'));
+    assert.equal(calls.filter(item => item.action === 'adminDashboard').length,1);
+    assert.equal(calls.filter(item => item.action === 'adminMemberLoginLogs').length,1);
+    assert.equal(calls.filter(item => item.action === 'adminMe').length,0,
+      'protected Admin actions must validate within their own GAS request, not a redundant preflight');
   } finally {
     await new Promise(resolve => server.close(resolve));
     fs.rmSync(root, {recursive:true, force:true});

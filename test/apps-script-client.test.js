@@ -182,6 +182,16 @@ test('GAS gateway rejects bad signatures, stale timestamps and unlisted actions 
   assert.equal(rows.length,1,'rejected requests must not consume nonce records');
 });
 
+test('GAS gateway HMAC binds action arguments and rejects tampering before nonce claim',()=>{
+  const {context,rows}=makeGatewayVerifier();
+  const envelope=signedGatewayEnvelope({nonce:'nonce-args-tamper-1234567890'});
+  envelope.args={admin:true,token:'forged'};
+  const result=context.verifyGatewayEnvelope_(envelope);
+  assert.equal(result.ok,false);
+  assert.equal(result.error.code,'INVALID_SIGNATURE');
+  assert.equal(rows.length,1,'tampered requests must not consume nonce records');
+});
+
 test('GAS gateway fails closed when the nonce ledger schema is missing and rejects replayed signed requests',()=>{
   const missing=makeGatewayVerifier({schemaAvailable:false});
   assert.throws(()=>missing.context.verifyGatewayEnvelope_(signedGatewayEnvelope({

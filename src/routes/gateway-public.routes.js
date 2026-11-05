@@ -39,15 +39,6 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
     });
   }
 
-  async function memberIdFromRequest(req) {
-    const token = readCookie(req, MEMBER_COOKIE);
-    if (!token) return '';
-    try {
-      const result = await client.call('memberMe', {token});
-      return result && result.authenticated && result.member ? String(result.member.member_id || '') : '';
-    } catch (_) { return ''; }
-  }
-
   router.get('/api/health', (req, res) => res.json({ok:true, service:'Nobi Topup API', storage:'google-apps-script'}));
   router.get('/api/public/catalog', asyncRoute(async (req, res) => {
     res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
@@ -58,12 +49,11 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
     res.json(await client.call('promotions'));
   }));
   router.get('/api/public/coupons/suggestions', asyncRoute(async (req, res) => {
-    const memberId = await memberIdFromRequest(req);
     const result = await client.call('couponSuggestions', {
       gameId:String(req.query.gameId || ''),
       subtotal:Number(req.query.subtotal || 0),
       playerId:String(req.query.playerId || ''),
-      memberId
+      member_token:readCookie(req, MEMBER_COOKIE)
     });
     res.set('Cache-Control', 'no-store');
     res.json(result);
@@ -73,10 +63,10 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
     if (!String(gameId || '') || !Number.isFinite(Number(subtotal)) || Number(subtotal) < 0) {
       return res.status(400).json({ok:false, message:'ข้อมูลยอดซื้อไม่ถูกต้อง'});
     }
-    const memberId = await memberIdFromRequest(req);
     const result = await client.call('coupon', {
       code:String(code || ''), gameId:String(gameId),
-      subtotal:Number(subtotal), playerId:String(playerId || ''), memberId
+      subtotal:Number(subtotal), playerId:String(playerId || ''),
+      member_token:readCookie(req, MEMBER_COOKIE)
     });
     res.set('Cache-Control', 'no-store');
     return res.status(result.valid ? 200 : 422).json({

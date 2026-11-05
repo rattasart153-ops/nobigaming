@@ -76,6 +76,33 @@ test('nonce ledger fails closed when too many fresh replay records accumulate',(
   assert.equal(sheet.rows.length,5001);
 });
 
+test('nonce claim holds ScriptLock across pruning, replay scan and append',()=>{
+  const sheet=new NonceSheet();
+  const context=makeContext(sheet);
+  let held=false,acquired=0,released=0;
+  context.LockService.getScriptLock=()=>({
+    waitLock(){assert.equal(held,false);held=true;acquired++;},
+    releaseLock(){assert.equal(held,true);held=false;released++;}
+  });
+  const originalGetLastRow=sheet.getLastRow.bind(sheet);
+  const originalGetRange=sheet.getRange.bind(sheet);
+  const originalAppend=sheet.appendRow.bind(sheet);
+  sheet.getLastRow=()=>{assert.equal(held,true);return originalGetLastRow();};
+  sheet.getRange=(...args)=>{
+    assert.equal(held,true);
+    const range=originalGetRange(...args);
+    return {
+      getValue(){assert.equal(held,true);return range.getValue();},
+      getValues(){assert.equal(held,true);return range.getValues();}
+    };
+  };
+  sheet.appendRow=row=>{assert.equal(held,true);return originalAppend(row);};
+  assert.equal(context.__claimNonce('nonce-lock-check-1234567890',Date.now()),true);
+  assert.equal(acquired,1);
+  assert.equal(released,1);
+  assert.equal(held,false);
+});
+
 test('corrupt nonce timestamps fail closed instead of dropping replay history',()=>{
   const sheet=new NonceSheet([['nonce_hash','created_at'],['hash','not-a-date']]);
   const context=makeContext(sheet);
