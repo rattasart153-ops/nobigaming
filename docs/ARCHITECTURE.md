@@ -83,7 +83,7 @@ Apps Script files share a global namespace; numeric prefixes are for human readi
 - Derive source IP from the Vercel proxy configuration; Apps Script rejects missing source IP and never trusts a client-supplied IP.
 - Admin-only IP history and slip views are audited.
 - Server calculates price, discount, totals and coupon eligibility from persisted records. Browser values are never authoritative.
-- Order creation requires an idempotency key. Repeating an identical request cannot create a second order or coupon reservation.
+- Order creation requires an idempotency key. Repeating an identical request cannot create a second order or coupon reservation. Slip submission also supports safe retries through a five-minute, order-scoped receipt cookie.
 - Payment deadline is enforced on order creation, slip submission and Admin completion.
 - A Pending order with a slip accepted before the deadline may be completed after the deadline. Without an accepted slip before the deadline, it expires and releases its Reserved coupon capacity.
 - Uploads accept PNG/JPEG/WebP only, are fully decoded/re-encoded in Vercel staging and capped at 3 MB; Apps Script independently checks signatures and size.
