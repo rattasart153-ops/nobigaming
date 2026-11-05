@@ -212,7 +212,7 @@ test('Apps Script PBKDF2-SHA256 helper matches the Node.js reference implementat
       Charset: { UTF_8: 'UTF-8' },
       newBlob: value => ({ getBytes: () => Array.from(Buffer.from(String(value), 'utf8')) }),
       computeHmacSha256Signature: (value, key) => Array.from(
-        crypto.createHmac('sha256', String(key)).update(Buffer.from(value.map(v => (v + 256) % 256))).digest()
+        crypto.createHmac('sha256', Buffer.from(key.map(v => (v + 256) % 256))).update(Buffer.from(value.map(v => (v + 256) % 256))).digest()
       ).map(v => v > 127 ? v - 256 : v),
       base64EncodeWebSafe: bytes => Buffer.from(bytes.map(v => (v + 256) % 256)).toString('base64url')
     }
