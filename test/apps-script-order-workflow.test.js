@@ -40,7 +40,7 @@ function makeOrderHarness() {
       newBlob:(bytes,mimeType,name)=>({bytes,mimeType,name})
     },
     DriveApp:{
-      Access:{PRIVATE:'PRIVATE'}, Permission:{NONE:'NONE'},
+      Access:{PRIVATE:'PRIVATE'}, Permission:{VIEW:'VIEW'},
       getFolderById:()=>({createFile:blob=>{
         const file={id:'drive-file-'+(files.length+1),blob,trashed:false,
           getId(){return this.id;},setSharing(){},setTrashed(value){this.trashed=value;}};
