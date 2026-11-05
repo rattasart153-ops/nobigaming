@@ -266,7 +266,8 @@ test('shared Sheets rate limits use keyed IP hashes and enforce fixed-window thr
     repositoryInsertLocked_:(table,record)=>{rows.push({...record});},
     repositoryUpdateLocked_:(table,id,patch)=>{const row=rows.find(item=>item.bucket_key_hash===id);Object.assign(row,patch);},
     repositoryDeleteLocked_:(table,id)=>{const i=rows.findIndex(item=>item.bucket_key_hash===id);if(i>=0)rows.splice(i,1);},
-    repositoryRows_:()=>rows
+    repositoryRows_:()=>rows,
+    repositorySheet_:()=>({getLastRow:()=>rows.length+1})
   };
   vm.runInNewContext(source + '\nglobalThis.__consumeAuthIpAttempt = consumeAuthIpAttempt_; globalThis.__consumeRegistrationIpAttempt = consumeRegistrationIpAttempt_; globalThis.__rateLimitHash = rateLimitBucketHash_;',context);
 
