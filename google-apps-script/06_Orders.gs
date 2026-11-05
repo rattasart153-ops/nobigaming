@@ -295,7 +295,18 @@ function applyOrderRecoveryJournalLocked_(journal) {
           requiredOrderFields.some(function(field) {
             return !Object.prototype.hasOwnProperty.call(orderRecord,field);
           }) || orderRecord.status !== 'Pending' || orderRecord.slip_submitted_at ||
-          !orderRecord.request_key || !orderRecord.checkout_token_hash) {
+          !/^[A-Za-z0-9._:-]{16,128}$/.test(String(orderRecord.request_key || '')) ||
+          !/^[a-f0-9]{64}$/i.test(String(orderRecord.checkout_token_hash || '')) ||
+          !Number.isFinite(Date.parse(orderRecord.created_at)) ||
+          !Number.isFinite(Date.parse(orderRecord.payment_expires_at)) ||
+          Date.parse(orderRecord.payment_expires_at) <= Date.parse(orderRecord.created_at) ||
+          !Number.isSafeInteger(Number(orderRecord.subtotal_satang)) ||
+          !Number.isSafeInteger(Number(orderRecord.discount_satang)) ||
+          !Number.isSafeInteger(Number(orderRecord.total_satang)) ||
+          Number(orderRecord.subtotal_satang) < 0 ||
+          Number(orderRecord.discount_satang) < 0 ||
+          Number(orderRecord.discount_satang) > Number(orderRecord.subtotal_satang) ||
+          Number(orderRecord.total_satang) !== Number(orderRecord.subtotal_satang) - Number(orderRecord.discount_satang)) {
         throw new Error('RECOVERY_ORDER_PAYLOAD_INVALID');
       }
 
@@ -308,6 +319,7 @@ function applyOrderRecoveryJournalLocked_(journal) {
           String(idem.resource_id) !== String(journal.order_id) || idem.state !== 'Completed' ||
           !/^[a-f0-9]{64}$/i.test(String(idem.payload_hash || '')) ||
           !Number.isFinite(Date.parse(idem.created_at)) ||
+          String(idem.created_at) !== String(orderRecord.created_at) ||
           !Number.isFinite(Date.parse(idem.expires_at)) ||
           Date.parse(idem.expires_at) <= Date.parse(idem.created_at)) {
         throw new Error('RECOVERY_IDEMPOTENCY_PAYLOAD_INVALID');
@@ -326,6 +338,12 @@ function applyOrderRecoveryJournalLocked_(journal) {
             }) ||
             String(redemptionRecord.order_id) !== String(journal.order_id) ||
             String(redemptionRecord.coupon_id) !== String(orderRecord.coupon_id) ||
+            String(redemptionRecord.member_id || '') !== String(orderRecord.member_id || '') ||
+            String(redemptionRecord.player_id) !== String(orderRecord.player_id) ||
+            String(redemptionRecord.game_id) !== String(orderRecord.game_id) ||
+            Number(redemptionRecord.discount_satang) !== Number(orderRecord.discount_satang) ||
+            String(redemptionRecord.reserved_at) !== String(orderRecord.created_at) ||
+            String(redemptionRecord.reserved_until) !== String(orderRecord.payment_expires_at) ||
             redemptionRecord.state !== 'Reserved' ||
             !Number.isFinite(Date.parse(redemptionRecord.reserved_at)) ||
             !Number.isFinite(Date.parse(redemptionRecord.reserved_until))) {
