@@ -36,7 +36,7 @@ Completed:
 Remaining:
 - [x] Remove fixed development Admin credentials and default Session Secret; require explicit configuration in every environment.
 - [x] Separate public media uploads from private order slips and add Admin-only slip retrieval.
-- [x] Fully decode and re-encode PNG/JPEG/WebP uploads; reject malformed/truncated images, MIME mismatches, animation, dimensions above 8,192 pixels per edge, more than 25 megapixels, and processed files above 5 MB.
+- [x] Fully decode and re-encode PNG/JPEG/WebP uploads; reject malformed/truncated images, MIME mismatches, animation, dimensions above 8,192 pixels per edge, more than 25 megapixels, and processed files above 3 MB.
 - [x] Require same-origin Origin headers for Admin mutations and reject cross-site Fetch Metadata.
 - [x] Enable CSP in Report-Only mode and verify the header.
 - [x] Extract security setup and environment configuration without changing existing runtime behavior.
@@ -66,7 +66,7 @@ Exit: existing API contracts are characterized, security changes are intentional
 - [x] Phase 1 final acceptance review completed: approved policies documented, final CI passed, and `main` remains unchanged. Phase 1 is closed for its stated Express-baseline scope. Phase 2 has been explicitly authorized and is in progress on vercel-drive-setup; no deployment is authorized.
 
 ## Phase 2 — Apps Script gateway and storage
-Progress: Schema v1 business handlers for Catalog, Coupon, Order, Admin and Authentication have been migrated to schema-aware repositories. Member registration/login/session/IP history, Admin sessions, password rotation, shared HMAC-keyed Sheets rate limits, coupon eligibility/reservations, order deadlines/idempotency/audit logs, private Drive slip/media storage and Vercel proxy routes are implemented in source. Express production mode now uses the signed Apps Script gateway and fails closed instead of falling back to SQLite. Node tests cover schema setup, PBKDF2 reference output, Vercel storage mode and gateway REST route contracts. Apps Script runtime, quota, concurrency and full browser/device verification remain open.
+Progress: Schema v1 business handlers for Catalog, Coupon, Order, Admin and Authentication have been migrated to schema-aware repositories. Member registration/login/session/IP history, Admin sessions, password rotation, shared HMAC-keyed Sheets rate limits, coupon eligibility/reservations, order deadlines/idempotency/audit logs, private Drive slip/media storage and Vercel proxy routes are implemented in source. Express production mode now uses the signed Apps Script gateway and fails closed instead of falling back to SQLite. Node tests cover schema setup, PBKDF2 reference output, Vercel storage mode, gateway REST route contracts, locked session validation, private Drive folder boundaries, coupon/UID spend rules, expiry boundaries, order idempotency and slip retry behavior. Recent hardening also closes session revocation races, restricts media/slip reads to configured private folders, rejects external catalog media, validates coupon dates/usage limits and makes accepted slip retries idempotent. Apps Script runtime, quota, concurrency and full browser/device verification remain open.
 - [x] Split legacy GAS business logic into focused files and replace the legacy `rpc()` entry with an explicit signed-HTTP action dispatcher; remove HtmlService/browser RPC assumptions.
 - [x] Add signed, version-1 HTTP request envelope and fixed legacy action allowlist (`13_HttpGateway.gs`).
 - [x] Add HMAC-SHA256 verification, timestamp freshness check and nonce replay ledger guarded by ScriptLock.
@@ -92,7 +92,7 @@ The migrated GAS modules pass Node syntax/structure checks and PBKDF2 is verifie
 
 ## Phase 4 — Storefront workflows (source implementation complete; runtime verification pending)
 - [x] Catalog and promotions from Sheets Schema v1.
-- [x] Coupon suggestions/validation for Guest, Member, UID allowlist, game restrictions and cumulative Member spend per game.
+- [x] Coupon suggestions/validation for Guest, Member, UID allowlist, game restrictions, cumulative Member spend per game and cumulative UID spend per game.
 - [x] Guest and Member checkout with server-side package pricing and eligibility.
 - [x] Enforce 15 minutes for orders without coupons or coupons without expiry; coupon orders with an expiry date remain payable through that date (Asia/Bangkok), with synchronous deadline checks.
 - [x] Idempotent order creation and private Drive slip upload.
