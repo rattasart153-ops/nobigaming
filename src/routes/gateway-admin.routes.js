@@ -127,8 +127,9 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
   router.get('/api/admin/me', asyncRoute(async (req, res) => {
     const token = readCookie(req, ADMIN_COOKIE);
     if (!token) return res.json({authenticated:false});
-    try { return res.json(await client.call('adminMe', {token})); }
-    catch (_) { return res.json({authenticated:false}); }
+    const result = await client.call('adminMe', {token});
+    if (!result || !result.authenticated) gatewaySession.clearAdminCookie(res);
+    return res.json(result || {authenticated:false});
   }));
   router.post('/api/admin/password', gatewaySession.requireAdmin, asyncRoute(async (req, res) => {
     const result = await client.call('adminChangePassword', {
