@@ -280,11 +280,19 @@ function adminStoreMedia(token, media, ipAddress) {
   }
   const folderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_MEDIA_FOLDER_ID') || '').trim();
   if (!folderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์ Drive ส่วนตัวสำหรับรูปภาพ');
+  const folder = DriveApp.getFolderById(folderId);
+  if (folder.getSharingAccess && folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+    throw new Error('DRIVE_FOLDER_NOT_PRIVATE');
+  }
   const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-  const file = DriveApp.getFolderById(folderId).createFile(
+  const file = folder.createFile(
     Utilities.newBlob(bytes, mimeType, 'nobi-media-' + Utilities.getUuid() + '.' + ext)
   );
   file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  if (file.getSharingAccess && file.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+    file.setTrashed(true);
+    throw new Error('DRIVE_FILE_NOT_PRIVATE');
+  }
   const now = new Date().toISOString();
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -310,6 +318,9 @@ function publicMediaData(fileId) {
   });
   if (!referenced) throw new Error('ไม่พบรูปภาพ');
   const file = DriveApp.getFileById(id);
+  if (file.getSharingAccess && file.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+    throw new Error('DRIVE_FILE_NOT_PRIVATE');
+  }
   const blob = file.getBlob();
   const mimeType = blob.getContentType();
   if (!/^image\/(png|jpeg|webp)$/.test(mimeType)) throw new Error('ชนิดไฟล์รูปภาพไม่รองรับ');
