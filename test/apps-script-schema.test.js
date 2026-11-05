@@ -341,3 +341,23 @@ test('default catalog seed preserves an existing custom package catalog',()=>{
   assert.equal(packages.getLastRow()-1,1);
   assert.equal(games.getLastRow()-1,10);
 });
+
+
+test('schema v2 database upgrades to v3 while preserving recovery journal and business rows',()=>{
+  const spreadsheet=new FakeSpreadsheet();
+  const {context}=loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  const games=spreadsheet.getSheetByName('games');
+  games.appendRow(['game-v2','Legacy v2 Game','moba','Preserve me',true,1,'2026-11-05T00:00:00.000Z','2026-11-05T00:00:00.000Z']);
+  const journal=spreadsheet.getSheetByName('order_recovery_journal');
+  journal.appendRow(['journal-v2','order-v2','CREATE','','','','','','','Pending',2,'RECOVERY_RETRY','2026-11-05T00:00:00.000Z','2026-11-05T00:01:00.000Z']);
+  const metadata=spreadsheet.getSheetByName('system_metadata');
+  metadata.rows[1][1]='2';
+
+  const upgraded=context.__setupNobiDatabase();
+  assert.equal(upgraded.ok,true);
+  assert.equal(upgraded.schemaVersion,3);
+  assert.deepEqual(games.rows[1],['game-v2','Legacy v2 Game','moba','Preserve me',true,1,'2026-11-05T00:00:00.000Z','2026-11-05T00:00:00.000Z']);
+  assert.deepEqual(journal.rows[1],['journal-v2','order-v2','CREATE','','','','','','','Pending',2,'RECOVERY_RETRY','2026-11-05T00:00:00.000Z','2026-11-05T00:01:00.000Z']);
+  assert.equal(metadata.rows[1][1],'3');
+});
