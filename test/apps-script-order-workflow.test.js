@@ -48,6 +48,7 @@ function makeOrderHarness() {
         files.push(file); return file;
       },getSharingAccess:()=> folderAccess})
     },
+    checkoutTokenForOrder_:(orderId,requestKey)=>'derived-checkout-token.'+orderId+'.'+requestKey,
     requireMemberLocked_:token=>{
       if(token!=='valid-member-token') throw new Error('เซสชันสมาชิกหมดอายุ');
       const member=data.members.find(row=>row.member_id==='member-1'&&row.status==='Active');
@@ -130,7 +131,7 @@ test('checkout idempotency returns the same order and rejects a changed payload'
   assert.equal(replay.duplicate,true);
   assert.equal(replay.order.order_id,first.order.order_id);
   assert.ok(replay.checkout_token);
-  assert.notEqual(replay.checkout_token,first.checkout_token);
+  assert.equal(replay.checkout_token,first.checkout_token);
   assert.throws(()=>context.createOrder({...payload,player_id:'uid-different'}),/IDEMPOTENCY_CONFLICT/);
 });
 
