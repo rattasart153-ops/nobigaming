@@ -20,9 +20,12 @@ class FakeSheet {
     const sheet=this;
     return {getValues(){return sheet.rows.map(row=>row.slice());}};
   }
-  getRange(row,column) {
+  getRange(row,column,rowCount=1,columnCount=1) {
     const sheet=this;
-    return {setValue(value){sheet.rows[row-1][column-1]=value;}};
+    return {
+      setValue(value){sheet.rows[row-1][column-1]=value;},
+      setValues(matrix){matrix.forEach((values,r)=>values.forEach((value,c)=>{sheet.rows[row+r-1][column+c-1]=value;}));}
+    };
   }
   deleteRow(row) { this.rows.splice(row-1,1); }
   deleteRows(start,count) { this.rows.splice(start-1,count); }
@@ -63,6 +66,8 @@ function makeRetentionHarness() {
   };
   const triggers=[];
   let triggerCreates=0;
+  let lockAcquisitions=0;
+  let lockReleases=0;
   const context={
     Date,
     NOBI:{LOG_RETENTION_DAYS:90,SHEETS:{
@@ -72,7 +77,7 @@ function makeRetentionHarness() {
       member_login_logs:['log_id','ip_address','created_at'],
       admin_audit_logs:['audit_id','ip_address','created_at']
     }},
-    LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
+    LockService:{getScriptLock:()=>({waitLock(){lockAcquisitions++;},releaseLock(){lockReleases++;}})},
     repositorySheet_:name=>sheets[name],
     ScriptApp:{
       getProjectTriggers:()=>triggers.slice(),
@@ -92,7 +97,7 @@ function makeRetentionHarness() {
   };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'..','google-apps-script','14_Retention.gs'),'utf8'),context);
-  return {context,sheets,triggers,get triggerCreates(){return triggerCreates;},now,cutoff};
+  return {context,sheets,triggers,get triggerCreates(){return triggerCreates;},get lockAcquisitions(){return lockAcquisitions;},get lockReleases(){return lockReleases;},now,cutoff};
 }
 
 test('90-day cleanup clears aged member and session IP fields and removes expired IP-history rows',()=>{
@@ -130,8 +135,8 @@ test('retention cleanup acquires the shared ScriptLock before touching IP-bearin
   assert.equal(released,true);
 });
 
-test('retention trigger setup is idempotent and creates a Bangkok daily trigger only when missing',()=>{
-  const {context,triggers}=makeRetentionHarness();
+test('retention trigger setup is idempotent, lock-protected and creates a Bangkok daily trigger only when missing',()=>{
+  const {context,triggers,get lockAcquisitions, get lockReleases}=makeRetentionHarness();
   const first=context.ensureNobiRetentionTrigger();
   assert.equal(first.created,true);
   assert.equal(triggers.length,1);
@@ -141,6 +146,8 @@ test('retention trigger setup is idempotent and creates a Bangkok daily trigger 
   const second=context.ensureNobiRetentionTrigger();
   assert.equal(second.created,false);
   assert.equal(triggers.length,1);
+  assert.equal(lockAcquisitions,2);
+  assert.equal(lockReleases,2);
 });
 
 test('retention trigger setup removes duplicates without creating another trigger',()=>{
