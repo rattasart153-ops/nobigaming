@@ -63,7 +63,7 @@
 |---|---|
 | APPS_SCRIPT_URL | URL Web App ของ Apps Script ที่ลงท้ายด้วย /exec |
 | APPS_SCRIPT_SHARED_SECRET | ค่าเดียวกับ NOBI_GATEWAY_SECRET |
-| APPS_SCRIPT_TIMEOUT_MS | ค่าเริ่มต้น 12000 ms |
+| APPS_SCRIPT_TIMEOUT_MS | ค่าเริ่มต้น 30000 ms |
 | PROMPTPAY_ID | PromptPay ID เฉพาะเมื่อได้รับอนุญาตให้ทดสอบการชำระเงินจริง |
 
 ใน Vercel/production ห้ามใช้ SQLite, local session store หรือ local uploads เป็นแหล่งข้อมูลถาวร หากไม่มี Apps Script configuration ระบบจะหยุดทำงานแบบ fail-closed
