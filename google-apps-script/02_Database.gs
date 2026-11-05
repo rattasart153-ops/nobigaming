@@ -109,9 +109,40 @@ function rows_(name) {
   });
 }
 
+function databaseAssertSchema_(name) {
+  const headers = NOBI.SHEETS[name];
+  if (!headers) throw new Error('DATABASE_TABLE_NOT_ALLOWED: ' + name);
+  const sh = sheet_(name);
+  if (!databaseHeadersMatch_(databaseHeaders_(sh), headers)) {
+    throw new Error('DATABASE_SCHEMA_MISMATCH: ' + name);
+  }
+  return { sheet: sh, headers: headers };
+}
+
+function databaseAssertRecordFields_(name, record, allowPrimaryKey) {
+  const schema = NOBI.SHEETS[name];
+  if (!schema || !record || typeof record !== 'object' || Array.isArray(record)) {
+    throw new Error('DATABASE_INVALID_RECORD');
+  }
+  Object.keys(record).forEach(function(field) {
+    if (schema.indexOf(field) === -1) {
+      throw new Error('DATABASE_FIELD_NOT_ALLOWED: ' + name + '.' + field);
+    }
+    if (!allowPrimaryKey && field === schema[0]) {
+      throw new Error('DATABASE_PRIMARY_KEY_IMMUTABLE: ' + name + '.' + field);
+    }
+  });
+  return schema;
+}
+
 function append_(name, record) {
-  const sh=sheet_(name), headers=NOBI.SHEETS[name];
-  sh.appendRow(headers.map(h=>record[h]===undefined ? '' : record[h]));
+  const checked = databaseAssertSchema_(name);
+  const headers = databaseAssertRecordFields_(name, record, true);
+  const primaryKey = String(record[headers[0]] || '').trim();
+  if (!primaryKey) throw new Error('DATABASE_PRIMARY_KEY_REQUIRED: ' + name);
+  checked.sheet.appendRow(headers.map(function(field) {
+    return record[field] === undefined || record[field] === null ? '' : record[field];
+  }));
 }
 
 function deleteById_(name,id) {
@@ -121,9 +152,18 @@ function deleteById_(name,id) {
 }
 
 function updateById_(name,id,patch) {
-  const sh=sheet_(name), values=sh.getDataRange().getValues(), headers=values[0], idIndex=0;
-  for(let i=1;i<values.length;i++) if(String(values[i][idIndex])===String(id)) {
-    Object.keys(patch).forEach(k=>{const col=headers.indexOf(k);if(col>=0)sh.getRange(i+1,col+1).setValue(patch[k]);});
+  const checked = databaseAssertSchema_(name);
+  const headers = databaseAssertRecordFields_(name, patch, false);
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) throw new Error('DATABASE_PRIMARY_KEY_REQUIRED: ' + name);
+  const values = checked.sheet.getDataRange().getValues();
+  const idIndex = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][idIndex]) !== normalizedId) continue;
+    Object.keys(patch).forEach(function(field) {
+      const column = headers.indexOf(field);
+      checked.sheet.getRange(i + 1, column + 1).setValue(patch[field] === undefined || patch[field] === null ? '' : patch[field]);
+    });
     return true;
   }
   throw new Error('ไม่พบรายการที่ต้องการแก้ไข');
