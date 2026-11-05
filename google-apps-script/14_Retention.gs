@@ -38,16 +38,20 @@ function clearMemberIpFieldByDate_(ipField, timestampField, cutoffMs) {
   const ipIndex = headers.indexOf(ipField);
   const timestampIndex = headers.indexOf(timestampField);
   if (ipIndex < 0 || timestampIndex < 0) throw new Error('RETENTION_SCHEMA_INVALID: members');
+  if (values.length <= 1) return 0;
+  const output = values.slice(1).map(function(row) { return [row[ipIndex] || '']; });
   let cleared = 0;
   for (let row = 1; row < values.length; row++) {
     const ip = String(values[row][ipIndex] || '');
     if (!ip) continue;
     const timestamp = Date.parse(String(values[row][timestampIndex] || ''));
     if (!Number.isFinite(timestamp) || timestamp <= cutoffMs) {
-      sheet.getRange(row + 1, ipIndex + 1).setValue('');
+      output[row - 1][0] = '';
       cleared++;
     }
   }
+  // One Sheets write per column avoids one remote service call per member/session.
+  if (cleared) sheet.getRange(2, ipIndex + 1, output.length, 1).setValues(output);
   return cleared;
 }
 
@@ -58,16 +62,19 @@ function clearSessionIpFieldByDate_(tableName, cutoffMs) {
   const ipIndex = headers.indexOf('created_ip');
   const timestampIndex = headers.indexOf('created_at');
   if (ipIndex < 0 || timestampIndex < 0) throw new Error('RETENTION_SCHEMA_INVALID: ' + tableName);
+  if (values.length <= 1) return 0;
+  const output = values.slice(1).map(function(row) { return [row[ipIndex] || '']; });
   let cleared = 0;
   for (let row = 1; row < values.length; row++) {
     const ip = String(values[row][ipIndex] || '');
     if (!ip) continue;
     const timestamp = Date.parse(String(values[row][timestampIndex] || ''));
     if (!Number.isFinite(timestamp) || timestamp <= cutoffMs) {
-      sheet.getRange(row + 1, ipIndex + 1).setValue('');
+      output[row - 1][0] = '';
       cleared++;
     }
   }
+  if (cleared) sheet.getRange(2, ipIndex + 1, output.length, 1).setValues(output);
   return cleared;
 }
 
@@ -113,22 +120,28 @@ function deleteExpiredRetentionRows_(tableName, cutoffMs) {
  * This function must be run manually by an authorized project owner.
  */
 function ensureNobiRetentionTrigger() {
-  const handler = 'runNobiRetentionCleanup';
-  const existing = ScriptApp.getProjectTriggers().filter(function(trigger) {
-    return trigger.getHandlerFunction() === handler;
-  });
-  if (existing.length === 1) {
-    return {ok:true, created:false, duplicates_removed:0, message:'Retention trigger already exists.'};
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const handler = 'runNobiRetentionCleanup';
+    const existing = ScriptApp.getProjectTriggers().filter(function(trigger) {
+      return trigger.getHandlerFunction() === handler;
+    });
+    if (existing.length === 1) {
+      return {ok:true, created:false, duplicates_removed:0, message:'Retention trigger already exists.'};
+    }
+    if (existing.length > 1) {
+      existing.slice(1).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+      return {ok:true, created:false, duplicates_removed:existing.length - 1, message:'Duplicate retention triggers removed.'};
+    }
+    ScriptApp.newTrigger(handler)
+      .timeBased()
+      .everyDays(1)
+      .atHour(3)
+      .inTimezone('Asia/Bangkok')
+      .create();
+    return {ok:true, created:true, duplicates_removed:0, message:'Daily retention trigger created for approximately 03:00 Asia/Bangkok.'};
+  } finally {
+    lock.releaseLock();
   }
-  if (existing.length > 1) {
-    existing.slice(1).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
-    return {ok:true, created:false, duplicates_removed:existing.length - 1, message:'Duplicate retention triggers removed.'};
-  }
-  ScriptApp.newTrigger(handler)
-    .timeBased()
-    .everyDays(1)
-    .atHour(3)
-    .inTimezone('Asia/Bangkok')
-    .create();
-  return {ok:true, created:true, duplicates_removed:0, message:'Daily retention trigger created for approximately 03:00 Asia/Bangkok.'};
 }
