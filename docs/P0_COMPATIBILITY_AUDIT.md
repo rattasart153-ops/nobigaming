@@ -106,6 +106,8 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 
 > **Coupon-rule clarification from prior approved decisions:** UID cumulative spend is based on Completed orders matching the same game and player UID, including Guest orders. The separate Member-game-spend threshold counts only Completed orders for that authenticated Member. Do not add a `member_id` requirement to UID spend; that would change the approved legacy UID rule. Existing test `UID cumulative spend coupon is enforced per game using Completed orders only` intentionally uses a Guest order.
 
+| P0-12 | Critical | Pure HtmlService + `google.script.run` does not expose a trusted client remote IP to the server-side function. The documented Web App event object exposes request parameters/body metadata, not a remote-IP field; `google.script.run` invokes named server functions asynchronously without forwarding a trusted network address. | Hard compatibility blocker: preserve the approved Admin-only Member IP-history requirement. Do not substitute a client-supplied IP and call it verified. A trusted IP-observing server/proxy would be needed, which may conflict with strict Zero Cost and the approved no-new-service boundary. Stop before P1 until a compliant method is approved. |
+
 ## 5. Business invariants that must not change
 
 - Guest checkout remains enabled.
@@ -120,6 +122,23 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 - Admin-only member IP history; retain 90 days then delete or irreversibly anonymize.
 - Slips and media remain Private; slips are Admin-only; manual slip review only.
 - No live payment credentials, real customer data or real orders in development tests.
+
+
+## 5A. HtmlService security and platform constraints
+
+Static source review confirms:
+
+- Neither frontend currently calls `google.script.run`; both use `fetch()`. Their existing REST cookie/session behavior cannot be copied unchanged into HtmlService.
+- Storefront `sessionStorage` currently holds checkout retry/idempotency state, not Admin or Member authentication tokens.
+- Admin relies on same-origin HttpOnly cookie sessions and does not persist an Admin bearer token in browser storage.
+- Both HTML pages contain inline scripts/styles and dynamic `innerHTML` rendering. Existing escaping and server-side validation must be re-reviewed after migration; CSP enforcement and HtmlService sandbox compatibility remain open.
+- The storefront submits slips and Admin media through multipart REST endpoints today. The GAS gateway converts file bytes to base64; the new RPC path must have explicit size limits and sequential/bounded calls.
+- `google.script.run` is asynchronous, has legal-type restrictions for parameters/returns, and allows at most 10 concurrent calls. The frontend adapter must serialize dependent mutations, use success/failure handlers, and never rely on call execution order. See [Google's google.script.run reference](https://developers.google.com/apps-script/guides/html/reference/run) and [server communication guide](https://developers.google.com/apps-script/guides/html/communication).
+- Apps Script Web App `doGet(e)` event documentation lists query parameters, path information and POST metadata; it does not document a remote client IP field. See [Google's Web Apps request event documentation](https://developers.google.com/apps-script/guides/web#request_parameters).
+
+### IP-history feasibility blocker
+
+The approved policy requires Admin to view Member IP history. The former Express gateway obtained the address from the server request and forwarded it to GAS. In a direct HtmlService + `google.script.run` deployment, the GAS function does not receive the original browser network connection metadata. A value fetched or submitted by browser JavaScript is client-controlled and must not be treated as verified IP history. No code change can safely preserve this requirement without an IP-observing server/proxy. Because adding a service or a potentially billable intermediary is outside the approved Zero Cost boundary, P1 must not proceed by silently weakening or relabelling this requirement.
 
 ## 6. File-by-file port matrix
 
@@ -187,10 +206,13 @@ The browser facade must expose named, typed operations rather than accepting arb
 - [x] Mark the PostgreSQL option as cancelled history.
 - [x] Align CI Node runtime with package engine.
 - [x] Observe and record CI result after the Node 22 workflow change (`42001254891`: success).
+- [x] Review frontend session/storage and HtmlService client-call constraints.
+- [x] Check trusted IP-history feasibility against official Apps Script request/API documentation.
 - [ ] Complete detailed field-by-field response/payload mapping for every Admin CRUD and checkout action.
-- [ ] Complete Apps Script HTML templating/security review before P1 implementation.
+- [x] Complete source-level HTML/session/storage and HtmlService call-constraint review.
+- [ ] Resolve P0-12 trusted Member IP-history compatibility without changing approved requirements or Zero Cost constraints.
 
-**P0 status: PARTIALLY COMPLETE.** The source/architecture blockers and file-level matrix are recorded. Remaining contract-detail and post-fix CI checks must pass before P0 is closed.
+**P0 status: BLOCKED pending user-approved resolution of P0-12.** Source inventory, payload matrix, static security review, file matrix and CI checks are complete. Do not start P1 until trusted Member IP history can be preserved within the approved constraints.
 
 ## 8. Safety gates
 
