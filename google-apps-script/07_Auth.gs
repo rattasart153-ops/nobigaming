@@ -34,6 +34,7 @@ function adminLogin(username, password, ipAddress) {
   const normalized = user.toLowerCase();
   const pass = String(password || '');
   if (!user || !pass) throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
+  consumeAuthIpAttempt_(ipAddress);
 
   const props = PropertiesService.getScriptProperties();
   const throttleKey = 'NOBI_ADMIN_LOGIN_' + sha256_(normalized).slice(0, 40);
@@ -214,6 +215,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
   const ip = String(ipAddress || '').slice(0, 100);
   const agent = String(userAgent || '').slice(0, 300);
   if (!login || !pass) throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
+  consumeAuthIpAttempt_(ipAddress);
 
   const props = PropertiesService.getScriptProperties();
   const throttleKey = 'NOBI_MEMBER_LOGIN_' + sha256_(normalized).slice(0, 40);
