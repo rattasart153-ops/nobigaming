@@ -1,36 +1,36 @@
-# Phase 1 — Multi-instance Abuse-Control Design
+# Multi-instance Abuse-Control Design and Implementation Status
 
-Status: design documented; implementation intentionally deferred until the approved Apps Script/Sheets repository is available. This is not a production security approval.
+Status: shared Apps Script/Sheets rate-limit ledger is implemented in source on vercel-drive-setup. It has not yet been load-tested in a real Apps Script deployment and is not production approval.
 
 ## Current baseline
 
-The Express Admin login limiter uses `express-rate-limit` with the existing threshold of 10 requests per 15 minutes. Its default memory store is process-local. It is useful for local development and single-process tests, but it is not a reliable control across Vercel serverless instances or cold starts.
+The Express Admin/Member login limiter uses express-rate-limit with a threshold of 10 requests per 15 minutes. Its default memory store is process-local. It remains a cheap first layer for local/single-instance traffic, but it is not treated as a global control across Vercel serverless instances or cold starts.
 
-Do not describe the current limiter as globally enforced.
+## Shared strategy
 
-## Target strategy for the existing zero-new-service architecture
+Use the existing Google Apps Script backend and a dedicated Sheets ledger named security_rate_limits, guarded by LockService.getScriptLock(). This introduces no new external service or account.
 
-Use a shared limiter in the existing Google Apps Script backend, backed by a dedicated Sheets ledger and guarded by `LockService.getScriptLock()`. This avoids introducing a third-party account or paid datastore, but it must be load-tested against Apps Script quotas and execution limits before live use.
+Schema v1 ledger fields:
+- bucket_key_hash: HMAC-SHA256 of a normalized bucket identity; never store raw IP or login IDs.
+- window_start: UTC timestamp for the fixed window.
+- attempt_count: integer count.
+- blocked_until: UTC timestamp or empty.
+- updated_at: UTC timestamp.
 
-Proposed ledger:
+The HMAC key is NOBI_GATEWAY_SECRET. If the secret is missing or the source IP is unavailable, authentication fails closed.
 
-`security_rate_limits`
-- `bucket_key_hash`: HMAC-SHA256 of a normalized bucket identity; never store raw IP or credentials in this table.
-- `window_start`: UTC timestamp for the fixed window.
-- `attempt_count`: integer count.
-- `blocked_until`: UTC timestamp or empty.
-- `updated_at`: UTC timestamp.
+## Enforcement rules implemented in source
 
-## Enforcement rules
-
-1. Preserve the current Admin login threshold: 10 attempts per 15-minute window.
-2. Atomically read/check/increment the bucket under ScriptLock; concurrent requests must not bypass the threshold.
-3. Derive the source IP only from a verified Vercel/platform proxy header. Never accept an IP supplied in a JSON body or an arbitrary client-controlled forwarding header.
-4. Normalize the login identifier before hashing an account-specific bucket. Use a keyed HMAC so raw IP and login IDs are not written into the rate-limit ledger.
-5. Apply the same shared enforcement to every application instance before password verification. The Express in-memory limiter may remain as a cheap local first layer, but it must not be treated as the global control.
-6. Fail closed for authentication if the shared limiter is unavailable; do not silently fall back to an unbounded login path.
-7. Prune expired buckets under a bounded maintenance process. Keep security audit/IP history separate from rate-limit buckets and apply the user-approved retention policy to audit records.
-8. Do not block a member solely because the member logs in from a new IP. The approved new-IP policy is to record the login IP/time; ordinary brute-force throttling remains a separate control.
+1. Shared Admin/Member login IP bucket: 10 attempts per 15-minute window across all Vercel instances.
+2. Member registration IP bucket: 5 registrations per 15-minute window.
+3. Account-specific failure bucket: 5 failed password attempts per 15-minute window; a successful login clears the account failure bucket.
+4. Every bucket identity is HMAC-keyed; raw IP addresses and login identifiers are not written to the rate-limit ledger.
+5. All read/check/increment/reset operations use ScriptLock, so concurrent requests cannot simply race the counter.
+6. Express obtains req.ip with one trusted proxy hop in Vercel mode; Apps Script rejects a missing source IP and never trusts an IP supplied in JSON.
+7. The Express in-memory limiter remains an additional first layer only; the Sheets ledger is the shared enforcement.
+8. Old buckets are pruned when the ledger grows beyond its maintenance threshold. If the ledger becomes too large, the shared limiter fails closed.
+9. Member new-IP logins are recorded but are not blocked solely because the IP is new.
+10. Member login/IP history and Admin audit logs remain separate from rate-limit buckets and follow the approved 90-day retention.
 
 ## Required tests before production
 
@@ -45,6 +45,6 @@ Proposed ledger:
 ## Explicit non-goals
 
 - No new external service or paid account.
-- No implementation in the current Phase 1 Express/SQLite baseline.
+- No use of process-local rate limiting as the only production control.
 - No deployment or publication of Apps Script.
-- No claim that Vercel's local in-memory limiter is production-safe.
+- No claim that Vercel/Apps Script rate limits are production-safe until the required load and quota tests pass.
