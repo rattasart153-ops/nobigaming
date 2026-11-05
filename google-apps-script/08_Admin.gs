@@ -1,75 +1,207 @@
-/** Nobi Topup Apps Script 08_Admin module. */
+/** Admin operations backed exclusively by the version 1 Sheets schema. */
 
 function adminDashboard(token) {
   requireAdmin_(token);
-  const orders = rows_('orders');
-  return {orders:orders.length,pending:orders.filter(o=>o.status==='Pending').length,completed:orders.filter(o=>o.status==='Completed').length,revenue:money_(orders.filter(o=>o.status==='Completed').reduce((s,o)=>s+Number(o.total||0),0))};
+  const orders = repositoryRows_('orders');
+  const completed = orders.filter(function(order) { return order.status === 'Completed'; });
+  return {
+    orders: orders.length,
+    pending: orders.filter(function(order) { return order.status === 'Pending'; }).length,
+    completed: completed.length,
+    revenue: money_(completed.reduce(function(sum, order) {
+      return sum + Number(order.total_satang || 0) / 100;
+    }, 0)),
+    games: repositoryRows_('games').length,
+    packages: repositoryRows_('packages').length,
+    coupons: repositoryRows_('coupons').length,
+    promotions: repositoryRows_('promotions').length
+  };
 }
 
 function adminOrders(token) {
   requireAdmin_(token);
-  return rows_('orders').sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))).map(function(o) {
-    const safe = clean_(publicOrder_(o));
-    safe.slip_file_id = o.slip_file_id; // ID only; use adminSlipData for authorized retrieval.
+  return repositoryRows_('orders').sort(function(a, b) {
+    return String(b.created_at).localeCompare(String(a.created_at));
+  }).map(function(order) {
+    const safe = clean_(order);
+    safe.id = order.order_id;
+    safe.has_slip = Boolean(order.slip_file_id);
+    safe.subtotal = Number(order.subtotal_satang || 0) / 100;
+    safe.discount = Number(order.discount_satang || 0) / 100;
+    safe.total = Number(order.total_satang || 0) / 100;
+    delete safe.slip_file_id;
+    delete safe.checkout_token_hash;
+    delete safe.request_key;
     return safe;
   });
 }
 
 function adminSlipData(token, orderId) {
   requireAdmin_(token);
-  const order = rows_('orders').find(o => String(o.id) === String(orderId));
+  const order = repositoryGetById_('orders', orderId);
   if (!order || !order.slip_file_id) throw new Error('ไม่พบสลิป');
   const file = DriveApp.getFileById(String(order.slip_file_id));
   const blob = file.getBlob();
-  return {name:file.getName(),mimeType:blob.getContentType(),base64:Utilities.base64Encode(blob.getBytes())};
+  return {
+    name: file.getName(),
+    mimeType: blob.getContentType(),
+    base64: Utilities.base64Encode(blob.getBytes())
+  };
 }
 
 function adminSetOrderStatus(token, orderId, status) {
-  requireAdmin_(token);
-  if (!['Pending','Completed','Rejected'].includes(String(status))) throw new Error('สถานะไม่ถูกต้อง');
+  const admin = requireAdmin_(token);
+  const nextStatus = String(status || '');
+  if (!['Completed', 'Rejected'].includes(nextStatus)) throw new Error('สถานะไม่ถูกต้อง');
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const order = rows_('orders').find(o=>String(o.id)===String(orderId));
+    const order = repositoryGetById_('orders', orderId);
     if (!order) throw new Error('ไม่พบออเดอร์');
-    if (String(order.status) !== 'Pending' && String(order.status) !== String(status)) throw new Error('ออเดอร์ที่ตรวจสอบแล้วไม่สามารถเปลี่ยนสถานะซ้ำได้');
-    updateById_('orders',order.id,{status:status,updated_at:new Date().toISOString()});
-    return {ok:true};
-  } finally { lock.releaseLock(); }
+    if (order.status === nextStatus) return {ok:true, unchanged:true};
+    if (order.status !== 'Pending') throw new Error('ออเดอร์ที่ตรวจสอบแล้วไม่สามารถเปลี่ยนสถานะซ้ำได้');
+
+    const now = new Date().toISOString();
+    const redemption = repositoryFindByField_('coupon_redemptions', 'order_id', order.order_id)
+      .find(function(item) { return item.state === 'Reserved'; });
+
+    if (nextStatus === 'Completed') {
+      if (!order.slip_submitted_at) throw new Error('ต้องมีสลิปก่อนอนุมัติออเดอร์');
+      const submitted = Date.parse(order.slip_submitted_at);
+      const deadline = Date.parse(order.payment_expires_at);
+      if (!Number.isFinite(submitted) || !Number.isFinite(deadline) || submitted >= deadline) {
+        repositoryUpdateLocked_('orders', order.order_id, {
+          status: 'Expired', status_reason: 'PAYMENT_TIMEOUT', updated_at: now
+        });
+        if (redemption) repositoryUpdateLocked_('coupon_redemptions', redemption.redemption_id, {
+          state: 'Released', released_at: now
+        });
+        return {ok:false, reason:'expired'};
+      }
+      if (redemption) repositoryUpdateLocked_('coupon_redemptions', redemption.redemption_id, {
+        state: 'Consumed', finalized_at: now
+      });
+      repositoryUpdateLocked_('orders', order.order_id, {
+        status: 'Completed', completed_at: now, updated_at: now
+      });
+    } else {
+      if (redemption) repositoryUpdateLocked_('coupon_redemptions', redemption.redemption_id, {
+        state: 'Released', released_at: now
+      });
+      repositoryUpdateLocked_('orders', order.order_id, {
+        status: 'Rejected', rejected_at: now, status_reason: 'ADMIN_REJECTED', updated_at: now
+      });
+    }
+
+    repositoryInsertLocked_('admin_audit_logs', {
+      audit_id: Utilities.getUuid(),
+      admin_id: admin.admin_id,
+      action: 'ORDER_STATUS_' + nextStatus.toUpperCase(),
+      target_type: 'order',
+      target_id: order.order_id,
+      request_id: '',
+      ip_address: '',
+      details_json: JSON.stringify({previous_status:'Pending', status:nextStatus}),
+      created_at: now
+    });
+    return {ok:true, status:nextStatus};
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function adminList(token, tableName) {
   requireAdmin_(token);
-  if (!['games','packages','coupons','promotions'].includes(String(tableName))) throw new Error('ไม่อนุญาตให้เข้าถึงตารางนี้');
-  return rows_(tableName).map(clean_);
+  if (!['games', 'packages', 'coupons', 'promotions'].includes(String(tableName))) {
+    throw new Error('ไม่อนุญาตให้เข้าถึงตารางนี้');
+  }
+  return repositoryRows_(tableName).map(clean_);
 }
 
 function adminUpsert(token, tableName, record) {
-  requireAdmin_(token);
-  if (!['games','packages','coupons','promotions'].includes(String(tableName))) throw new Error('ไม่อนุญาตให้แก้ไขตารางนี้');
-  record = record || {};
-  const headers = NOBI.SHEETS[tableName];
+  const admin = requireAdmin_(token);
+  if (!['games', 'packages', 'coupons', 'promotions'].includes(String(tableName))) {
+    throw new Error('ไม่อนุญาตให้แก้ไขตารางนี้');
+  }
+  if (!record || typeof record !== 'object' || Array.isArray(record)) throw new Error('ข้อมูลไม่ถูกต้อง');
+
+  const primaryKeys = {games:'game_id', packages:'package_id', coupons:'coupon_id', promotions:'promotion_id'};
+  const primaryKey = primaryKeys[tableName];
   const safe = {};
-  headers.forEach(h => { if (h !== 'id' && h !== 'created_at' && Object.prototype.hasOwnProperty.call(record,h)) safe[h] = record[h]; });
-  validateRecord_(tableName,safe);
+  Object.keys(record).forEach(function(field) {
+    if (field === primaryKey || field === 'created_at' || field === 'updated_at') return;
+    if (NOBI.SHEETS[tableName].indexOf(field) === -1) throw new Error('ฟิลด์ไม่ถูกต้อง: ' + field);
+    safe[field] = record[field];
+  });
+  validateRecord_(tableName, safe);
+
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    if (record.id) {
-      updateById_(tableName,record.id,safe);
-      return {ok:true,id:record.id};
+    const now = new Date().toISOString();
+    let id;
+    if (record[primaryKey]) {
+      id = String(record[primaryKey]);
+      safe.updated_at = now;
+      repositoryUpdateLocked_(tableName, id, safe);
+    } else {
+      id = Utilities.getUuid();
+      safe[primaryKey] = id;
+      safe.created_at = now;
+      safe.updated_at = now;
+      repositoryInsertLocked_(tableName, safe);
     }
-    safe.id = Utilities.getUuid();
-    safe.created_at = new Date().toISOString();
-    append_(tableName,safe);
-    return {ok:true,id:safe.id};
-  } finally { lock.releaseLock(); }
+    repositoryInsertLocked_('admin_audit_logs', {
+      audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
+      action: 'UPSERT_' + tableName.toUpperCase(), target_type: tableName,
+      target_id: id, request_id: '', ip_address: '',
+      details_json: '{}', created_at: now
+    });
+    return {ok:true, id:id};
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function adminDelete(token, tableName, id) {
-  requireAdmin_(token);
-  if (!['games','packages','coupons','promotions'].includes(String(tableName))) throw new Error('ไม่อนุญาตให้ลบตารางนี้');
-  const sh = sheet_(tableName), data = sh.getDataRange().getValues(), headers = data[0], idx = headers.indexOf('id');
-  for (let i=1;i<data.length;i++) if (String(data[i][idx])===String(id)) { sh.deleteRow(i+1); return {ok:true}; }
-  throw new Error('ไม่พบรายการ');
+  const admin = requireAdmin_(token);
+  if (!['games', 'packages', 'coupons', 'promotions'].includes(String(tableName))) {
+    throw new Error('ไม่อนุญาตให้ลบตารางนี้');
+  }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const primaryKey = NOBI.SHEETS[tableName][0];
+    const target = repositoryGetById_(tableName, id);
+    if (!target) throw new Error('ไม่พบรายการ');
+    if (tableName === 'games' && (
+      repositoryFindByField_('packages', 'game_id', id).length ||
+      repositoryFindByField_('orders', 'game_id', id).length
+    )) throw new Error('ลบเกมไม่ได้ เนื่องจากมีแพ็กเกจหรือออเดอร์อ้างอิงอยู่');
+    if (tableName === 'packages' && repositoryFindByField_('orders', 'package_id', id).length) {
+      throw new Error('ลบแพ็กเกจไม่ได้ เนื่องจากมีออเดอร์อ้างอิงอยู่');
+    }
+    if (tableName === 'coupons' && repositoryFindByField_('coupon_redemptions', 'coupon_id', id).length) {
+      throw new Error('ลบคูปองไม่ได้ เนื่องจากมีประวัติการใช้คูปอง');
+    }
+
+    const sheet = repositorySheet_(tableName);
+    const values = sheet.getDataRange().getValues();
+    const index = NOBI.SHEETS[tableName].indexOf(primaryKey);
+    for (let row = 1; row < values.length; row++) {
+      if (String(values[row][index]) !== String(id)) continue;
+      sheet.deleteRow(row + 1);
+      const now = new Date().toISOString();
+      repositoryInsertLocked_('admin_audit_logs', {
+        audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
+        action: 'DELETE_' + tableName.toUpperCase(), target_type: tableName,
+        target_id: String(id), request_id: '', ip_address: '',
+        details_json: '{}', created_at: now
+      });
+      return {ok:true};
+    }
+    throw new Error('ไม่พบรายการ');
+  } finally {
+    lock.releaseLock();
+  }
 }
