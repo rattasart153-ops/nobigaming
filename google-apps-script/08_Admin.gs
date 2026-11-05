@@ -93,7 +93,7 @@ function adminSetOrderStatus(token, orderId, status) {
       });
     }
 
-    repositoryInsertLocked_('admin_audit_logs', {
+    appendAdminAuditLogLocked_({
       audit_id: Utilities.getUuid(),
       admin_id: admin.admin_id,
       action: 'ORDER_STATUS_' + nextStatus.toUpperCase(),
@@ -151,7 +151,7 @@ function adminUpsert(token, tableName, record) {
       safe.updated_at = now;
       repositoryInsertLocked_(tableName, safe);
     }
-    repositoryInsertLocked_('admin_audit_logs', {
+    appendAdminAuditLogLocked_({
       audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
       action: 'UPSERT_' + tableName.toUpperCase(), target_type: tableName,
       target_id: id, request_id: '', ip_address: '',
@@ -192,7 +192,7 @@ function adminDelete(token, tableName, id) {
       if (String(values[row][index]) !== String(id)) continue;
       sheet.deleteRow(row + 1);
       const now = new Date().toISOString();
-      repositoryInsertLocked_('admin_audit_logs', {
+      appendAdminAuditLogLocked_({
         audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
         action: 'DELETE_' + tableName.toUpperCase(), target_type: tableName,
         target_id: String(id), request_id: '', ip_address: '',
