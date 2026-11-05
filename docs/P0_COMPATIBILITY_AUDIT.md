@@ -70,7 +70,7 @@ The legacy local-SQLite route modules remain in `src/routes/public.routes.js` an
 | `03_Catalog.gs` | Catalog/promotions | Present |
 | `04_Coupons.gs` | Coupon eligibility and suggestions | Present; business tests use mocks |
 | `05_Payments.gs` | PromptPay response | **Stub: returns configured=false even if PromptPay ID exists** |
-| `06_Orders.gs` | Order creation, deadlines, slips, idempotency and write-ahead recovery journal | P0-R1 through R3 implemented; P0-R4 retention source and mock tests added; real Drive/Sheets concurrency and trigger execution remain unverified |
+| `06_Orders.gs` | Order creation, deadlines, slips, idempotency and write-ahead recovery journal | P0-R1 through R3 implemented; expanded fault-injection and linkage checks added; real Drive/Sheets concurrency remains unverified |
 | `07_Auth.gs` | Admin/member auth and sessions | Present; PBKDF2 performance unverified in Apps Script |
 | `08_Admin.gs` | Admin CRUD, audit, private files | Present; real Drive ACLs unverified |
 | `09_Validation.gs` | Record validation | Present |
