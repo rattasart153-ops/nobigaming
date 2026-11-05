@@ -117,10 +117,20 @@ function createAppsScriptClient({ url, secret, fetchImpl = globalThis.fetch, tim
     }
     if (!data.ok) {
       const error = data.error || {};
+      const code = String(error.code || 'GATEWAY_REQUEST_REJECTED');
+      const statusByCode = {
+        UNAUTHENTICATED:401,
+        VALIDATION_FAILED:422,
+        RESOURCE_NOT_FOUND:404,
+        RESOURCE_CONFLICT:409,
+        RESOURCE_EXPIRED:410,
+        RATE_LIMITED:429,
+        GATEWAY_NOT_CONFIGURED:503
+      };
       throw new AppsScriptGatewayError(
         String(error.message || 'Apps Script gateway rejected the request'),
-        String(error.code || 'GATEWAY_REQUEST_REJECTED'),
-        502
+        code,
+        statusByCode[code] || 502
       );
     }
     return data.result;
