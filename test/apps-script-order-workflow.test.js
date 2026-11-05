@@ -214,3 +214,21 @@ test('coupon expiry rejects impossible calendar dates and remains inclusive thro
   assert.ok(Number.isNaN(context.couponExpiryCutoff_('2026-02-31')));
   assert.equal(context.couponExpiryCutoff_('2026-11-05'),Date.parse('2026-11-05T17:00:00.000Z'));
 });
+
+
+test('slip upload fails closed when the configured Drive folder is shared',()=>{
+  const {context,data,files,setFolderAccess}=makeOrderHarness();
+  const order=context.createOrder({
+    request_key:'request-key-00000006',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-123',server_id:'',coupon_code:''
+  });
+  setFolderAccess('ANYONE');
+  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  assert.throws(()=>context.submitOrderSlip({
+    order_id:order.order.order_id,
+    checkout_token:order.checkout_token,
+    slip:{mimeType:'image/png',base64:png.toString('base64')}
+  }),/DRIVE_FOLDER_NOT_PRIVATE/);
+  assert.equal(files.length,0);
+  assert.equal(data.orders[0].slip_submitted_at,'');
+});
