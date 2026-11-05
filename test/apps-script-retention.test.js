@@ -101,8 +101,8 @@ test('90-day cleanup clears aged member and session IP fields and removes expire
   const members=sheets.members.records();
   assert.equal(members.find(x=>x.member_id==='member-old').registered_ip,'');
   assert.equal(members.find(x=>x.member_id==='member-old').last_login_ip,'');
-  assert.equal(members.find(x=>x.member_id==='member-boundary').registered_ip,'203.0.113.3');
-  assert.equal(members.find(x=>x.member_id==='member-boundary').last_login_ip,'203.0.113.4');
+  assert.equal(members.find(x=>x.member_id==='member-boundary').registered_ip,'');
+  assert.equal(members.find(x=>x.member_id==='member-boundary').last_login_ip,'');
   assert.equal(members.find(x=>x.member_id==='member-recent').last_login_ip,'203.0.113.6');
   assert.equal(members.find(x=>x.member_id==='member-invalid').registered_ip,'');
   assert.equal(members.find(x=>x.member_id==='member-invalid').last_login_ip,'');
@@ -113,10 +113,10 @@ test('90-day cleanup clears aged member and session IP fields and removes expire
   assert.equal(memberSessions.find(x=>x.session_id==='member-session-new').created_ip,'198.51.100.2');
   assert.equal(sheets.admin_sessions.records().find(x=>x.session_id==='admin-session-old').created_ip,'');
 
-  assert.deepEqual(sheets.member_login_logs.records().map(x=>x.log_id),['member-log-boundary','member-log-new']);
-  assert.deepEqual(sheets.admin_audit_logs.records().map(x=>x.audit_id),['admin-log-boundary']);
-  assert.equal(result.member_login_logs_deleted,2);
-  assert.equal(result.admin_audit_logs_deleted,1);
+  assert.deepEqual(sheets.member_login_logs.records().map(x=>x.log_id),['member-log-new']);
+  assert.deepEqual(sheets.admin_audit_logs.records().map(x=>x.audit_id),[]);
+  assert.equal(result.member_login_logs_deleted,3);
+  assert.equal(result.admin_audit_logs_deleted,2);
 });
 
 test('retention cleanup acquires the shared ScriptLock before touching IP-bearing sheets',()=>{
