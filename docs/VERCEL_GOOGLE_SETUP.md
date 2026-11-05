@@ -1,45 +1,107 @@
-Vercel + Google Apps Script / Sheets / Drive
+# Nobi Topup — Vercel + Google Apps Script / Sheets / Drive
 
-เป้าหมาย
+สถานะเอกสาร: คู่มือสถาปัตยกรรมและการตั้งค่าล่วงหน้า **ยังไม่ใช่คำสั่ง Deploy หรือเปิดใช้ระบบจริง**
 
-- ใช้ Vercel เป็นโฮสต์เว็บไซต์
-- ใช้ Google Account เดิม ไม่สมัครบริการใหม่
-- ใช้ Google Sheets เป็นฐานข้อมูล
-- ใช้ Google Drive เก็บไฟล์สลิปและรูปภาพแบบส่วนตัว
-- รักษาหน้าร้านและหน้าแอดมินเดิมให้มากที่สุด
-- ไม่แก้ไข Branch main
+## เป้าหมาย
 
-สถาปัตยกรรม
+- ใช้ Vercel ให้บริการหน้าเว็บและ REST API
+- ใช้ Google Account เดิม ไม่ต้องสมัครบริการใหม่
+- ใช้ Google Sheets เป็นแหล่งข้อมูลถาวร
+- ใช้ Google Drive เก็บสลิปและรูปภาพแบบ Private
+- รักษาหน้าร้านและหน้าแอดมินเดิม พร้อมรองรับ Guest checkout
+- ทำงานเฉพาะ Branch vercel-drive-setup; ห้ามแก้ไข main
 
-1. Vercel ให้บริการหน้าเว็บและ API
-2. Google Apps Script ทำหน้าที่เป็น API สำหรับจัดการข้อมูล
-3. Google Sheets เก็บข้อมูล admins, games, packages, coupons, promotions, orders และ sessions
-4. Google Drive เก็บไฟล์ภาพและสลิป โดยไม่เปิดสิทธิ์สาธารณะ
-5. ใช้ LockService ควบคุมการเขียนข้อมูลพร้อมกัน
-6. Express API บน Vercel ทำหน้าที่เชื่อมต่อกับ Apps Script และรักษา API เดิม
+## สถาปัตยกรรมปัจจุบันของ Branch
 
-ข้อจำกัด
+1. Vercel ให้บริการไฟล์หน้าเว็บและ Express REST API
+2. Express เรียก Apps Script ผ่าน Signed HTTP Gateway ด้วย HMAC-SHA256, timestamp และ nonce
+3. Apps Script เป็นเจ้าของ Business Logic และข้อมูลใน Sheets
+4. Sheets ใช้ Schema Version 1 พร้อม repository ที่ตรวจ header/field และใช้ ScriptLock สำหรับการเขียน
+5. Drive เก็บสลิปในโฟลเดอร์ส่วนตัว และเก็บรูปภาพในโฟลเดอร์ส่วนตัวอีกชุด
+6. Vercel ส่งไฟล์ผ่าน API proxy; ไม่เปิด Drive sharing เป็น Public
+7. Vercel production จะไม่เริ่ม SQLite fallback หากไม่มี Apps Script gateway configuration
 
-- Google Sheets ไม่ใช่ฐานข้อมูล SQL และไม่มี transaction แบบ SQLite
-- Apps Script มีโควตาและเวลาประมวลผลจำกัด
-- ต้องทดสอบการสร้างออเดอร์ การใช้คูปอง และการเปลี่ยนสถานะก่อนใช้งานจริง
-- ห้ามใช้ไฟล์ SQLite บน Vercel เป็นฐานข้อมูลถาวร
-- ห้ามเปิดไฟล์สลิปให้บุคคลทั่วไปเข้าถึง
-- ห้ามนำ OAuth secrets หรือ token ไปเก็บใน GitHub
+## ข้อมูลที่เก็บใน Sheets
 
-ลำดับการพัฒนา
+- Admins และ Admin sessions
+- Members, Member sessions และ Member login/IP history
+- Games และ packages
+- Coupons และ coupon redemptions
+- Promotions
+- Orders
+- Admin audit logs
+- Idempotency records
+- Gateway nonces และ system metadata
 
-1. สร้าง Apps Script API และโครงสร้าง Google Sheets
-2. สร้างระบบเชื่อมต่อจาก Express บน Vercel
-3. ย้ายระบบอัปโหลดภาพไป Google Drive
-4. เพิ่มการตั้งค่า Vercel และ Environment Variables
-5. ทดสอบระบบร้านค้าและระบบแอดมินทั้งหมด
-6. Deploy เมื่อผ่านการทดสอบแล้วเท่านั้น
+เงินที่เก็บใน Schema v1 ใช้หน่วยสตางค์ (ฟิลด์ที่ลงท้ายด้วย _satang) เพื่อหลีกเลี่ยงปัญหาทศนิยม
 
-ความปลอดภัย
+## Drive folders และ Script Properties
 
-- เปลี่ยนรหัสผ่านแอดมินเริ่มต้น
-- ตั้ง SESSION_SECRET ใหม่
-- ใช้ HTTPS
-- เก็บสลิปเป็นไฟล์ส่วนตัว
-- ตรวจสอบสิทธิ์ทุก API ที่เกี่ยวข้องกับแอดมิน
+สร้างโฟลเดอร์ Drive สองโฟลเดอร์ด้วย Google Account เดิม และคงสิทธิ์เป็น Private:
+
+- โฟลเดอร์สลิป: กำหนด ID ใน Script Property ชื่อ NOBI_PRIVATE_DRIVE_FOLDER_ID
+- โฟลเดอร์รูปภาพสินค้า/โปรโมชั่น: กำหนด ID ใน Script Property ชื่อ NOBI_PRIVATE_MEDIA_FOLDER_ID
+
+ตั้งค่า Script Properties เพิ่มเติม:
+
+| Property | จุดประสงค์ |
+|---|---|
+| NOBI_GATEWAY_SECRET | Shared secret อย่างน้อย 32 ตัวอักษร ใช้ร่วมกับ Vercel |
+| NOBI_PRIVATE_DRIVE_FOLDER_ID | โฟลเดอร์ Private สำหรับสลิป |
+| NOBI_PRIVATE_MEDIA_FOLDER_ID | โฟลเดอร์ Private สำหรับรูปภาพ |
+| NOBI_ADMIN_USERNAME | Username สำหรับ bootstrap Admin ครั้งแรก |
+| NOBI_ADMIN_PASSWORD | รหัสผ่าน bootstrap อย่างน้อย 14 ตัวอักษร; ระบบลบ property นี้หลังสร้าง Admin สำเร็จ |
+| NOBI_PROMPTPAY_ID | PromptPay ID สำหรับสร้าง QR ผ่าน Express เมื่อพร้อมเปิดใช้จริง |
+
+ห้ามใส่ค่า secret, password, PromptPay จริง หรือ Drive ID ลงใน GitHub
+
+## Vercel Environment Variables
+
+กำหนดใน Project Settings → Environment Variables:
+
+| Variable | ค่า |
+|---|---|
+| APPS_SCRIPT_URL | URL Web App ของ Apps Script ที่ลงท้ายด้วย /exec |
+| APPS_SCRIPT_SHARED_SECRET | ค่าเดียวกับ NOBI_GATEWAY_SECRET |
+| APPS_SCRIPT_TIMEOUT_MS | ค่าเริ่มต้น 12000 ms |
+| PROMPTPAY_ID | PromptPay ID เฉพาะเมื่อได้รับอนุญาตให้ทดสอบการชำระเงินจริง |
+
+ใน Vercel/production ห้ามใช้ SQLite, local session store หรือ local uploads เป็นแหล่งข้อมูลถาวร หากไม่มี Apps Script configuration ระบบจะหยุดทำงานแบบ fail-closed
+
+## Workflow ที่เตรียมไว้ใน Source Code
+
+- Catalog และ Promotions อ่านจาก Schema v1
+- Coupon ตรวจสอบวันหมดอายุ, ยอดขั้นต่ำ, เกม, UID allowlist, สมาชิก และยอดเติมสะสมรายเกม
+- Order สร้าง Pending ก่อน และส่งสลิปแยกภายหลังด้วย one-time checkout token
+- Order ที่ไม่มีคูปองหรือใช้คูปองไม่มีวันหมดอายุมีเวลา 15 นาที
+- Order ที่ใช้คูปองมีวันหมดอายุให้เวลาถึงสิ้นวันนั้นตามเวลา Asia/Bangkok
+- Coupon capacity ถูก Reserve เมื่อสร้าง Pending, Consume เมื่อ Completed และ Release เมื่อ Rejected/Expired
+- Admin และ Member sessions เก็บ token hash, อายุสูงสุด 8 ชั่วโมง, idle timeout 30 นาที และ revoke เมื่อ logout/เปลี่ยนรหัสผ่าน
+- Member Login ID เป็น ASCII English letters/digits 4–30 ตัว ไม่แยกตัวพิมพ์เล็ก/ใหญ่
+- Admin ดู Member login/IP history ได้; เก็บประวัติและ Admin audit logs 90 วัน
+- รหัสผ่านใช้ PBKDF2-SHA256 120,000 iterations; ต้อง benchmark ใน Apps Script runtime จริงก่อนใช้งาน
+- สลิปและรูปภาพเก็บใน Drive แบบ Private และส่งผ่าน API proxy ที่ตรวจสิทธิ์
+
+## ข้อจำกัดและ Release Gates
+
+- Google Sheets ไม่มี transaction แบบ SQLite; workflow หลายแถวต้องมี recovery path และทดสอบ concurrency
+- Apps Script มี execution/quota limits; ต้อง benchmark PBKDF2, file transfer, row scans และ LockService
+- Node tests ยืนยัน API contract, schema behavior และ PBKDF2 reference vector แต่ยังไม่แทนการทดสอบใน Apps Script runtime จริง
+- ต้องทดสอบ bad signature, stale timestamp, replay, concurrent nonce/order/coupon claims, quota และ Drive privacy
+- ต้องทำ Browser/device end-to-end tests ของ Guest, Member, Admin, coupon, checkout, slip, status และ CRUD
+- ห้ามใช้สลิปจริงหรือเปิดรับออเดอร์จริงในการทดสอบ
+- ห้าม Deploy Apps Script Web App หรือ Vercel production จนกว่าจะได้รับอนุญาตแยกต่างหาก
+
+## ลำดับการเปิดใช้ (ยังไม่อนุญาตให้เริ่มขั้นตอน Live)
+
+1. ตรวจ Source Code และ CI ให้ผ่านทั้งหมด
+2. ทำ GAS runtime test project ด้วยข้อมูลสังเคราะห์
+3. Benchmark PBKDF2 และ Apps Script execution time
+4. ตรวจ Drive folder/file permissions และ proxy authorization
+5. ตั้ง Script Properties และ Vercel Environment Variables
+6. Initialize Schema v1 เฉพาะเมื่อผ่าน runtime gates และได้รับอนุญาต
+7. Bootstrap Admin หลัง schema พร้อมและทดสอบแล้ว
+8. ทำ end-to-end tests บนข้อมูลสังเคราะห์
+9. ขออนุญาต Deploy/เปิดรับชำระเงินแยกต่างหาก
+
+**ห้ามเรียก setupNobiDatabase() หรือ initializeAdmin() บนข้อมูลจริงก่อนผ่าน release gates ข้างต้น**
