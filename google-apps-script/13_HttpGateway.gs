@@ -20,6 +20,10 @@ const NOBI_GATEWAY = {
     'createOrder',
     'submitOrderSlip',
     'adminLogin',
+    'memberRegister',
+    'memberLogin',
+    'memberMe',
+    'memberLogout',
     'adminMe',
     'adminLogout',
     'adminDashboard',
@@ -28,7 +32,8 @@ const NOBI_GATEWAY = {
     'adminSetOrderStatus',
     'adminList',
     'adminUpsert',
-    'adminDelete'
+    'adminDelete',
+    'adminMemberLoginLogs'
   ]
 };
 
