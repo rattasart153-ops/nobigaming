@@ -40,7 +40,19 @@ function createOrder(payload) {
       }
       const existingOrder = repositoryGetById_('orders', existingKey.resource_id);
       if (!existingOrder) throw new Error('ไม่สามารถกู้คืนออเดอร์เดิมได้');
-      return {ok:true, order:publicOrder_(existingOrder), duplicate:true, checkout_token:null};
+      let replayToken = null;
+      if (existingOrder.status === 'Pending' && !existingOrder.slip_submitted_at &&
+          Date.parse(existingOrder.payment_expires_at) > Date.now()) {
+        // The original response may have been lost. Rotate the one-time token
+        // only for an identical idempotent request and invalidate the old token.
+        replayToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
+        repositoryUpdateLocked_('orders', existingOrder.order_id, {
+          checkout_token_hash:sha256_(replayToken),
+          updated_at:new Date().toISOString()
+        });
+        existingOrder.checkout_token_hash = sha256_(replayToken);
+      }
+      return {ok:true, order:publicOrder_(existingOrder), duplicate:true, checkout_token:replayToken};
     }
 
     const game = repositoryGetById_('games', gameId);
