@@ -82,7 +82,8 @@ function loadGasDatabase(spreadsheet, initialProperties = {}) {
       openById: () => spreadsheet,
       create: () => spreadsheet
     },
-    LockService: { getScriptLock: () => lock }
+    LockService: { getScriptLock: () => lock },
+    Utilities: { getUuid: () => 'test-uuid-' + Math.random() }
   };
   const gasDir = path.join(__dirname, '..', 'google-apps-script');
   const source = [
