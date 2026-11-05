@@ -185,7 +185,7 @@ function submitOrderSlip(payload) {
   const bytes = Utilities.base64Decode(String(slip.base64).replace(/^data:[^,]+,/, ''));
   if (!bytes.length || bytes.length > NOBI.MAX_SLIP_BYTES ||
       !validImageSignature_(bytes, slip.mimeType)) {
-    throw new Error('ไฟล์สลิปไม่ถูกต้องหรือมีขนาดเกิน 5 MB');
+    throw new Error('ไฟล์สลิปไม่ถูกต้องหรือมีขนาดเกิน 3 MB');
   }
 
   const lock = LockService.getScriptLock();
