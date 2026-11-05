@@ -63,3 +63,17 @@ function appendAdminAuditLogLocked_(record) {
     if (Number.isFinite(created) && created < cutoff) sheet.deleteRow(row + 1);
   }
 }
+
+
+/** Prune revoked/expired opaque session hashes after the approved 90-day retention. Caller holds ScriptLock. */
+function pruneExpiredSessionsLocked_(nowMs) {
+  const cutoff = (Number(nowMs) || Date.now()) - NOBI.LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  ['admin_sessions','member_sessions'].forEach(function(tableName) {
+    repositoryRows_(tableName).filter(function(session) {
+      const terminalAt = session.revoked_at ? Date.parse(session.revoked_at) : Date.parse(session.expires_at);
+      return Number.isFinite(terminalAt) && terminalAt < cutoff;
+    }).forEach(function(session) {
+      repositoryDeleteLocked_(tableName, session.session_id);
+    });
+  });
+}
