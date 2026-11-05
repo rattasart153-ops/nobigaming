@@ -28,7 +28,8 @@ function setupNobiDatabase() {
       }
     }
 
-    if (currentVersion && currentVersion !== String(NOBI.SCHEMA_VERSION)) {
+    const supportedUpgrade = currentVersion === '1' && Number(NOBI.SCHEMA_VERSION) === 2;
+    if (currentVersion && currentVersion !== String(NOBI.SCHEMA_VERSION) && !supportedUpgrade) {
       throw new Error('SCHEMA_VERSION_UNSUPPORTED: expected version ' + NOBI.SCHEMA_VERSION + ' but found ' + currentVersion + '.');
     }
 

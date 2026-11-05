@@ -78,6 +78,7 @@ function adminSetOrderStatus(token, orderId, status, ipAddress) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
+    recoverPendingOrderJournalsLocked_();
     const order = repositoryGetById_('orders', orderId);
     if (!order) throw new Error('ไม่พบออเดอร์');
     if (order.status === nextStatus) return {ok:true, unchanged:true};
@@ -86,53 +87,45 @@ function adminSetOrderStatus(token, orderId, status, ipAddress) {
     const now = new Date().toISOString();
     const redemption = repositoryFindByField_('coupon_redemptions', 'order_id', order.order_id)
       .find(function(item) { return item.state === 'Reserved'; });
-
+    let targetStatus = nextStatus;
+    let orderPatch;
+    let redemptionPatch = null;
     if (nextStatus === 'Completed') {
       if (!order.slip_submitted_at) throw new Error('ต้องมีสลิปก่อนอนุมัติออเดอร์');
       const submitted = Date.parse(order.slip_submitted_at);
       const deadline = Date.parse(order.payment_expires_at);
       if (!Number.isFinite(submitted) || !Number.isFinite(deadline) || submitted >= deadline) {
-        repositoryUpdateLocked_('orders', order.order_id, {
-          status: 'Expired', status_reason: 'PAYMENT_TIMEOUT', updated_at: now
-        });
-        if (redemption) repositoryUpdateLocked_('coupon_redemptions', redemption.redemption_id, {
-          state: 'Released', released_at: now
-        });
-        appendAdminAuditLogLocked_({
-          audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
-          action:'ORDER_STATUS_EXPIRED', target_type:'order', target_id:order.order_id,
-          request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
-          details_json:JSON.stringify({reason:'PAYMENT_TIMEOUT'}), created_at:now
-        });
-        return {ok:false, reason:'expired'};
+        targetStatus = 'Expired';
+        orderPatch = {status:'Expired',status_reason:'PAYMENT_TIMEOUT',updated_at:now};
+        if (redemption) redemptionPatch = {state:'Released',released_at:now};
+      } else {
+        orderPatch = {status:'Completed',completed_at:now,updated_at:now};
+        if (redemption) redemptionPatch = {state:'Consumed',finalized_at:now};
       }
-      if (redemption) repositoryUpdateLocked_('coupon_redemptions', redemption.redemption_id, {
-        state: 'Consumed', finalized_at: now
-      });
-      repositoryUpdateLocked_('orders', order.order_id, {
-        status: 'Completed', completed_at: now, updated_at: now
-      });
     } else {
-      if (redemption) repositoryUpdateLocked_('coupon_redemptions', redemption.redemption_id, {
-        state: 'Released', released_at: now
-      });
-      repositoryUpdateLocked_('orders', order.order_id, {
-        status: 'Rejected', rejected_at: now, status_reason: 'ADMIN_REJECTED', updated_at: now
-      });
+      orderPatch = {status:'Rejected',rejected_at:now,status_reason:'ADMIN_REJECTED',updated_at:now};
+      if (redemption) redemptionPatch = {state:'Released',released_at:now};
     }
-
-    appendAdminAuditLogLocked_({
-      audit_id: Utilities.getUuid(),
-      admin_id: admin.admin_id,
-      action: 'ORDER_STATUS_' + nextStatus.toUpperCase(),
-      target_type: 'order',
-      target_id: order.order_id,
-      request_id: '',
-      ip_address: String(ipAddress || '').slice(0, 100),
-      details_json: JSON.stringify({previous_status:'Pending', status:nextStatus}),
-      created_at: now
+    const journal = createOrderRecoveryJournalLocked_({
+      order_id:order.order_id,
+      operation:'TRANSITION',
+      order_patch:orderPatch,
+      redemption_id:redemption ? redemption.redemption_id : '',
+      redemption_patch:redemptionPatch,
+      created_at:now
     });
-    return {ok:true, status:nextStatus};
+    applyOrderRecoveryJournalLocked_(journal);
+
+    const expired = targetStatus === 'Expired';
+    appendAdminAuditLogLocked_({
+      audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
+      action:expired ? 'ORDER_STATUS_EXPIRED' : 'ORDER_STATUS_' + nextStatus.toUpperCase(),
+      target_type:'order', target_id:order.order_id, request_id:'',
+      ip_address:String(ipAddress || '').slice(0,100),
+      details_json:JSON.stringify(expired ? {reason:'PAYMENT_TIMEOUT'} : {previous_status:'Pending',status:nextStatus}),
+      created_at:now
+    });
+    return expired ? {ok:false,reason:'expired'} : {ok:true,status:nextStatus};
   } finally {
     lock.releaseLock();
   }

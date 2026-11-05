@@ -24,7 +24,8 @@ function makeOrderHarness() {
     members:[],
     orders:[],
     coupon_redemptions:[],
-    idempotency_records:[]
+    idempotency_records:[],
+    order_recovery_journal:[]
   };
   let uuid = 0;
   const files = [];
@@ -58,7 +59,7 @@ function makeOrderHarness() {
     repositoryRows_:table=>data[table] || [],
     repositoryFindByField_:(table,field,value)=>(data[table]||[]).filter(row=>String(row[field])===String(value)),
     repositoryGetById_:(table,id)=>{
-      const keys={games:'game_id',packages:'package_id',coupons:'coupon_id',members:'member_id',orders:'order_id',coupon_redemptions:'redemption_id',idempotency_records:'idempotency_id'};
+      const keys={games:'game_id',packages:'package_id',coupons:'coupon_id',members:'member_id',orders:'order_id',coupon_redemptions:'redemption_id',idempotency_records:'idempotency_id',order_recovery_journal:'journal_id'};
       return (data[table]||[]).find(row=>String(row[keys[table]])===String(id)) || null;
     },
     repositoryInsertLocked_:(table,record)=>{
@@ -268,4 +269,64 @@ test('checkout rejects an expired Member session instead of silently downgrading
     member_token:'expired-token'
   }),/เซสชันสมาชิกหมดอายุ/);
   assert.equal(data.orders.length,0);
+});
+
+
+test('recovery journal completes expiry after a transient coupon write failure', () => {
+  const {context,data,fixedNow}=makeOrderHarness();
+  data.coupons.push({
+    coupon_id:'coupon-recovery',code_normalized:'RECOVER',code_display:'RECOVER',
+    discount_type:'fixed',discount_value:1000,access_type:'public',active:true,
+    expires_at:'',min_order_satang:0,usage_limit:1,game_id:''
+  });
+  const created=context.createOrder({
+    request_key:'request-key-recovery-01',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-recovery',server_id:'',coupon_code:'RECOVER'
+  });
+  const originalUpdate=context.repositoryUpdateLocked_;
+  let failOnce=true;
+  context.repositoryUpdateLocked_=(table,id,patch)=>{
+    if(table==='coupon_redemptions'&&failOnce){failOnce=false;throw new Error('SIMULATED_SHEETS_WRITE_FAILURE');}
+    return originalUpdate(table,id,patch);
+  };
+  assert.throws(()=>context.expirePendingOrdersLocked_(fixedNow+16*60*1000),/SIMULATED_SHEETS_WRITE_FAILURE/);
+  assert.equal(data.orders[0].status,'Pending');
+  assert.equal(data.coupon_redemptions[0].state,'Reserved');
+  assert.equal(data.order_recovery_journal[0].state,'Pending');
+  context.expirePendingOrdersLocked_(fixedNow+16*60*1000);
+  assert.equal(data.orders[0].status,'Expired');
+  assert.equal(data.coupon_redemptions[0].state,'Released');
+  assert.equal(data.order_recovery_journal[0].state,'Completed');
+});
+
+test('recovery journal idempotently finalizes Completed and Rejected order/coupon pairs', () => {
+  const {context,data}=makeOrderHarness();
+  const now='2026-11-05T04:20:00.000Z';
+  for(const status of ['Completed','Rejected']) {
+    const id='order-'+status.toLowerCase();
+    data.orders.push({
+      order_id:id,status:'Pending',slip_submitted_at:'2026-11-05T04:10:00.000Z',
+      payment_expires_at:'2026-11-05T04:30:00.000Z',updated_at:now
+    });
+    data.coupon_redemptions.push({
+      redemption_id:'redemption-'+status.toLowerCase(),order_id:id,state:'Reserved'
+    });
+    const patch=status==='Completed'
+      ? {status:'Completed',completed_at:now,updated_at:now}
+      : {status:'Rejected',rejected_at:now,status_reason:'ADMIN_REJECTED',updated_at:now};
+    const redemptionPatch=status==='Completed'
+      ? {state:'Consumed',finalized_at:now}
+      : {state:'Released',released_at:now};
+    const journal=context.createOrderRecoveryJournalLocked_({
+      order_id:id,operation:'TRANSITION',order_patch:patch,
+      redemption_id:'redemption-'+status.toLowerCase(),
+      redemption_patch:redemptionPatch,created_at:now
+    });
+    context.applyOrderRecoveryJournalLocked_(journal);
+    context.applyOrderRecoveryJournalLocked_(journal);
+    assert.equal(context.repositoryGetById_('orders',id).status,status);
+    assert.equal(context.repositoryGetById_('coupon_redemptions','redemption-'+status.toLowerCase()).state,
+      status==='Completed'?'Consumed':'Released');
+    assert.equal(data.order_recovery_journal.filter(x=>x.order_id===id&&x.state==='Completed').length,1);
+  }
 });

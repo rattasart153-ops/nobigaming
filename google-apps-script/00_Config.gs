@@ -1,6 +1,6 @@
 /** Nobi Topup Apps Script configuration and versioned Sheets schema. */
 const NOBI = {
-  SCHEMA_VERSION: 1,
+  SCHEMA_VERSION: 2,
   SCHEMA_VERSION_KEY: 'schema_version',
   SHEETS: {
     admins: ['admin_id','username_normalized','username_display','password_hash','password_salt','password_algorithm','status','auth_version','created_at','updated_at','last_login_at'],
@@ -16,6 +16,7 @@ const NOBI = {
     promotions: ['promotion_id','title','subtitle','image_file_id','image_url','link_url','active','sort_order','starts_at','ends_at','created_at','updated_at'],
     orders: ['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at'],
     idempotency_records: ['idempotency_id','scope','request_key','payload_hash','resource_id','state','created_at','expires_at'],
+    order_recovery_journal: ['journal_id','order_id','operation','order_record_json','idempotency_record_json','redemption_record_json','order_patch_json','redemption_id','redemption_patch_json','state','attempts','last_error_code','created_at','updated_at'],
     system_metadata: ['key','value','updated_at'],
     gateway_nonces: ['nonce_hash','created_at'],
     security_rate_limits: ['bucket_key_hash','window_start','attempt_count','blocked_until','updated_at']

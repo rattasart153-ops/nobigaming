@@ -23,6 +23,7 @@ function createOrder(payload) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
+    recoverPendingOrderJournalsLocked_();
     const member = memberToken ? requireMemberLocked_(memberToken, Date.now()) : null;
     if (!member && suppliedMemberId) throw new Error('ไม่อนุญาตให้กำหนดรหัสสมาชิกจากคำขอโดยตรง');
     const memberId = member ? String(member.member_id) : '';
@@ -114,50 +115,39 @@ function createOrder(payload) {
       rejected_at:''
     };
 
-    repositoryInsertLocked_('orders', order);
-    try {
-      if (coupon) {
-        const redemption = {
-          redemption_id:Utilities.getUuid(),
-          coupon_id:coupon.coupon_id,
-          order_id:orderId,
-          member_id:memberId,
-          player_id:playerId,
-          game_id:gameId,
-          discount_satang:discountSatang,
-          state:'Reserved',
-          reserved_at:now.toISOString(),
-          reserved_until:deadline,
-          finalized_at:'',
-          released_at:''
-        };
-        repositoryInsertLocked_('coupon_redemptions', redemption);
-      }
-      repositoryInsertLocked_('idempotency_records', {
-        idempotency_id:Utilities.getUuid(),
-        scope:'create_order',
-        request_key:key,
-        payload_hash:payloadHash,
-        resource_id:orderId,
-        state:'Completed',
-        created_at:now.toISOString(),
-        expires_at:new Date(nowMs + 90 * 24 * 60 * 60 * 1000).toISOString()
-      });
-    } catch (error) {
-      // Sheets has no multi-row transaction. Release any reservation already
-      // written, then make the partially-created order permanently unpayable.
-      repositoryFindByField_('coupon_redemptions', 'order_id', orderId)
-        .filter(function(item) { return item.state === 'Reserved'; })
-        .forEach(function(item) {
-          repositoryUpdateLocked_('coupon_redemptions', item.redemption_id, {
-            state:'Released', released_at:new Date().toISOString()
-          });
-        });
-      repositoryUpdateLocked_('orders', orderId, {
-        status:'Rejected', status_reason:'CHECKOUT_PERSISTENCE_FAILED', updated_at:new Date().toISOString()
-      });
-      throw error;
-    }
+    const redemption = coupon ? {
+      redemption_id:Utilities.getUuid(),
+      coupon_id:coupon.coupon_id,
+      order_id:orderId,
+      member_id:memberId,
+      player_id:playerId,
+      game_id:gameId,
+      discount_satang:discountSatang,
+      state:'Reserved',
+      reserved_at:now.toISOString(),
+      reserved_until:deadline,
+      finalized_at:'',
+      released_at:''
+    } : null;
+    const idempotencyRecord = {
+      idempotency_id:Utilities.getUuid(),
+      scope:'create_order',
+      request_key:key,
+      payload_hash:payloadHash,
+      resource_id:orderId,
+      state:'Completed',
+      created_at:now.toISOString(),
+      expires_at:new Date(nowMs + 90 * 24 * 60 * 60 * 1000).toISOString()
+    };
+    const journal = createOrderRecoveryJournalLocked_({
+      order_id:orderId,
+      operation:'CREATE',
+      order_record:order,
+      idempotency_record:idempotencyRecord,
+      redemption_record:redemption,
+      created_at:now.toISOString()
+    });
+    applyOrderRecoveryJournalLocked_(journal);
 
     return {
       ok:true,
@@ -242,6 +232,7 @@ function submitOrderSlip(payload) {
 }
 
 function expirePendingOrdersLocked_(nowMs) {
+  recoverPendingOrderJournalsLocked_();
   const now = new Date(nowMs).toISOString();
   repositoryRows_('orders').filter(function(order) {
     return order.status === 'Pending' && !order.slip_submitted_at &&
@@ -252,16 +243,123 @@ function expirePendingOrdersLocked_(nowMs) {
 }
 
 function expireOrderLocked_(order, now) {
-  repositoryUpdateLocked_('orders', order.order_id, {
-    status:'Expired', status_reason:'PAYMENT_TIMEOUT', updated_at:now
+  const current = repositoryGetById_('orders', order.order_id);
+  if (!current || current.status === 'Expired') return;
+  if (current.status !== 'Pending') return;
+  const redemption = repositoryFindByField_('coupon_redemptions', 'order_id', order.order_id)
+    .find(function(item) { return item.state === 'Reserved'; });
+  const journal = createOrderRecoveryJournalLocked_({
+    order_id:order.order_id,
+    operation:'TRANSITION',
+    order_patch:{status:'Expired',status_reason:'PAYMENT_TIMEOUT',updated_at:now},
+    redemption_id:redemption ? redemption.redemption_id : '',
+    redemption_patch:redemption ? {state:'Released',released_at:now} : null,
+    created_at:now
   });
-  repositoryFindByField_('coupon_redemptions', 'order_id', order.order_id)
-    .filter(function(item) { return item.state === 'Reserved'; })
-    .forEach(function(item) {
-      repositoryUpdateLocked_('coupon_redemptions', item.redemption_id, {
-        state:'Released', released_at:now
-      });
+  applyOrderRecoveryJournalLocked_(journal);
+}
+
+/** Journal intent is persisted before any order/coupon write. Caller holds ScriptLock. */
+function createOrderRecoveryJournalLocked_(input) {
+  const now = input.created_at || new Date().toISOString();
+  const journal = {
+    journal_id:Utilities.getUuid(),
+    order_id:String(input.order_id),
+    operation:String(input.operation),
+    order_record_json:input.order_record ? JSON.stringify(input.order_record) : '',
+    idempotency_record_json:input.idempotency_record ? JSON.stringify(input.idempotency_record) : '',
+    redemption_record_json:input.redemption_record ? JSON.stringify(input.redemption_record) : '',
+    order_patch_json:input.order_patch ? JSON.stringify(input.order_patch) : '',
+    redemption_id:String(input.redemption_id || ''),
+    redemption_patch_json:input.redemption_patch ? JSON.stringify(input.redemption_patch) : '',
+    state:'Pending',
+    attempts:0,
+    last_error_code:'',
+    created_at:now,
+    updated_at:now
+  };
+  repositoryInsertLocked_('order_recovery_journal',journal);
+  return journal;
+}
+
+/** Applies one journal repeatedly without duplicating rows or reversing a terminal state. Caller holds ScriptLock. */
+function applyOrderRecoveryJournalLocked_(journal) {
+  if (!journal || journal.state === 'Completed') return {ok:true,already_completed:true};
+  const now = new Date().toISOString();
+  try {
+    if (journal.operation === 'CREATE') {
+      const orderRecord = JSON.parse(String(journal.order_record_json || '{}'));
+      if (!orderRecord.order_id || String(orderRecord.order_id) !== String(journal.order_id)) {
+        throw new Error('RECOVERY_ORDER_PAYLOAD_INVALID');
+      }
+      if (!repositoryGetById_('orders',journal.order_id)) {
+        repositoryInsertLocked_('orders',orderRecord);
+      }
+      if (journal.redemption_record_json) {
+        const redemptionRecord = JSON.parse(journal.redemption_record_json);
+        const existing = repositoryFindByField_('coupon_redemptions','order_id',journal.order_id)[0];
+        if (!existing) repositoryInsertLocked_('coupon_redemptions',redemptionRecord);
+      }
+      if (journal.idempotency_record_json) {
+        const idem = JSON.parse(journal.idempotency_record_json);
+        const existingIdem = repositoryFindByField_('idempotency_records','request_key',idem.request_key)
+          .find(function(item) { return item.scope === idem.scope; });
+        if (!existingIdem) repositoryInsertLocked_('idempotency_records',idem);
+        else if (String(existingIdem.resource_id) !== String(journal.order_id) ||
+                 String(existingIdem.payload_hash) !== String(idem.payload_hash)) {
+          throw new Error('RECOVERY_IDEMPOTENCY_CONFLICT');
+        }
+      }
+    } else if (journal.operation === 'TRANSITION') {
+      const order = repositoryGetById_('orders',journal.order_id);
+      if (!order) throw new Error('RECOVERY_ORDER_NOT_FOUND');
+      const patch = JSON.parse(String(journal.order_patch_json || '{}'));
+      const targetStatus = String(patch.status || '');
+      if (order.status !== 'Pending' && order.status !== targetStatus) {
+        throw new Error('RECOVERY_TERMINAL_STATE_CONFLICT');
+      }
+      if (journal.redemption_id && journal.redemption_patch_json) {
+        const redemption = repositoryGetById_('coupon_redemptions',journal.redemption_id);
+        if (!redemption) throw new Error('RECOVERY_REDEMPTION_NOT_FOUND');
+        const redemptionPatch = JSON.parse(journal.redemption_patch_json);
+        const targetRedemptionState = String(redemptionPatch.state || '');
+        if (redemption.state !== 'Reserved' && redemption.state !== targetRedemptionState) {
+          throw new Error('RECOVERY_REDEMPTION_STATE_CONFLICT');
+        }
+        repositoryUpdateLocked_('coupon_redemptions',journal.redemption_id,redemptionPatch);
+      }
+      if (order.status !== targetStatus || Object.keys(patch).some(function(key) {
+        return String(order[key] == null ? '' : order[key]) !== String(patch[key] == null ? '' : patch[key]);
+      })) repositoryUpdateLocked_('orders',journal.order_id,patch);
+    } else {
+      throw new Error('RECOVERY_OPERATION_UNSUPPORTED');
+    }
+    repositoryUpdateLocked_('order_recovery_journal',journal.journal_id,{
+      state:'Completed',
+      attempts:Number(journal.attempts || 0)+1,
+      last_error_code:'',
+      updated_at:now
     });
+    return {ok:true};
+  } catch (error) {
+    try {
+      repositoryUpdateLocked_('order_recovery_journal',journal.journal_id,{
+        state:'Pending',
+        attempts:Number(journal.attempts || 0)+1,
+        last_error_code:String(error && error.message || 'RECOVERY_FAILED').slice(0,100),
+        updated_at:now
+      });
+    } catch (journalError) {}
+    throw error;
+  }
+}
+
+function recoverPendingOrderJournalsLocked_() {
+  repositoryRows_('order_recovery_journal').filter(function(item) {
+    return item.state === 'Pending';
+  }).forEach(function(item) {
+    applyOrderRecoveryJournalLocked_(item);
+  });
 }
 
 function publicOrder_(order) {
