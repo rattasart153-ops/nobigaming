@@ -30,6 +30,8 @@ function dispatchGatewayAction_(action, args) {
     case 'adminUpsert': return adminUpsert(args.token, args.tableName, args.record, args.ipAddress);
     case 'adminDelete': return adminDelete(args.token, args.tableName, args.id, args.ipAddress);
     case 'adminMemberLoginLogs': return adminMemberLoginLogs(args.token, args.memberId, args.limit);
+    case 'adminMembers': return adminMembers(args.token, args.search, args.limit);
+    case 'adminSetMemberStatus': return adminSetMemberStatus(args.token, args.memberId, args.status, args.ipAddress);
     case 'adminStoreMedia': return adminStoreMedia(args.token, args.media, args.ipAddress);
     case 'publicMediaData': return publicMediaData(args.fileId);
     default: throw new Error('Action is not allowed');
