@@ -89,7 +89,8 @@ function loadGasDatabase(spreadsheet, initialProperties = {}) {
     fs.readFileSync(path.join(gasDir, '00_Config.gs'), 'utf8'),
     fs.readFileSync(path.join(gasDir, '02_Database.gs'), 'utf8'),
     fs.readFileSync(path.join(gasDir, '11_Repositories.gs'), 'utf8'),
-    'globalThis.__nobi = NOBI; globalThis.__setupNobiDatabase = setupNobiDatabase; globalThis.__repoInsert = repositoryInsert_; globalThis.__repoFind = repositoryFindByField_; globalThis.__repoUpdate = repositoryUpdate_; globalThis.__append = append_; globalThis.__updateById = updateById_;'
+    fs.readFileSync(path.join(gasDir, '12_Seed.gs'), 'utf8'),
+    'globalThis.__nobi = NOBI; globalThis.__setupNobiDatabase = setupNobiDatabase; globalThis.__seedDefaultCatalog = seedDefaultCatalog; globalThis.__repoInsert = repositoryInsert_; globalThis.__repoFind = repositoryFindByField_; globalThis.__repoUpdate = repositoryUpdate_; globalThis.__append = append_; globalThis.__updateById = updateById_;'
   ].join('\n');
   vm.runInNewContext(source, context);
   return { context, properties };
@@ -284,4 +285,37 @@ test('shared Sheets rate limits use keyed IP hashes and enforce fixed-window thr
   const registerIp='198.51.100.17';
   for(let i=0;i<5;i++) context.__consumeRegistrationIpAttempt(registerIp);
   assert.throws(()=>context.__consumeRegistrationIpAttempt(registerIp),/RATE_LIMITED/);
+});
+
+
+test('default catalog seed creates the legacy nine games and 54 packages idempotently',()=>{
+  const spreadsheet=new FakeSpreadsheet();
+  const {context}=loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  const first=context.__seedDefaultCatalog();
+  assert.equal(first.ok,true);
+  assert.equal(first.gamesAdded,9);
+  assert.equal(first.packagesAdded,54);
+  const games=spreadsheet.getSheetByName('games');
+  const packages=spreadsheet.getSheetByName('packages');
+  assert.equal(games.getLastRow()-1,9);
+  assert.equal(packages.getLastRow()-1,54);
+  const second=context.__seedDefaultCatalog();
+  assert.equal(second.alreadySeeded,true);
+  assert.equal(packages.getLastRow()-1,54);
+  assert.equal(packages.rows.slice(1).filter(row=>row[8]===true).length,9);
+});
+
+test('default catalog seed preserves an existing custom package catalog',()=>{
+  const spreadsheet=new FakeSpreadsheet();
+  const {context}=loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  const games=spreadsheet.getSheetByName('games');
+  games.appendRow(['custom-game','Custom Game','other','Custom',true,1,'2026-11-05T00:00:00.000Z','2026-11-05T00:00:00.000Z']);
+  const packages=spreadsheet.getSheetByName('packages');
+  packages.appendRow(['custom-package','custom-game','Custom Pack',10,'Coins',1000,'','','',true,1,'2026-11-05T00:00:00.000Z','2026-11-05T00:00:00.000Z']);
+  const result=context.__seedDefaultCatalog();
+  assert.equal(result.status,'SKIPPED_EXISTING_PACKAGES');
+  assert.equal(packages.getLastRow()-1,1);
+  assert.equal(games.getLastRow()-1,10);
 });
