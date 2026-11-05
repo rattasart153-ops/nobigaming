@@ -71,7 +71,7 @@ function doPost(e) {
     return gatewayJson_({
       ok:false,
       version:NOBI_GATEWAY.VERSION,
-      error:{code:'GATEWAY_EXECUTION_FAILED',message:safeGatewayMessage_(error)}
+      error:{code:gatewayErrorCode_(error),message:safeGatewayMessage_(error)}
     });
   }
 }
@@ -189,4 +189,16 @@ function safeGatewayMessage_(error) {
   if (/^GATEWAY_SCHEMA_MISSING$/.test(message)) return 'Gateway schema is missing';
   if (/คูปอง|UID|เกม|แพ็กเกจ|สลิป|ออเดอร์|หมดเวลา|ไม่พบ|ไม่ถูกต้อง/.test(message)) return message.slice(0, 240);
   return 'The request could not be completed';
+}
+
+
+function gatewayErrorCode_(error) {
+  const message = String(error && error.message || '');
+  if (/RATE_LIMITED|ลองเข้าสู่ระบบใหม่ภายหลัง/.test(message)) return 'RATE_LIMITED';
+  if (/เซสชัน|กรุณาเข้าสู่ระบบ|ชื่อผู้ใช้หรือรหัสผ่าน|Login ID หรือรหัสผ่าน|บัญชีสมาชิกถูกระงับ|สิทธิ์อัปโหลด/.test(message)) return 'UNAUTHENTICATED';
+  if (/หมดเวลา|หมดอายุ/.test(message)) return 'RESOURCE_EXPIRED';
+  if (/IDEMPOTENCY_CONFLICT|ถูกใช้ครบจำนวน|มีอยู่แล้ว|ไม่สามารถเปลี่ยนสถานะซ้ำ|อ้างอิงอยู่/.test(message)) return 'RESOURCE_CONFLICT';
+  if (/ไม่พบ/.test(message)) return 'RESOURCE_NOT_FOUND';
+  if (/ไม่ถูกต้อง|กรุณา|ต้องระบุ|ต้องมี|ต้องเลือก|ข้อมูล/.test(message)) return 'VALIDATION_FAILED';
+  return 'GATEWAY_EXECUTION_FAILED';
 }
