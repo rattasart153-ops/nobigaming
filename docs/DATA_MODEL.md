@@ -1,4 +1,4 @@
-> **LEGACY DATA MODEL (2026-11-05):** This document describes the former Google Sheets schema. It is retained only as a field/business-rule mapping source for the PostgreSQL migration and must not be used to initialize a live spreadsheet. The target PostgreSQL model will be defined by versioned SQL migrations under the approved [POSTGRES_MIGRATION_PLAN.md](./POSTGRES_MIGRATION_PLAN.md).
+> **ACTIVE DATA MODEL BASELINE (2026-11-05):** Google Sheets Schema v1 is the approved data model for the zero-cost Apps Script architecture. This is a schema reference only; it does not authorize spreadsheet creation or initialization. See [ZERO_COST_MIGRATION_PLAN.md](./ZERO_COST_MIGRATION_PLAN.md).
 
 # Nobi Topup — Google Sheets and Drive Data Model
 
