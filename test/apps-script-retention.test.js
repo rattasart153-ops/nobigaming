@@ -162,3 +162,27 @@ test('retention trigger setup removes duplicates without creating another trigge
   assert.equal(result.duplicates_removed,1);
   assert.equal(triggers.length,1);
 });
+
+
+test('retention cleanup can safely resume after a partial table deletion failure',()=>{
+  const harness=makeRetentionHarness();
+  const {context,sheets}=harness;
+  const originalDelete=sheets.admin_audit_logs.deleteRows.bind(sheets.admin_audit_logs);
+  let failOnce=true;
+  sheets.admin_audit_logs.deleteRows=(start,count)=>{
+    if(failOnce){failOnce=false;throw new Error('SIMULATED_AUDIT_DELETE_FAILURE');}
+    return originalDelete(start,count);
+  };
+  assert.throws(()=>context.runNobiRetentionCleanup(),/SIMULATED_AUDIT_DELETE_FAILURE/);
+  assert.equal(harness.lockAcquisitions,1);
+  assert.equal(harness.lockReleases,1);
+  assert.deepEqual(sheets.member_login_logs.records().map(x=>x.log_id),['member-log-new-a','member-log-new-b','member-log-new-c']);
+  assert.equal(sheets.admin_audit_logs.records().length,2);
+
+  const retry=context.runNobiRetentionCleanup();
+  assert.equal(retry.ok,true);
+  assert.equal(harness.lockAcquisitions,2);
+  assert.equal(harness.lockReleases,2);
+  assert.equal(sheets.admin_audit_logs.records().length,0);
+  assert.equal(sheets.members.records().find(x=>x.member_id==='member-old').registered_ip,'');
+});
