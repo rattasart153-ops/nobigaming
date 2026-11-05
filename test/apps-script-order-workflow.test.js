@@ -489,7 +489,7 @@ test('CREATE recovery rejects an existing order whose immutable payload conflict
   assert.equal(data.order_recovery_journal[0].state,'Pending');
 });
 
-test('replayed checkout calls with the same idempotency key preserve one order', async () => {
+test('replayed same-key checkout requests preserve one order in the single-thread harness', async () => {
   const {context,data}=makeOrderHarness();
   const payload={
     request_key:'request-key-replay-serialized-01',game_id:'game-1',package_id:'pack-1',
