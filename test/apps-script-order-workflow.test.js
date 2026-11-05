@@ -162,3 +162,22 @@ test('slip upload checks the server deadline and prevents a second upload', () =
     slip:{mimeType:'image/png',base64:png.toString('base64')}
   }),/ส่งสลิปแล้ว/);
 });
+
+
+test('member-game coupon requires an authenticated member with completed spend in the qualifying game', () => {
+  const {context,data,fixedNow}=makeOrderHarness();
+  data.members.push({member_id:'member-1',status:'Active'});
+  data.orders.push({order_id:'old-order',member_id:'member-1',game_id:'game-1',status:'Completed',total_satang:50000});
+  const coupon={
+    coupon_id:'member-coupon',code_normalized:'MEMBER',code_display:'MEMBER',
+    discount_type:'percent',discount_value:10,access_type:'member_game_spend',
+    member_spend_game_id:'game-1',member_min_game_spend_satang:40000,
+    allowed_player_ids_json:'["uid-123"]',game_id:'game-1',
+    active:true,expires_at:'',min_order_satang:0,usage_limit:''
+  };
+  const eligible=context.couponEligibility_(coupon,'game-1',10000,'uid-123','member-1',fixedNow);
+  assert.equal(eligible.valid,true);
+  assert.equal(eligible.discount_satang,1000);
+  assert.equal(context.couponEligibility_(coupon,'game-1',10000,'uid-123','',fixedNow).valid,false);
+  assert.equal(context.couponEligibility_(coupon,'game-1',10000,'uid-other','member-1',fixedNow).valid,false);
+});
