@@ -536,7 +536,7 @@ test('CREATE recovery rejects a missing idempotency payload before inserting the
     member_id:'',game_id:'game-1',package_id:'pack-1',player_id:'uid-no-idem',server_id:'',
     coupon_id:'',subtotal_satang:10000,discount_satang:0,total_satang:10000,
     slip_file_id:'',slip_mime_type:'',slip_size_bytes:0,slip_submitted_at:'',
-    checkout_token_hash:'expected-hash',status:'Pending',status_reason:'',
+    checkout_token_hash:'b'.repeat(64),status:'Pending',status_reason:'',
     payment_expires_at:'2026-11-05T04:15:00.000Z',created_at:'2026-11-05T04:00:00.000Z',
     updated_at:'2026-11-05T04:00:00.000Z',completed_at:'',rejected_at:''
   };
