@@ -42,12 +42,22 @@ function adminOrders(token) {
   });
 }
 
-function adminSlipData(token, orderId) {
-  requireAdmin_(token);
+function adminSlipData(token, orderId, ipAddress) {
+  const admin = requireAdmin_(token);
   const order = repositoryGetById_('orders', orderId);
   if (!order || !order.slip_file_id) throw new Error('ไม่พบสลิป');
   const file = DriveApp.getFileById(String(order.slip_file_id));
   const blob = file.getBlob();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    appendAdminAuditLogLocked_({
+      audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
+      action:'VIEW_ORDER_SLIP', target_type:'order', target_id:order.order_id,
+      request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
+      details_json:'{}', created_at:new Date().toISOString()
+    });
+  } finally { lock.releaseLock(); }
   return {
     name: file.getName(),
     mimeType: blob.getContentType(),
@@ -55,7 +65,7 @@ function adminSlipData(token, orderId) {
   };
 }
 
-function adminSetOrderStatus(token, orderId, status) {
+function adminSetOrderStatus(token, orderId, status, ipAddress) {
   const admin = requireAdmin_(token);
   const nextStatus = String(status || '');
   if (!['Completed', 'Rejected'].includes(nextStatus)) throw new Error('สถานะไม่ถูกต้อง');
@@ -82,6 +92,12 @@ function adminSetOrderStatus(token, orderId, status) {
         if (redemption) repositoryUpdateLocked_('coupon_redemptions', redemption.redemption_id, {
           state: 'Released', released_at: now
         });
+        appendAdminAuditLogLocked_({
+          audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
+          action:'ORDER_STATUS_EXPIRED', target_type:'order', target_id:order.order_id,
+          request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
+          details_json:JSON.stringify({reason:'PAYMENT_TIMEOUT'}), created_at:now
+        });
         return {ok:false, reason:'expired'};
       }
       if (redemption) repositoryUpdateLocked_('coupon_redemptions', redemption.redemption_id, {
@@ -106,7 +122,7 @@ function adminSetOrderStatus(token, orderId, status) {
       target_type: 'order',
       target_id: order.order_id,
       request_id: '',
-      ip_address: '',
+      ip_address: String(ipAddress || '').slice(0, 100),
       details_json: JSON.stringify({previous_status:'Pending', status:nextStatus}),
       created_at: now
     });
@@ -136,7 +152,7 @@ function adminList(token, tableName) {
   return records.map(clean_);
 }
 
-function adminUpsert(token, tableName, record) {
+function adminUpsert(token, tableName, record, ipAddress) {
   const admin = requireAdmin_(token);
   if (!['games', 'packages', 'coupons', 'promotions'].includes(String(tableName))) {
     throw new Error('ไม่อนุญาตให้แก้ไขตารางนี้');
@@ -184,7 +200,7 @@ function adminUpsert(token, tableName, record) {
     appendAdminAuditLogLocked_({
       audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
       action: 'UPSERT_' + tableName.toUpperCase(), target_type: tableName,
-      target_id: id, request_id: '', ip_address: '',
+      target_id: id, request_id: '', ip_address: String(ipAddress || '').slice(0, 100),
       details_json: '{}', created_at: now
     });
     return {ok:true, id:id};
@@ -193,7 +209,7 @@ function adminUpsert(token, tableName, record) {
   }
 }
 
-function adminDelete(token, tableName, id) {
+function adminDelete(token, tableName, id, ipAddress) {
   const admin = requireAdmin_(token);
   if (!['games', 'packages', 'coupons', 'promotions'].includes(String(tableName))) {
     throw new Error('ไม่อนุญาตให้ลบตารางนี้');
@@ -225,7 +241,7 @@ function adminDelete(token, tableName, id) {
       appendAdminAuditLogLocked_({
         audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
         action: 'DELETE_' + tableName.toUpperCase(), target_type: tableName,
-        target_id: String(id), request_id: '', ip_address: '',
+        target_id: String(id), request_id: '', ip_address: String(ipAddress || '').slice(0, 100),
         details_json: '{}', created_at: now
       });
       return {ok:true};
@@ -248,7 +264,7 @@ function adminMemberLoginLogs(token, memberId, requestedLimit) {
 }
 
 
-function adminStoreMedia(token, media) {
+function adminStoreMedia(token, media, ipAddress) {
   requireAdmin_(token);
   media = media || {};
   const mimeType = String(media.mimeType || '');
@@ -266,6 +282,18 @@ function adminStoreMedia(token, media) {
     Utilities.newBlob(bytes, mimeType, 'nobi-media-' + Utilities.getUuid() + '.' + ext)
   );
   file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  const now = new Date().toISOString();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    appendAdminAuditLogLocked_({
+      audit_id:Utilities.getUuid(), admin_id:requireAdmin_(token).admin_id,
+      action:'UPLOAD_PRIVATE_MEDIA', target_type:'drive_media', target_id:file.getId(),
+      request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
+      details_json:JSON.stringify({mime_type:mimeType, size_bytes:bytes.length}),
+      created_at:now
+    });
+  } finally { lock.releaseLock(); }
   return {ok:true, file_id:file.getId(), url:'/api/public/media/' + file.getId()};
 }
 
