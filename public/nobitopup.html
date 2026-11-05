@@ -2198,7 +2198,7 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
   refreshMember();
 
   // Admin entry opens the real backend dashboard.
-  $("#loginBtn").addEventListener("click", () => { window.location.search = "?page=admin"; });
+  $("#loginBtn").addEventListener("click", () => { window.location.href = "/admin"; });
 
   // Pull live catalog, popular flags and admin-managed promotions from backend.
   async function loadLiveCatalog() {
