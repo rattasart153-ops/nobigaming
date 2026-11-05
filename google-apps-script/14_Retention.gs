@@ -43,7 +43,7 @@ function clearMemberIpFieldByDate_(ipField, timestampField, cutoffMs) {
     const ip = String(values[row][ipIndex] || '');
     if (!ip) continue;
     const timestamp = Date.parse(String(values[row][timestampIndex] || ''));
-    if (!Number.isFinite(timestamp) || timestamp < cutoffMs) {
+    if (!Number.isFinite(timestamp) || timestamp <= cutoffMs) {
       sheet.getRange(row + 1, ipIndex + 1).setValue('');
       cleared++;
     }
@@ -63,7 +63,7 @@ function clearSessionIpFieldByDate_(tableName, cutoffMs) {
     const ip = String(values[row][ipIndex] || '');
     if (!ip) continue;
     const timestamp = Date.parse(String(values[row][timestampIndex] || ''));
-    if (!Number.isFinite(timestamp) || timestamp < cutoffMs) {
+    if (!Number.isFinite(timestamp) || timestamp <= cutoffMs) {
       sheet.getRange(row + 1, ipIndex + 1).setValue('');
       cleared++;
     }
@@ -81,7 +81,7 @@ function deleteExpiredRetentionRows_(tableName, cutoffMs) {
   for (let row = values.length - 1; row >= 1; row--) {
     const timestamp = Date.parse(String(values[row][timestampIndex] || ''));
     // Invalid timestamps cannot justify retaining IP-bearing history indefinitely.
-    if (!Number.isFinite(timestamp) || timestamp < cutoffMs) {
+    if (!Number.isFinite(timestamp) || timestamp <= cutoffMs) {
       sheet.deleteRow(row + 1);
       deleted++;
     }
