@@ -54,7 +54,7 @@ There are no Member order-history endpoints in the current API. Do not promise o
 ## Order creation and slip lifecycle
 
 - Every checkout request supplies an `Idempotency-Key` of 16–128 characters. The server fingerprints the canonical order payload and stores the request key, payload hash and resulting order ID in Sheets for 90 days.
-- Repeating the same key with the same payload returns the same order. If the order is still Pending and has no slip, the server rotates and reissues the one-time checkout token in the scoped cookie. Reusing the key with a different payload returns a conflict.
+- Repeating the same key with the same payload returns the same order. If the order is still Pending and has no slip, the server deterministically re-derives and reissues the same opaque checkout token in the scoped cookie, so concurrent retries cannot invalidate one another. Reusing the key with a different payload returns a conflict.
 - The server derives package price, discount, totals, member identity and coupon eligibility from persisted records and the verified Member cookie. Client-supplied totals or member IDs are not authoritative.
 - Orders without a coupon, and orders using a coupon without an expiry date, have a 15-minute payment deadline.
 - Orders using an expiring coupon remain payable and eligible for slip submission through 23:59:59.999 Asia/Bangkok on the coupon expiry date. The stored deadline is the exclusive next-day 00:00 Asia/Bangkok cutoff. No additional 15-minute cap applies.
