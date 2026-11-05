@@ -47,14 +47,8 @@ function createOrder(payload) {
       let replayToken = null;
       if (existingOrder.status === 'Pending' && !existingOrder.slip_submitted_at &&
           Date.parse(existingOrder.payment_expires_at) > Date.now()) {
-        // The original response may have been lost. Rotate the one-time token
-        // only for an identical idempotent request and invalidate the old token.
-        replayToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
-        repositoryUpdateLocked_('orders', existingOrder.order_id, {
-          checkout_token_hash:sha256_(replayToken),
-          updated_at:new Date().toISOString()
-        });
-        existingOrder.checkout_token_hash = sha256_(replayToken);
+        // Deterministic HMAC token recovery avoids invalidating a concurrent retry response.
+        replayToken = checkoutTokenForOrder_(existingOrder.order_id, key);
       }
       return {ok:true, order:publicOrder_(existingOrder), duplicate:true, checkout_token:replayToken};
     }
@@ -90,7 +84,7 @@ function createOrder(payload) {
     const orderNumber = 'NBI-' + Utilities.formatDate(now, 'Asia/Bangkok', 'yyyyMMddHHmmss') +
       '-' + Utilities.getUuid().slice(0, 6).toUpperCase();
     const orderId = orderNumber;
-    const checkoutToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
+    const checkoutToken = checkoutTokenForOrder_(orderId, key);
     const totalSatang = Math.max(0, subtotalSatang - discountSatang);
 
     const order = {
@@ -318,4 +312,19 @@ function pruneExpiredIdempotencyLocked_(nowMs) {
   }).forEach(function(record) {
     repositoryDeleteLocked_('idempotency_records', record.idempotency_id);
   });
+}
+
+
+/** Recoverable opaque checkout token; only its SHA-256 digest is stored in Sheets. */
+function checkoutTokenForOrder_(orderId, requestKey) {
+  const secret = String(PropertiesService.getScriptProperties().getProperty('NOBI_GATEWAY_SECRET') || '');
+  if (secret.length < 32) throw new Error('GATEWAY_NOT_CONFIGURED');
+  const signature = Utilities.computeHmacSha256Signature(
+    'NOBI_CHECKOUT_V1:' + String(orderId) + ':' + String(requestKey),
+    secret,
+    Utilities.Charset.UTF_8
+  );
+  return signature.map(function(byte) {
+    return ('0' + ((byte + 256) % 256).toString(16)).slice(-2);
+  }).join('');
 }
