@@ -316,3 +316,66 @@ function publicMediaData(fileId) {
     base64:Utilities.base64Encode(blob.getBytes())
   };
 }
+
+
+function adminMembers(token, searchTerm, requestedLimit) {
+  requireAdmin_(token);
+  const query = String(searchTerm || '').trim().toLowerCase();
+  const limit = Math.min(500, Math.max(1, Number(requestedLimit) || 200));
+  return repositoryRows_('members').filter(function(member) {
+    return !query ||
+      String(member.login_id_normalized).toLowerCase().includes(query) ||
+      String(member.full_name).toLowerCase().includes(query) ||
+      String(member.member_id).toLowerCase().includes(query);
+  }).sort(function(a, b) {
+    return String(b.created_at).localeCompare(String(a.created_at));
+  }).slice(0, limit).map(function(member) {
+    return {
+      member_id:member.member_id,
+      full_name:member.full_name,
+      login_id:member.login_id_display,
+      status:member.status,
+      registered_ip:member.registered_ip,
+      last_login_ip:member.last_login_ip,
+      last_login_at:member.last_login_at,
+      created_at:member.created_at
+    };
+  });
+}
+
+function adminSetMemberStatus(token, memberId, status, ipAddress) {
+  const admin = requireAdmin_(token);
+  const nextStatus = String(status || '');
+  if (!['Active','Suspended'].includes(nextStatus)) throw new Error('สถานะสมาชิกไม่ถูกต้อง');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const member = repositoryGetById_('members', memberId);
+    if (!member) throw new Error('ไม่พบสมาชิก');
+    if (member.status === nextStatus) return {ok:true, unchanged:true};
+    const now = new Date().toISOString();
+    repositoryUpdateLocked_('members', member.member_id, {
+      status:nextStatus,
+      auth_version:Number(member.auth_version || 1) + 1,
+      updated_at:now
+    });
+    if (nextStatus === 'Suspended') {
+      repositoryRows_('member_sessions').filter(function(session) {
+        return String(session.member_id) === String(member.member_id) && !session.revoked_at;
+      }).forEach(function(session) {
+        repositoryUpdateLocked_('member_sessions', session.session_id, {revoked_at:now});
+      });
+    }
+    appendAdminAuditLogLocked_({
+      audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
+      action:'MEMBER_STATUS_' + nextStatus.toUpperCase(),
+      target_type:'member', target_id:member.member_id,
+      request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
+      details_json:JSON.stringify({previous_status:member.status,status:nextStatus}),
+      created_at:now
+    });
+    return {ok:true,status:nextStatus};
+  } finally {
+    lock.releaseLock();
+  }
+}
