@@ -1,4 +1,4 @@
-> **LEGACY / SUPERSEDED (2026-11-05):** The user selected Vercel + Neon PostgreSQL + Vercel Blob Private. Do not follow this setup guide, create an Apps Script project, initialize Sheets, create Drive folders, or deploy a GAS Web App. This file is retained only as migration reference. The active plan is [POSTGRES_MIGRATION_PLAN.md](./POSTGRES_MIGRATION_PLAN.md).
+> **ACTIVE TARGET (2026-11-05):** Google Apps Script + Sheets + private Drive is the approved zero-cost architecture. This guide is a source/setup reference only; it does not authorize creating a project, initializing data, creating folders, setting Script Properties or deploying. The current frontend still needs an HtmlService / google.script.run compatibility port. See [ZERO_COST_MIGRATION_PLAN.md](./ZERO_COST_MIGRATION_PLAN.md).
 
 # Nobi Topup — Google Apps Script / Sheets / Drive Setup
 
