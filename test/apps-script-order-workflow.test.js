@@ -32,7 +32,7 @@ function makeOrderHarness() {
   let folderAccess = 'PRIVATE';
   const context = {
     Date:FixedDate,
-    NOBI:{MAX_SLIP_BYTES:3*1024*1024},
+    NOBI:{MAX_SLIP_BYTES:3*1024*1024,SHEETS:{orders:['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at']}},
     LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>{}})},
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='NOBI_PRIVATE_DRIVE_FOLDER_ID'?'private-folder-id':''})},
     Utilities:{
@@ -466,17 +466,20 @@ test('TRANSITION recovery remains pending and fail-closed when its referenced re
 test('CREATE recovery rejects an existing order whose immutable payload conflicts with the journal', () => {
   const {context,data}=makeOrderHarness();
   const order={
-    order_id:'order-conflict',request_key:'request-key-conflict-0001',member_id:'',
+    order_id:'order-conflict',order_number:'NBI-CONFLICT',request_key:'request-key-conflict-0001',member_id:'',
     game_id:'game-1',package_id:'pack-1',player_id:'uid-expected',server_id:'',
     coupon_id:'',subtotal_satang:10000,discount_satang:0,total_satang:10000,
-    checkout_token_hash:'expected-hash'
+    slip_file_id:'',slip_mime_type:'',slip_size_bytes:0,slip_submitted_at:'',
+    checkout_token_hash:'expected-hash',status:'Pending',status_reason:'',
+    payment_expires_at:'2026-11-05T04:15:00.000Z',created_at:'2026-11-05T04:00:00.000Z',
+    updated_at:'2026-11-05T04:00:00.000Z',completed_at:'',rejected_at:''
   };
   data.orders.push({...order,player_id:'uid-attacker'});
   const journal=context.createOrderRecoveryJournalLocked_({
     order_id:order.order_id,operation:'CREATE',order_record:order,
     idempotency_record:{
       idempotency_id:'idem-conflict',scope:'create_order',request_key:order.request_key,
-      payload_hash:'payload-hash',resource_id:order.order_id,state:'Completed',
+      payload_hash:'a'.repeat(64),resource_id:order.order_id,state:'Completed',
       created_at:'2026-11-05T04:00:00.000Z',expires_at:'2027-02-03T04:00:00.000Z'
     },
     created_at:'2026-11-05T04:00:00.000Z'
