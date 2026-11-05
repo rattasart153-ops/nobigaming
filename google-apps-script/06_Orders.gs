@@ -27,8 +27,12 @@ function createOrder(payload) {
   lock.waitLock(20000);
   try {
     expirePendingOrdersLocked_(Date.now());
-    const existingKey = repositoryFindByField_('idempotency_records', 'request_key', key)
+    let existingKey = repositoryFindByField_('idempotency_records', 'request_key', key)
       .find(function(item) { return item.scope === 'create_order'; });
+    if (existingKey && Date.parse(existingKey.expires_at) <= Date.now()) {
+      repositoryDeleteLocked_('idempotency_records', existingKey.idempotency_id);
+      existingKey = null;
+    }
     if (existingKey) {
       if (String(existingKey.payload_hash) !== payloadHash) {
         throw new Error('IDEMPOTENCY_CONFLICT: request_key นี้ถูกใช้กับข้อมูลอื่นแล้ว');
@@ -126,7 +130,7 @@ function createOrder(payload) {
         resource_id:orderId,
         state:'Completed',
         created_at:now.toISOString(),
-        expires_at:deadline
+        expires_at:new Date(nowMs + 90 * 24 * 60 * 60 * 1000).toISOString()
       });
     } catch (error) {
       // Sheets has no multi-row transaction. Release any reservation already
