@@ -135,17 +135,18 @@ function consumeRateLimitBucketLocked_(scope, identity, limit, nowMs) {
     repositoryUpdateLocked_('security_rate_limits', bucketHash, record);
   }
 
-  let rows = repositoryRows_('security_rate_limits');
-  if (rows.length > 1000) {
+  const sheet = repositorySheet_('security_rate_limits');
+  let rowCount = Math.max(0, sheet.getLastRow() - 1);
+  if (rowCount > 1000) {
     const cutoff = now - 24 * 60 * 60 * 1000;
-    rows.filter(function(row) {
+    repositoryRows_('security_rate_limits').filter(function(row) {
       return Date.parse(row.updated_at || '') < cutoff;
     }).slice(0, 250).forEach(function(row) {
       repositoryDeleteLocked_('security_rate_limits', row.bucket_key_hash);
     });
-    rows = repositoryRows_('security_rate_limits');
+    rowCount = Math.max(0, repositorySheet_('security_rate_limits').getLastRow() - 1);
   }
-  if (rows.length > 5000) throw new Error('RATE_LIMIT_STORE_FULL');
+  if (rowCount > 5000) throw new Error('RATE_LIMIT_STORE_FULL');
 }
 
 /** Caller must hold ScriptLock. */
