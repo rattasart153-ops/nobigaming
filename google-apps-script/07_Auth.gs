@@ -411,7 +411,7 @@ function memberChangePassword(token, currentPassword, newPassword) {
   }
 }
 
-function adminChangePassword(token, currentPassword, newPassword) {
+function adminChangePassword(token, currentPassword, newPassword, ipAddress) {
   const authenticated = requireAdmin_(token);
   const nextPassword = String(newPassword || '');
   if (nextPassword.length < 14 || nextPassword.length > 200) throw new Error('รหัสผ่านใหม่ต้องมีความยาว 14-200 ตัวอักษร');
@@ -439,7 +439,7 @@ function adminChangePassword(token, currentPassword, newPassword) {
     appendAdminAuditLogLocked_({
       audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
       action:'ADMIN_PASSWORD_CHANGED', target_type:'admin',
-      target_id:admin.admin_id, request_id:'', ip_address:'',
+      target_id:admin.admin_id, request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
       details_json:'{}', created_at:now
     });
     return {ok:true, message:'เปลี่ยนรหัสผ่านแล้ว กรุณาเข้าสู่ระบบใหม่'};
