@@ -5,7 +5,6 @@
 const NOBI_REPOSITORY_UNIQUE_FIELDS = {
   admins: ['username_normalized'],
   games: ['name'],
-  packages: [['game_id','name']],
   admin_sessions: ['token_hash'],
   members: ['login_id_normalized'],
   member_sessions: ['token_hash'],
