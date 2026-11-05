@@ -99,9 +99,9 @@ function consumeAuthIpAttempt_(ipAddress) {
     bucket.count = Number(bucket.count || 0) + 1;
     state[ipHash] = bucket;
     const keys = Object.keys(state);
-    if (keys.length > 1000) {
+    if (keys.length > 80) {
       keys.sort(function(a,b) { return Number(state[a].started_at || 0) - Number(state[b].started_at || 0); });
-      keys.slice(0, keys.length - 1000).forEach(function(key) { delete state[key]; });
+      keys.slice(0, keys.length - 80).forEach(function(key) { delete state[key]; });
     }
     props.setProperty(keyName, JSON.stringify(state));
   } finally {
