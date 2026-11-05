@@ -315,6 +315,10 @@ function adminStoreMedia(token, media, ipAddress) {
 function assertDriveFileInPrivateFolder_(file, folderId) {
   const expected = String(folderId || '').trim();
   if (!expected || !file || typeof file.getParents !== 'function') throw new Error('DRIVE_FOLDER_INVALID');
+  const folder = DriveApp.getFolderById(expected);
+  if (folder.getSharingAccess && folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+    throw new Error('DRIVE_FOLDER_NOT_PRIVATE');
+  }
   const parents = file.getParents();
   let found = false;
   while (parents.hasNext()) {
