@@ -136,7 +136,8 @@ test('retention cleanup acquires the shared ScriptLock before touching IP-bearin
 });
 
 test('retention trigger setup is idempotent, lock-protected and creates a Bangkok daily trigger only when missing',()=>{
-  const {context,triggers,get lockAcquisitions, get lockReleases}=makeRetentionHarness();
+  const harness=makeRetentionHarness();
+  const {context,triggers}=harness;
   const first=context.ensureNobiRetentionTrigger();
   assert.equal(first.created,true);
   assert.equal(triggers.length,1);
@@ -146,8 +147,8 @@ test('retention trigger setup is idempotent, lock-protected and creates a Bangko
   const second=context.ensureNobiRetentionTrigger();
   assert.equal(second.created,false);
   assert.equal(triggers.length,1);
-  assert.equal(lockAcquisitions,2);
-  assert.equal(lockReleases,2);
+  assert.equal(harness.lockAcquisitions,2);
+  assert.equal(harness.lockReleases,2);
 });
 
 test('retention trigger setup removes duplicates without creating another trigger',()=>{
