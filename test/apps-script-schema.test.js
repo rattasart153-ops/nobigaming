@@ -102,7 +102,7 @@ test('versioned Sheets setup creates the complete approved schema and is idempot
   const { context, properties } = loadGasDatabase(spreadsheet);
   const first = context.__setupNobiDatabase();
   assert.equal(first.ok, true);
-  assert.equal(first.schemaVersion, 2);
+  assert.equal(first.schemaVersion, 3);
   assert.equal(first.sheetCount, Object.keys(context.__nobi.SHEETS).length);
   assert.equal(properties.NOBI_SHEET_ID, spreadsheet.getId());
   assert.equal(spreadsheet.getSheetByName('members').rows[0][0], 'member_id');
@@ -127,7 +127,7 @@ test('versioned Sheets setup refuses incompatible legacy headers without changin
   assert.deepEqual(games.rows, [['id','name','category'],['old-1','Legacy Game','moba']]);
 });
 
-test('schema v1 database upgrades to v2 by adding the recovery journal without changing existing rows', () => {
+test('schema v1 database upgrades cumulatively to v3 without changing existing business rows', () => {
   const spreadsheet = new FakeSpreadsheet();
   const { context } = loadGasDatabase(spreadsheet);
   context.__setupNobiDatabase();
@@ -139,7 +139,7 @@ test('schema v1 database upgrades to v2 by adding the recovery journal without c
 
   const upgraded = context.__setupNobiDatabase();
   assert.equal(upgraded.ok, true);
-  assert.equal(upgraded.schemaVersion, 2);
+  assert.equal(upgraded.schemaVersion, 3);
   assert.deepEqual(games.rows[1], ['game-1','RoV','moba','Arena of Valor',true,1,'2026-11-04T00:00:00.000Z','2026-11-04T00:00:00.000Z']);
   assert.deepEqual(
     Array.from(spreadsheet.getSheetByName('order_recovery_journal').rows[0]),
@@ -250,7 +250,7 @@ test('Apps Script PBKDF2-SHA256 helper matches the Node.js reference implementat
   assert.equal(context.__passwordHash(password, salt), expected);
 });
 
-test('Schema v2 business modules no longer call legacy field-based Sheets helpers', () => {
+test('Schema v3 business modules no longer call legacy field-based Sheets helpers', () => {
   const gasDir = path.join(__dirname, '..', 'google-apps-script');
   const migrated = ['03_Catalog.gs','04_Coupons.gs','06_Orders.gs','07_Auth.gs','08_Admin.gs'];
   for (const file of migrated) {
