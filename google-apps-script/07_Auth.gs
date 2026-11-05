@@ -157,6 +157,9 @@ function memberRegister(fullName, loginId, password, ipAddress) {
   }
   consumeRegistrationIpAttempt_(ipAddress);
 
+  // Compute the password KDF before acquiring the global write lock.
+  const salt = Utilities.getUuid() + Utilities.getUuid();
+  const passwordHash = passwordHash_(pass, salt);
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
@@ -164,13 +167,12 @@ function memberRegister(fullName, loginId, password, ipAddress) {
       throw new Error('Login ID นี้ถูกใช้งานแล้ว');
     }
     const now = new Date().toISOString();
-    const salt = Utilities.getUuid() + Utilities.getUuid();
     const member = {
       member_id:Utilities.getUuid(),
       full_name:name,
       login_id_normalized:normalized,
       login_id_display:login,
-      password_hash:passwordHash_(pass, salt),
+      password_hash:passwordHash,
       password_salt:salt,
       password_algorithm:'PBKDF2-SHA256-120000',
       status:'Active',
