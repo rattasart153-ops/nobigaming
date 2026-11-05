@@ -212,7 +212,7 @@ function submitOrderSlip(payload) {
     file = DriveApp.getFolderById(folderId).createFile(
       Utilities.newBlob(bytes, slip.mimeType, String(order.order_number) + '.' + ext)
     );
-    file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+    file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
     const now = new Date().toISOString();
     repositoryUpdateLocked_('orders', orderId, {
       slip_file_id:file.getId(),
