@@ -93,20 +93,16 @@ function databaseHeadersMatch_(actual, expected) {
 }
 
 function sheet_(name) {
-  const id=PropertiesService.getScriptProperties().getProperty('NOBI_SHEET_ID');
-  if(!id) throw new Error('Run setupNobiDatabase first.');
-  const sh=SpreadsheetApp.openById(id).getSheetByName(name);
-  if(!sh) throw new Error('Missing sheet: '+name);
-  return sh;
+  if (!NOBI.SHEETS[name]) throw new Error('DATABASE_TABLE_NOT_ALLOWED: ' + name);
+  const id = PropertiesService.getScriptProperties().getProperty('NOBI_SHEET_ID');
+  if (!id) throw new Error('Run setupNobiDatabase first.');
+  const sheet = SpreadsheetApp.openById(id).getSheetByName(name);
+  if (!sheet) throw new Error('Missing sheet: ' + name);
+  return sheet;
 }
 
 function rows_(name) {
-  const sh=sheet_(name), values=sh.getDataRange().getValues();
-  if(values.length<2) return [];
-  const headers=values[0];
-  return values.slice(1).filter(row=>row.some(v=>v!=='' && v!==null)).map(row=>{
-    const o={}; headers.forEach((h,i)=>o[h]=row[i]); return o;
-  });
+  return repositoryRows_(name);
 }
 
 function databaseAssertSchema_(name) {
@@ -136,35 +132,16 @@ function databaseAssertRecordFields_(name, record, allowPrimaryKey) {
 }
 
 function append_(name, record) {
-  const checked = databaseAssertSchema_(name);
-  const headers = databaseAssertRecordFields_(name, record, true);
-  const primaryKey = String(record[headers[0]] || '').trim();
-  if (!primaryKey) throw new Error('DATABASE_PRIMARY_KEY_REQUIRED: ' + name);
-  checked.sheet.appendRow(headers.map(function(field) {
-    return record[field] === undefined || record[field] === null ? '' : record[field];
-  }));
+  return repositoryInsert_(name, record);
 }
 
-function deleteById_(name,id) {
-  const sh=sheet_(name), values=sh.getDataRange().getValues(), headers=values[0], idIndex=0;
-  for(let i=1;i<values.length;i++) if(String(values[i][idIndex])===String(id)) { sh.deleteRow(i+1); return true; }
-  return false;
+function deleteById_(name, id) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try { return repositoryDeleteLocked_(name, id); }
+  finally { lock.releaseLock(); }
 }
 
-function updateById_(name,id,patch) {
-  const checked = databaseAssertSchema_(name);
-  const headers = databaseAssertRecordFields_(name, patch, false);
-  const normalizedId = String(id || '').trim();
-  if (!normalizedId) throw new Error('DATABASE_PRIMARY_KEY_REQUIRED: ' + name);
-  const values = checked.sheet.getDataRange().getValues();
-  const idIndex = 0;
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][idIndex]) !== normalizedId) continue;
-    Object.keys(patch).forEach(function(field) {
-      const column = headers.indexOf(field);
-      checked.sheet.getRange(i + 1, column + 1).setValue(patch[field] === undefined || patch[field] === null ? '' : patch[field]);
-    });
-    return true;
-  }
-  throw new Error('ไม่พบรายการที่ต้องการแก้ไข');
+function updateById_(name, id, patch) {
+  return repositoryUpdate_(name, id, patch);
 }
