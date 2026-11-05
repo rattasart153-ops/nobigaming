@@ -330,3 +330,34 @@ test('recovery journal idempotently finalizes Completed and Rejected order/coupo
     assert.equal(data.order_recovery_journal.filter(x=>x.order_id===id&&x.state==='Completed').length,1);
   }
 });
+
+
+test('checkout retry recovers a partially persisted order before returning the original idempotent order', () => {
+  const {context,data}=makeOrderHarness();
+  data.coupons.push({
+    coupon_id:'coupon-create-recovery',code_normalized:'CREATEFIX',code_display:'CREATEFIX',
+    discount_type:'fixed',discount_value:1000,access_type:'public',active:true,
+    expires_at:'',min_order_satang:0,usage_limit:1,game_id:''
+  });
+  const payload={
+    request_key:'request-key-create-recovery',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-create-recovery',server_id:'',coupon_code:'CREATEFIX'
+  };
+  const originalInsert=context.repositoryInsertLocked_;
+  let failOnce=true;
+  context.repositoryInsertLocked_=(table,record)=>{
+    if(table==='coupon_redemptions'&&failOnce){failOnce=false;throw new Error('SIMULATED_REDEMPTION_INSERT_FAILURE');}
+    return originalInsert(table,record);
+  };
+  assert.throws(()=>context.createOrder(payload),/SIMULATED_REDEMPTION_INSERT_FAILURE/);
+  assert.equal(data.orders.length,1);
+  assert.equal(data.coupon_redemptions.length,0);
+  assert.equal(data.order_recovery_journal[0].state,'Pending');
+
+  const retry=context.createOrder(payload);
+  assert.equal(retry.duplicate,true);
+  assert.equal(retry.order.order_id,data.orders[0].order_id);
+  assert.equal(data.coupon_redemptions.length,1);
+  assert.equal(data.idempotency_records.length,1);
+  assert.equal(data.order_recovery_journal[0].state,'Completed');
+});

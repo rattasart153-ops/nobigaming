@@ -102,7 +102,7 @@ test('versioned Sheets setup creates the complete approved schema and is idempot
   const { context, properties } = loadGasDatabase(spreadsheet);
   const first = context.__setupNobiDatabase();
   assert.equal(first.ok, true);
-  assert.equal(first.schemaVersion, 1);
+  assert.equal(first.schemaVersion, 2);
   assert.equal(first.sheetCount, Object.keys(context.__nobi.SHEETS).length);
   assert.equal(properties.NOBI_SHEET_ID, spreadsheet.getId());
   assert.equal(spreadsheet.getSheetByName('members').rows[0][0], 'member_id');
@@ -125,6 +125,27 @@ test('versioned Sheets setup refuses incompatible legacy headers without changin
   assert.throws(() => context.__setupNobiDatabase(), /SCHEMA_INCOMPATIBLE/);
   assert.equal(spreadsheet.sheets.size, beforeSheets, 'preflight must fail before creating missing sheets');
   assert.deepEqual(games.rows, [['id','name','category'],['old-1','Legacy Game','moba']]);
+});
+
+test('schema v1 database upgrades to v2 by adding the recovery journal without changing existing rows', () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const { context } = loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  const games = spreadsheet.getSheetByName('games');
+  games.appendRow(['game-1','RoV','moba','Arena of Valor',true,1,'2026-11-04T00:00:00.000Z','2026-11-04T00:00:00.000Z']);
+  const metadata = spreadsheet.getSheetByName('system_metadata');
+  metadata.rows[1][1] = '1';
+  spreadsheet.sheets.delete('order_recovery_journal');
+
+  const upgraded = context.__setupNobiDatabase();
+  assert.equal(upgraded.ok, true);
+  assert.equal(upgraded.schemaVersion, 2);
+  assert.deepEqual(games.rows[1], ['game-1','RoV','moba','Arena of Valor',true,1,'2026-11-04T00:00:00.000Z','2026-11-04T00:00:00.000Z']);
+  assert.deepEqual(
+    spreadsheet.getSheetByName('order_recovery_journal').rows[0],
+    context.__nobi.SHEETS.order_recovery_journal
+  );
+  assert.equal(metadata.rows[1][1], '2');
 });
 
 test('versioned Sheets setup refuses unknown schema versions', () => {
