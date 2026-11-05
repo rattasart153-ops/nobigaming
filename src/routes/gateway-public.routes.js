@@ -15,6 +15,20 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
   async function removeUpload(file) {
     if (file && file.path) await fs.unlink(file.path).catch(() => {});
   }
+  function checkoutCookieOptions(req, orderId, expiresAt) {
+    return {
+      httpOnly:true,
+      secure:process.env.NODE_ENV === 'production' || Boolean(req.secure),
+      sameSite:'strict',
+      path:'/api/public/orders/' + encodeURIComponent(String(orderId)) + '/slip',
+      expires:expiresAt
+    };
+  }
+  function setCheckoutReceiptCookie(req, res, orderId, token) {
+    const id = String(orderId).replace(/[^A-Za-z0-9_-]/g, '');
+    res.cookie('nobi_checkout_' + id, token,
+      checkoutCookieOptions(req, orderId, new Date(Date.now() + 5 * 60 * 1000)));
+  }
   function clearCheckoutCookie(req, res, orderId) {
     const id = String(orderId).replace(/[^A-Za-z0-9_-]/g, '');
     res.clearCookie('nobi_checkout_' + id, {
@@ -133,7 +147,8 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
             }
           });
           slipSubmittedAt = submitted.slip_submitted_at || null;
-          clearCheckoutCookie(req, res, order.id);
+          if (submitted.already_submitted) clearCheckoutCookie(req, res, order.id);
+          else setCheckoutReceiptCookie(req, res, order.id, token);
         }
       }
 
@@ -163,7 +178,8 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
         checkout_token:checkoutToken,
         slip:{name:req.file.originalname, mimeType:req.file.mimetype, base64:bytes.toString('base64')}
       });
-      clearCheckoutCookie(req, res, req.params.id);
+      if (result.already_submitted) clearCheckoutCookie(req, res, req.params.id);
+      else setCheckoutReceiptCookie(req, res, req.params.id, checkoutToken);
       res.set('Cache-Control', 'no-store');
       return res.status(result.already_submitted ? 200 : 201).json({
         ok:true,
