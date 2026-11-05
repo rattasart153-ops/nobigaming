@@ -4,10 +4,11 @@ function dispatchGatewayAction_(action, args) {
   switch (String(action || '')) {
     case 'catalog': return publicCatalog();
     case 'promotions': return publicPromotions();
-    case 'coupon': return validateCoupon(args.code, args.gameId, args.subtotal, args.playerId);
-    case 'couponSuggestions': return couponSuggestions_(args.gameId, args.subtotal, args.playerId);
+    case 'coupon': return validateCoupon(args.code, args.gameId, args.subtotal, args.playerId, args.memberId);
+    case 'couponSuggestions': return couponSuggestions_(args.gameId, args.subtotal, args.playerId, args.memberId);
     case 'paymentInfo': return paymentInfo_(args.amount);
     case 'createOrder': return createOrder(args);
+    case 'submitOrderSlip': return submitOrderSlip(args);
     case 'adminLogin': return adminLogin(args.username, args.password);
     case 'adminMe':
       try { requireAdmin_(args.token); return {authenticated:true}; }
