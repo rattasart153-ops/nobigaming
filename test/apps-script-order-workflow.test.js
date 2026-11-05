@@ -87,6 +87,7 @@ function makeOrderHarness() {
   for (const file of ['04_Coupons.gs','06_Orders.gs']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname,'..','google-apps-script',file),'utf8'),context,{filename:file});
   }
+  context.checkoutTokenForOrder_=(orderId,requestKey)=>'derived-checkout-token.'+orderId+'.'+requestKey;
   return {context,data,files,fixedNow,setFolderAccess:value=>{folderAccess=value;}};
 }
 
