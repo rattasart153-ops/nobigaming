@@ -18,6 +18,7 @@ const NOBI_GATEWAY = {
     'couponSuggestions',
     'paymentInfo',
     'createOrder',
+    'submitOrderSlip',
     'adminLogin',
     'adminMe',
     'adminLogout',
