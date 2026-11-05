@@ -69,6 +69,7 @@ The browser calls same-origin Vercel routes only. It never calls `google.script.
 - `09_Validation.gs` — schema v1 business-record validation.
 - `10_Utilities.gs` — hashing, rate limits, retention, money and shared helpers.
 - `11_Repositories.gs` — schema-aware Sheets repository primitives.
+- `12_Seed.gs` — resumable, idempotent default games and packages catalog seed.
 - `13_HttpGateway.gs` — signed POST verification, nonce replay protection and response envelope.
 - `Code.gs` — minimal HTTP entry/liveness boundary.
 
