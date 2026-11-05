@@ -298,60 +298,71 @@ function applyOrderRecoveryJournalLocked_(journal) {
           !orderRecord.request_key || !orderRecord.checkout_token_hash) {
         throw new Error('RECOVERY_ORDER_PAYLOAD_INVALID');
       }
+
       const idem = JSON.parse(String(journal.idempotency_record_json || '{}'));
-      if (!idem.idempotency_id || idem.scope !== 'create_order' ||
+      const requiredIdemFields = NOBI.SHEETS.idempotency_records;
+      if (!idem.idempotency_id || requiredIdemFields.some(function(field) {
+            return !Object.prototype.hasOwnProperty.call(idem,field);
+          }) || idem.scope !== 'create_order' ||
           String(idem.request_key) !== String(orderRecord.request_key) ||
           String(idem.resource_id) !== String(journal.order_id) ||
           !/^[a-f0-9]{64}$/i.test(String(idem.payload_hash || '')) ||
-          !idem.created_at || !idem.expires_at) {
+          !Number.isFinite(Date.parse(idem.created_at)) ||
+          !Number.isFinite(Date.parse(idem.expires_at)) ||
+          Date.parse(idem.expires_at) <= Date.parse(idem.created_at)) {
         throw new Error('RECOVERY_IDEMPOTENCY_PAYLOAD_INVALID');
       }
-      const existingOrder = repositoryGetById_('orders',journal.order_id);
-      if (!existingOrder) {
-        repositoryInsertLocked_('orders',orderRecord);
-      } else {
-        const orderConflict = requiredOrderFields.some(function(field) {
-          return String(existingOrder[field] == null ? '' : existingOrder[field]) !==
-            String(orderRecord[field] == null ? '' : orderRecord[field]);
-        });
-        if (orderConflict) throw new Error('RECOVERY_ORDER_CONFLICT');
+
+      const redemptionRecord = journal.redemption_record_json
+        ? JSON.parse(String(journal.redemption_record_json)) : null;
+      if (Boolean(orderRecord.coupon_id) !== Boolean(redemptionRecord)) {
+        throw new Error('RECOVERY_REDEMPTION_PAYLOAD_INVALID');
       }
-      const existingRedemptions = repositoryFindByField_('coupon_redemptions','order_id',journal.order_id);
-      if (existingRedemptions.length > 1) throw new Error('RECOVERY_DUPLICATE_REDEMPTIONS');
-      if (journal.redemption_record_json) {
-        const redemptionRecord = JSON.parse(journal.redemption_record_json);
-        if (!orderRecord.coupon_id ||
+      if (redemptionRecord) {
+        const requiredRedemptionFields = NOBI.SHEETS.coupon_redemptions;
+        if (!redemptionRecord.redemption_id ||
+            requiredRedemptionFields.some(function(field) {
+              return !Object.prototype.hasOwnProperty.call(redemptionRecord,field);
+            }) ||
             String(redemptionRecord.order_id) !== String(journal.order_id) ||
             String(redemptionRecord.coupon_id) !== String(orderRecord.coupon_id) ||
-            redemptionRecord.state !== 'Reserved') {
+            redemptionRecord.state !== 'Reserved' ||
+            !Number.isFinite(Date.parse(redemptionRecord.reserved_at)) ||
+            !Number.isFinite(Date.parse(redemptionRecord.reserved_until))) {
           throw new Error('RECOVERY_REDEMPTION_PAYLOAD_INVALID');
         }
-        const existingRedemption = existingRedemptions[0];
-        if (!existingRedemption) {
-          repositoryInsertLocked_('coupon_redemptions',redemptionRecord);
-        } else {
-          const immutableRedemptionFields = [
-            'redemption_id','coupon_id','order_id','member_id','player_id','game_id','discount_satang'
-          ];
-          const redemptionConflict = immutableRedemptionFields.some(function(field) {
+      }
+
+      // Validate every pre-existing record before performing any missing write.
+      const existingOrder = repositoryGetById_('orders',journal.order_id);
+      if (existingOrder && requiredOrderFields.some(function(field) {
+        return String(existingOrder[field] == null ? '' : existingOrder[field]) !==
+          String(orderRecord[field] == null ? '' : orderRecord[field]);
+      })) throw new Error('RECOVERY_ORDER_CONFLICT');
+
+      const existingRedemptions = repositoryFindByField_('coupon_redemptions','order_id',journal.order_id);
+      if (existingRedemptions.length > 1) throw new Error('RECOVERY_DUPLICATE_REDEMPTIONS');
+      const existingRedemption = existingRedemptions[0] || null;
+      if (existingRedemption && (!redemptionRecord ||
+          NOBI.SHEETS.coupon_redemptions.some(function(field) {
             return String(existingRedemption[field] == null ? '' : existingRedemption[field]) !==
               String(redemptionRecord[field] == null ? '' : redemptionRecord[field]);
-          }) || existingRedemption.state !== 'Reserved';
-          if (redemptionConflict) throw new Error('RECOVERY_REDEMPTION_CONFLICT');
-        }
-      } else if (existingRedemptions.length || orderRecord.coupon_id) {
-        throw new Error('RECOVERY_UNEXPECTED_REDEMPTION');
-      }
+          }))) throw new Error('RECOVERY_REDEMPTION_CONFLICT');
+
       const existingIdemRows = repositoryFindByField_('idempotency_records','request_key',idem.request_key)
         .filter(function(item) { return item.scope === idem.scope; });
       if (existingIdemRows.length > 1) throw new Error('RECOVERY_DUPLICATE_IDEMPOTENCY');
-      const existingIdem = existingIdemRows[0];
-      if (!existingIdem) repositoryInsertLocked_('idempotency_records',idem);
-      else if (String(existingIdem.idempotency_id) !== String(idem.idempotency_id) ||
-               String(existingIdem.resource_id) !== String(journal.order_id) ||
-               String(existingIdem.payload_hash) !== String(idem.payload_hash)) {
-        throw new Error('RECOVERY_IDEMPOTENCY_CONFLICT');
+      const existingIdem = existingIdemRows[0] || null;
+      if (existingIdem && NOBI.SHEETS.idempotency_records.some(function(field) {
+        return String(existingIdem[field] == null ? '' : existingIdem[field]) !==
+          String(idem[field] == null ? '' : idem[field]);
+      })) throw new Error('RECOVERY_IDEMPOTENCY_CONFLICT');
+
+      if (!existingOrder) repositoryInsertLocked_('orders',orderRecord);
+      if (redemptionRecord && !existingRedemption) {
+        repositoryInsertLocked_('coupon_redemptions',redemptionRecord);
       }
+      if (!existingIdem) repositoryInsertLocked_('idempotency_records',idem);
     } else if (journal.operation === 'TRANSITION') {
       const order = repositoryGetById_('orders',journal.order_id);
       if (!order) throw new Error('RECOVERY_ORDER_NOT_FOUND');
