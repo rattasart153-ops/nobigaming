@@ -1,3 +1,5 @@
+> **CURRENT MIGRATION NOTE (2026-11-05):** The lower sections of this inventory describe two different historical frontend states and conflict with each other. The latest approved target is Apps Script HtmlService + an allowlisted `google.script.run` facade. The Express REST contract is now a legacy reference, not the target transport. P0 must re-verify every route against the current HTML source before porting. No frontend code has been changed as part of the architecture switch.
+
 # Frontend → Backend Compatibility Inventory
 
 Branch: `vercel-drive-setup`
