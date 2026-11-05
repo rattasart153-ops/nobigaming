@@ -63,6 +63,7 @@ function adminLogin(username, password, ipAddress) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
+    pruneExpiredSessionsLocked_(Date.now());
     const currentState = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
     if (Date.now() < Number(currentState.until || 0)) throw new Error('ลองเข้าสู่ระบบใหม่ภายหลัง');
     const currentAdmin = repositoryGetById_('admins', admin.admin_id);
@@ -250,6 +251,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
+    pruneExpiredSessionsLocked_(Date.now());
     const state = JSON.parse(props.getProperty(throttleKey) || '{"count":0,"until":0}');
     if (Date.now() < Number(state.until || 0)) {
       appendMemberLoginLogLocked_(member.member_id, normalized, ip, false, 'Failure', 'RATE_LIMITED', agent, new Date().toISOString());
