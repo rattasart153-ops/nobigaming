@@ -61,7 +61,7 @@ There are no Member order-history endpoints in the current API. Do not promise o
 - The server enforces the deadline synchronously when creating an order, submitting a slip and approving an order. A slip must be accepted before the deadline; Admin may review and complete it later.
 - Coupon capacity is Reserved when a Pending order is created, Consumed only when the order is Completed, and Released when the order is Rejected or expires. Sheets writes are serialized with ScriptLock; multi-row writes use compensating updates because Sheets has no SQL transaction.
 - Slip upload is limited to PNG/JPEG/WebP, fully decoded/re-encoded in the Vercel staging layer, and capped at 3 MB to stay below Vercel function payload limits. Apps Script independently checks size and file signature.
-- A repeated slip submission using the same valid checkout token returns the existing accepted submission and does not create a second Drive file. A successful upload clears the browser cookie.
+- A repeated slip submission using the same valid checkout token returns the existing accepted submission and does not create a second Drive file. After the first accepted upload, Vercel retains the scoped token cookie for five minutes as a receipt/retry credential; a successful retry returns `already_submitted=true` and clears that cookie.
 - Slips are stored in the configured private Drive slip folder. Admin retrieval requires a valid Admin session and checks the configured private folder and file privacy.
 
 ## Coupon eligibility
