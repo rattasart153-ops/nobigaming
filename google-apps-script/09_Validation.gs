@@ -64,9 +64,14 @@ function validateRecord_(tableName, record) {
   }
 
   if (tableName === 'promotions' && record.link_url) {
+    const link = String(record.link_url).trim();
+    const safeRelative = link.charAt(0) === '#' ||
+      (link.charAt(0) === '/' && link.charAt(1) !== '/');
     let parsed;
-    try { parsed = new URL(String(record.link_url)); } catch (ignored) {}
-    if (!parsed || !['https:', 'http:'].includes(parsed.protocol)) {
+    if (!safeRelative) {
+      try { parsed = new URL(link); } catch (ignored) {}
+    }
+    if (!safeRelative && (!parsed || !['https:', 'http:'].includes(parsed.protocol))) {
       throw new Error('ลิงก์โปรโมชันไม่ถูกต้อง');
     }
   }
