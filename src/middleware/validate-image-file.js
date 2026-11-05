@@ -5,7 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const sharp = require('sharp');
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_BYTES = 3 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 25_000_000;
 const MAX_IMAGE_EDGE = 8192;
 
@@ -99,7 +99,7 @@ async function validateImageFile(req, res, next) {
     if (outputStat.size < 1 || outputStat.size > MAX_FILE_BYTES) {
       await removeFile(temporaryPath);
       await removeFile(originalPath);
-      return res.status(415).json({ error: 'ขนาดไฟล์ภาพหลังประมวลผลเกิน 5 MB' });
+      return res.status(415).json({ error: 'ขนาดไฟล์ภาพหลังประมวลผลเกิน 3 MB' });
     }
 
     await fs.rename(temporaryPath, originalPath);
