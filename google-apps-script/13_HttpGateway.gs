@@ -140,8 +140,8 @@ function claimGatewayNonce_(nonce, timestamp) {
   try {
     const ssId = PropertiesService.getScriptProperties().getProperty('NOBI_SHEET_ID');
     if (!ssId) throw new Error('DATABASE_NOT_INITIALIZED');
-    const sheet = SpreadsheetApp.openById(ssId).getSheetByName('gateway_nonces');
-    if (!sheet) throw new Error('GATEWAY_SCHEMA_MISSING');
+    const checked = databaseAssertSchema_('gateway_nonces');
+    const sheet = checked.sheet;
 
     const nonceHash = sha256_(nonce);
     const lastRow = sheet.getLastRow();
