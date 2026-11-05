@@ -48,6 +48,12 @@ function makeOrderHarness() {
         files.push(file); return file;
       },getSharingAccess:()=> folderAccess})
     },
+    requireMemberLocked_:token=>{
+      if(token!=='valid-member-token') throw new Error('เซสชันสมาชิกหมดอายุ');
+      const member=data.members.find(row=>row.member_id==='member-1'&&row.status==='Active');
+      if(!member) throw new Error('บัญชีสมาชิกถูกระงับ');
+      return member;
+    },
     repositoryRows_:table=>data[table] || [],
     repositoryFindByField_:(table,field,value)=>(data[table]||[]).filter(row=>String(row[field])===String(value)),
     repositoryGetById_:(table,id)=>{
