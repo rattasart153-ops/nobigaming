@@ -197,8 +197,11 @@ function submitOrderSlip(payload) {
         !constantTimeHexEqual_(String(order.checkout_token_hash), sha256_(checkoutToken))) {
       throw new Error('ไม่พบออเดอร์หรือสิทธิ์อัปโหลดไม่ถูกต้อง');
     }
-    if (order.status !== 'Pending' || order.slip_submitted_at) {
-      throw new Error('ออเดอร์นี้มีการส่งสลิปแล้วหรือไม่สามารถแก้ไขได้');
+    if (order.slip_submitted_at) {
+      return {ok:true, already_submitted:true, slip_submitted_at:order.slip_submitted_at};
+    }
+    if (order.status !== 'Pending') {
+      throw new Error('ออเดอร์นี้ไม่สามารถส่งสลิปได้แล้ว');
     }
     const deadline = Date.parse(order.payment_expires_at);
     if (!Number.isFinite(deadline) || Date.now() >= deadline) {
