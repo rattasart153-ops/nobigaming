@@ -48,3 +48,17 @@ function clean_(record) {
   });
   return output;
 }
+
+
+/** Insert Admin audit records and enforce the approved 90-day retention. Caller holds ScriptLock. */
+function appendAdminAuditLogLocked_(record) {
+  repositoryInsertLocked_('admin_audit_logs', record);
+  const cutoff = Date.now() - NOBI.LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const sheet = repositorySheet_('admin_audit_logs');
+  const values = sheet.getDataRange().getValues();
+  const createdIndex = NOBI.SHEETS.admin_audit_logs.indexOf('created_at');
+  for (let row = values.length - 1; row >= 1; row--) {
+    const created = Date.parse(String(values[row][createdIndex] || ''));
+    if (Number.isFinite(created) && created < cutoff) sheet.deleteRow(row + 1);
+  }
+}
