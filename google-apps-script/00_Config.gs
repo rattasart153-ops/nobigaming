@@ -17,7 +17,8 @@ const NOBI = {
     orders: ['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at'],
     idempotency_records: ['idempotency_id','scope','request_key','payload_hash','resource_id','state','created_at','expires_at'],
     system_metadata: ['key','value','updated_at'],
-    gateway_nonces: ['nonce_hash','created_at']
+    gateway_nonces: ['nonce_hash','created_at'],
+    security_rate_limits: ['bucket_key_hash','window_start','attempt_count','blocked_until','updated_at']
   },
   SESSION_MAX_LIFETIME_MS: 8 * 60 * 60 * 1000,
   SESSION_IDLE_TIMEOUT_MS: 30 * 60 * 1000,
