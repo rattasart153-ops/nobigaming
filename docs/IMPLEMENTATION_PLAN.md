@@ -52,7 +52,7 @@ Exit: existing API contracts are characterized, security changes are intentional
 ## Phase 1 security findings
 - See [PHASE1_SECURITY_FINDINGS.md](./PHASE1_SECURITY_FINDINGS.md) for evidence, remediation, and remaining release gates.
 - See [PHASE1_ABUSE_CONTROL_DESIGN.md](./PHASE1_ABUSE_CONTROL_DESIGN.md) for the documented no-new-service multi-instance limiter strategy.
-- Remaining material risks: local SQLite/session persistence on Vercel, process-local rate limiting, CSP still Report-Only, and all uploaded images still need private Google Drive storage and application-proxy delivery.
+- Remaining material risks after the Phase 2 source integration: Apps Script runtime/quota behavior is not yet verified, CSP remains Report-Only, and browser/device end-to-end tests plus shared-abuse-control load tests are still release gates. Vercel production now fails closed without Apps Script configuration and does not initialize SQLite.
 - Do not enable production orders until the critical/high findings are resolved and retested.
 
 ## Phase 0/1 exit blockers before Phase 2
@@ -63,10 +63,10 @@ Exit: existing API contracts are characterized, security changes are intentional
 - [x] Complete full image decoding and document the shared multi-instance abuse-control strategy in [PHASE1_ABUSE_CONTROL_DESIGN.md](./PHASE1_ABUSE_CONTROL_DESIGN.md); implementation/load testing is a production integration gate for the shared backend.
 - [x] User confirmed IP login history and Admin audit-log retention: 90 days, then delete or irreversibly anonymize.
 - [x] User confirmed Admin and Member session policy: maximum lifetime 8 hours; idle timeout 30 minutes; revoke on logout or password change.
-- [x] Phase 1 final acceptance review completed: approved policies documented, final CI passed, and `main` remains unchanged. Phase 1 is closed for its stated Express-baseline scope. Phase 2 has NOT started; begin it only after a separate user instruction.
+- [x] Phase 1 final acceptance review completed: approved policies documented, final CI passed, and `main` remains unchanged. Phase 1 is closed for its stated Express-baseline scope. Phase 2 has been explicitly authorized and is in progress on vercel-drive-setup; no deployment is authorized.
 
 ## Phase 2 — Apps Script gateway and storage
-Progress: GAS source is split into focused HTTP, catalog, coupon, payment, order, authentication, Admin, validation, database and utility modules. The legacy `rpc()`/HtmlService assumptions are removed from the entry point. The complete target Sheets header model and non-destructive schema-versioned initializer are implemented and covered by Node tests. Initial schema-aware repository primitives now provide validated row reads, primary-key lookup, unique-key checks and lock-aware inserts/updates; full business workflows and Drive integration remain open.
+Progress: Schema v1 business handlers for Catalog, Coupon, Order, Admin and Authentication have been migrated to schema-aware repositories. Member registration/login/session/IP history, Admin sessions, password rotation, coupon eligibility/reservations, order deadlines/idempotency/audit logs, private Drive slip/media storage and Vercel proxy routes are implemented in source. Express production mode now uses the signed Apps Script gateway and fails closed instead of falling back to SQLite. Node tests cover schema setup, PBKDF2 reference output, Vercel storage mode and gateway REST route contracts. Apps Script runtime, quota, concurrency and full browser/device verification remain open.
 - [x] Split legacy GAS business logic into focused files and replace the legacy `rpc()` entry with an explicit signed-HTTP action dispatcher; remove HtmlService/browser RPC assumptions.
 - [x] Add signed, version-1 HTTP request envelope and fixed legacy action allowlist (`13_HttpGateway.gs`).
 - [x] Add HMAC-SHA256 verification, timestamp freshness check and nonce replay ledger guarded by ScriptLock.
@@ -75,13 +75,13 @@ Progress: GAS source is split into focused HTTP, catalog, coupon, payment, order
 - [x] Implement schema-versioned, idempotent Sheets setup (schema version 1) that preflights all existing headers, stops on incompatibility or unknown versions, never clears existing content, and is covered by repeat-run/legacy-schema/version tests.
 - [x] Add schema-aware repository primitives with exact header checks, allowed-field validation, immutable primary keys, unique-key checks, and ScriptLock-protected inserts/updates.
 - [x] Harden legacy Sheets write helpers to fail closed on unknown tables, schema mismatches, unknown fields, missing primary keys, and primary-key mutation; add regression tests proving rejected writes do not alter data.
-- [ ] Migrate every legacy business handler to the version 1 repository field model; keep live Sheets initialization blocked until this migration is complete.
-- [ ] Implement the approved complete Sheets model workflows, including Members, Member/Admin sessions, coupon reservations, order deadlines, audit and idempotency records.
-- [ ] Implement private Drive storage for slips and all storefront/catalog/promotion images, plus authorized Vercel proxy delivery.
+- [x] Migrate Catalog, Coupon, Order, Admin and Auth business handlers to the version 1 repository field model; keep live Sheets initialization blocked until runtime verification is complete.
+- [x] Implement Member/Admin sessions, coupon reservations, order deadlines, audit and idempotency records against the approved Sheets schema.
+- [x] Implement private Drive storage for slips and storefront/catalog/promotion images, plus Admin-authorized slip and reference-checked media proxy delivery.
 - [ ] Add GAS runtime tests for bad signature, stale timestamp, replay, invalid action, missing schema, concurrent nonce claims and quota behavior.
-- [ ] Wire the Express repository adapter only after every action is mapped and tested.
+- [x] Wire the Express production API to the signed Apps Script gateway; add REST route contract tests. Full Apps Script runtime integration remains a separate gate.
 
-The split GAS modules and schema initializer pass Node syntax/structure and mocked setup tests, but have not been imported into or runtime-tested in Apps Script. Existing business handlers are still legacy and are not compatible with the new target schema yet; do not initialize a live spreadsheet or call `initializeAdmin()` until repository and authentication adapters are migrated. No deployment is authorized.
+The migrated GAS modules pass Node syntax/structure checks and PBKDF2 is verified against Node's reference implementation. They have not yet been imported into or runtime-tested in Apps Script. Benchmark the 120,000-iteration PBKDF2 implementation and test nonce replay, concurrent order/coupon claims, Drive privacy, and quota behavior before any live initialization. Do not call `setupNobiDatabase()` or `initializeAdmin()` until those gates pass. No deployment is authorized.
 
 ## Phase 3 — Durable authentication
 - Implement separate Admin and Member auth.
@@ -140,4 +140,4 @@ Exit: all critical tests pass, remaining risks are documented, and user separate
 - [x] Adapt Admin order list to `has_slip`, private binary slip retrieval, payment deadline and `Expired` status.
 - [x] Add frontend syntax/contract test and verify it in GitHub Actions.
 
-Still open: connect the Express service/repository layer to Apps Script + Sheets + private Drive; implement the previously approved member and member-coupon rules; make sessions, rate limits and all uploaded media durable/private; complete real-browser end-to-end tests. Frontend REST integration is not production readiness.
+Still open: import and test the Apps Script project in its real runtime; benchmark PBKDF2 and quotas; run concurrency/replay/security tests; verify Drive permissions; finish real-browser/device end-to-end tests and production CSP/abuse-control review. Frontend and gateway source integration is not production readiness.
