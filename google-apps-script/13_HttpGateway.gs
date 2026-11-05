@@ -35,7 +35,9 @@ const NOBI_GATEWAY = {
     'adminList',
     'adminUpsert',
     'adminDelete',
-    'adminMemberLoginLogs'
+    'adminMemberLoginLogs',
+    'adminStoreMedia',
+    'publicMediaData'
   ]
 };
 
