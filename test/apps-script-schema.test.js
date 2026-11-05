@@ -145,7 +145,7 @@ test('schema v1 database upgrades cumulatively to v3 without changing existing b
     Array.from(spreadsheet.getSheetByName('order_recovery_journal').rows[0]),
     Array.from(context.__nobi.SHEETS.order_recovery_journal)
   );
-  assert.equal(metadata.rows[1][1], '2');
+  assert.equal(metadata.rows[1][1], '3');
 });
 
 test('versioned Sheets setup refuses unknown schema versions', () => {
