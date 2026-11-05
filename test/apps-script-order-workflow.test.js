@@ -28,9 +28,10 @@ function makeOrderHarness() {
   };
   let uuid = 0;
   const files = [];
+  let folderAccess = 'PRIVATE';
   const context = {
     Date:FixedDate,
-    NOBI:{MAX_SLIP_BYTES:5*1024*1024},
+    NOBI:{MAX_SLIP_BYTES:3*1024*1024},
     LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>{}})},
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='NOBI_PRIVATE_DRIVE_FOLDER_ID'?'private-folder-id':''})},
     Utilities:{
@@ -45,7 +46,7 @@ function makeOrderHarness() {
         const file={id:'drive-file-'+(files.length+1),blob,trashed:false,
           getId(){return this.id;},getSharingAccess(){return 'PRIVATE';},setSharing(){},setTrashed(value){this.trashed=value;}};
         files.push(file); return file;
-      },getSharingAccess:()=> 'PRIVATE'})
+      },getSharingAccess:()=> folderAccess})
     },
     repositoryRows_:table=>data[table] || [],
     repositoryFindByField_:(table,field,value)=>(data[table]||[]).filter(row=>String(row[field])===String(value)),
@@ -79,7 +80,7 @@ function makeOrderHarness() {
   for (const file of ['04_Coupons.gs','06_Orders.gs']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname,'..','google-apps-script',file),'utf8'),context,{filename:file});
   }
-  return {context,data,files,fixedNow};
+  return {context,data,files,fixedNow,setFolderAccess:value=>{folderAccess=value;}};
 }
 
 test('checkout creates a Pending order with a 15-minute deadline and a one-time token', () => {
