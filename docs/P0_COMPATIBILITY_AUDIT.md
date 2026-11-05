@@ -238,3 +238,29 @@ The browser facade must expose named, typed operations rather than accepting arb
 - No GAS Web App, Vercel Preview or Production deployment was performed during this audit.
 - No production order or payment was accepted.
 - Continue only on `vercel-drive-setup`; never modify `main`.
+
+
+## 9. P0-R5/R6 recovery, gateway and request-count verification
+
+### P0-R5 — idempotency and recovery fault handling
+
+- The slip-upload catch path previously trashed a newly created Drive file whenever the following Sheets order update threw. A Sheets update may commit even when its response is lost; in that case the order could already reference the file, and unconditional trashing would leave a broken slip reference.
+- The catch path now re-reads the order. It trashes the file only when the order does not reference it. If the re-read itself fails, it preserves the private file and prefers a possible orphan over destructive loss of an already-committed slip.
+- Added a fault-injection test where the order write commits and then throws. The test verifies the file remains private/present, the order reference remains valid, and a retry returns the already-submitted result without creating a second Drive file.
+- Existing CREATE/TRANSITION recovery tests continue to cover idempotent journal replay, partial primary writes, and uncertain journal finalization. These are deterministic test-harness checks, not a simulation of parallel Apps Script executions.
+
+### P0-R6 — HMAC, nonce and GAS request count
+
+- The Node client and Apps Script gateway use the same canonical JSON envelope and HMAC-SHA256 signature. A new test mutates signed action arguments and verifies rejection occurs before the nonce is claimed.
+- Nonce claim still occurs only after signature validation, uses a ScriptLock around expiry pruning, replay scan and append, rejects duplicate nonce hashes, fails closed on corrupt timestamps or a full active ledger, and retains the existing 10-minute window / 5,000 active-row ceiling.
+- Added a lock-boundary test asserting that nonce pruning, reads and append all occur while ScriptLock is held. The local harness verifies lock use; actual simultaneous Apps Script executions and Sheets contention remain untested.
+- Removed redundant `adminMe` / `memberMe` preflight gateway calls from protected route middleware. Middleware now requires the HttpOnly cookie and forwards its token; each protected business handler performs authoritative session validation inside the same signed GAS action. Logout remains a token-revocation operation.
+- Coupon validation and suggestions now send the Member token inside the signed server-to-server envelope. Apps Script derives the optional Member ID from the verified session, avoiding a separate `memberMe` round-trip. Invalid/expired Member sessions retain Guest behavior for public coupons; infrastructure failures are not silently converted to Guest.
+- Route tests assert protected Admin requests do not make a redundant `adminMe` request and Member coupon validation does not make a separate `memberMe` request.
+
+### CI evidence for this pair
+
+- P0-R5 workflow run `42129198977`: **77 tests passed, 0 failed**.
+- P0-R6 workflow run `42129480514`: **79 tests passed, 0 failed**.
+- Both runs executed on `vercel-drive-setup`. No live Apps Script, Sheets, Drive, deployment, or production transaction was used.
+- P0 remains blocked by the unresolved trusted Member IP-history compatibility issue documented under P0-12. Do not start P1 or change the approved IP-history / Zero Cost requirements without a separate user decision.
