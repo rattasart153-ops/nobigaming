@@ -1,13 +1,14 @@
 /** Coupon eligibility against Schema v1; all persisted money values are satang. */
 
 function couponExpiryCutoff_(expiresAt) {
-  const match = String(expiresAt || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) {
-    const parsed = Date.parse(expiresAt);
-    return Number.isFinite(parsed) ? parsed : NaN;
-  }
+  const match = String(expiresAt || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+  if (!match) return NaN;
+  const year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+  const calendarDate = new Date(Date.UTC(year, month - 1, day));
+  if (calendarDate.getUTCFullYear() !== year || calendarDate.getUTCMonth() !== month - 1 ||
+      calendarDate.getUTCDate() !== day) return NaN;
   // Date-only expiry is inclusive through 23:59:59.999 Asia/Bangkok (UTC+7).
-  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1) - 7 * 60 * 60 * 1000;
+  return Date.UTC(year, month - 1, day + 1) - 7 * 60 * 60 * 1000;
 }
 
 function couponEligibility_(coupon, gameId, subtotalSatang, playerId, memberId, nowMs) {
@@ -53,6 +54,19 @@ function couponEligibility_(coupon, gameId, subtotalSatang, playerId, memberId, 
     }, 0);
     if (spent < minimum) {
       return {valid:false, error:'ยอดเติมสะสมของสมาชิกในเกมที่กำหนดยังไม่ถึง ฿' + (minimum / 100).toLocaleString('th-TH')};
+    }
+  }
+
+  const playerMinimum = Number(coupon.min_player_spend_satang || 0);
+  if (playerMinimum > 0) {
+    const playerSpent = repositoryRows_('orders').filter(function(order) {
+      return String(order.player_id) === uid &&
+        String(order.game_id) === String(gameId) && order.status === 'Completed';
+    }).reduce(function(sum, order) {
+      return sum + Number(order.total_satang || 0);
+    }, 0);
+    if (playerSpent < playerMinimum) {
+      return {valid:false, error:'UID นี้มียอดเติมสะสมในเกมที่เลือกยังไม่ถึง ฿' + (playerMinimum / 100).toLocaleString('th-TH')};
     }
   }
 
