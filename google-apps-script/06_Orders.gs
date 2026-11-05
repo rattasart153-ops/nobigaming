@@ -129,8 +129,15 @@ function createOrder(payload) {
         expires_at:deadline
       });
     } catch (error) {
-      // Sheets has no multi-row transaction. Mark the order as failed and make
-      // it ineligible for payment if a later write in the reservation sequence fails.
+      // Sheets has no multi-row transaction. Release any reservation already
+      // written, then make the partially-created order permanently unpayable.
+      repositoryFindByField_('coupon_redemptions', 'order_id', orderId)
+        .filter(function(item) { return item.state === 'Reserved'; })
+        .forEach(function(item) {
+          repositoryUpdateLocked_('coupon_redemptions', item.redemption_id, {
+            state:'Released', released_at:new Date().toISOString()
+          });
+        });
       repositoryUpdateLocked_('orders', orderId, {
         status:'Rejected', status_reason:'CHECKOUT_PERSISTENCE_FAILED', updated_at:new Date().toISOString()
       });
