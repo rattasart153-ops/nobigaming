@@ -1,54 +1,52 @@
-# Nobi Topup — Full-Stack starter
+# Nobi Topup — Zero-Cost Architecture
 
-เว็บไซต์เติมเกมภาษาไทย พร้อมหน้าร้าน ระบบสมาชิก/คูปอง QR PromptPay การแนบสลิป และ Admin Panel โดย Branch นี้กำลังปรับสถาปัตยกรรมเป้าหมายเป็น **Vercel + Neon PostgreSQL + Vercel Blob Private** ตามแนวทาง free-first
-
-## สถานะปัจจุบัน
-
-- Branch สำหรับพัฒนา: `vercel-drive-setup` เท่านั้น; ห้ามแก้ไข `main`.
-- หน้า Storefront และ Admin ใช้ Express REST API แบบ same-origin แล้ว และต้องรักษา route/response contracts เดิมระหว่างย้ายระบบ
-- Source ปัจจุบันยังผูก production runtime กับ Google Apps Script gateway และยังไม่พร้อมใช้งานบน Vercel จนกว่าจะพอร์ต persistence ไป PostgreSQL เสร็จ
-- แผนการย้ายระบบฉบับหลัก: [docs/POSTGRES_MIGRATION_PLAN.md](docs/POSTGRES_MIGRATION_PLAN.md)
-- สถาปัตยกรรมเป้าหมาย: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- ลำดับงานและสถานะ Phase: [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md)
+เว็บไซต์เติมเกมภาษาไทย พร้อมหน้าร้าน ระบบสมาชิก/คูปอง การแนบสลิป และ Admin Panel
 
 ## สถาปัตยกรรมเป้าหมาย
 
-- **Vercel + Express:** ให้บริการหน้าเว็บและ same-origin REST API
-- **Neon PostgreSQL:** เก็บ Admin, Members, sessions, games, packages, coupons, promotions, orders, audit logs, idempotency และ shared rate limits
-- **Vercel Blob Private:** เก็บสลิปและรูปภาพแบบ Private; ทุกการอ่านผ่าน API ที่ตรวจสิทธิ์
-- **SQLite:** ใช้ได้เฉพาะ local characterization/test adapter ไม่ใช้เป็น persistence บน Vercel/production
-- **Google Apps Script / Sheets / Drive:** เป็นสถาปัตยกรรมเดิมที่ถูกแทนที่ในแผนใหม่ ไม่ต้องสร้างหรือ Deploy API ของ Apps Script
+**Google Apps Script + Google Sheets + Google Drive จากบัญชีเดิมเท่านั้น**
 
-## Free-first และค่าใช้จ่าย
+- Apps Script เป็น application runtime, backend และ web host ผ่าน HtmlService
+- Sheets เป็นฐานข้อมูล
+- Drive เก็บสลิปและรูปภาพแบบ Restricted / Private
+- Frontend จะเปลี่ยนจาก Vercel REST calls เป็น `google.script.run` ผ่าน facade ที่เปิดเฉพาะฟังก์ชันที่อนุญาต
+- GitHub เป็น source control; ทำงานเฉพาะ `vercel-drive-setup`; ห้ามแก้ `main`
+- ไม่ใช้ Vercel runtime, Neon, hosted PostgreSQL, Vercel Blob หรือบริการที่ต้องเปิด billing
 
-เริ่มต้นโดยประเมิน Neon Free และ Vercel Blob Hobby included usage ก่อน แต่ต้องตรวจสอบ quota, Marketplace billing mode, region และข้อกำหนดจริงในบัญชี Vercel ก่อนสร้าง resource ห้ามเปิด paid plan/add-on หรือยอมรับค่าใช้จ่ายเกิน quota โดยไม่ได้รับอนุญาต
+`google.script.run` เป็น built-in bridge สำหรับเรียก server-side Apps Script ไม่ใช่ API provider ภายนอกที่ต้องสมัครหรือจ่ายแยกต่างหาก
 
-Vercel Hobby มีข้อจำกัดการใช้งานเชิงพาณิชย์ จึงใช้เพื่อพัฒนา/ทดสอบตามเงื่อนไขปัจจุบันเท่านั้น ก่อนเปิดร้านเชิงพาณิชย์ต้องตรวจสอบแผนที่รองรับและขออนุมัติค่าใช้จ่ายที่อาจเกิดขึ้น
+## เงื่อนไข Zero Cost
 
-## ข้อกำหนดธุรกิจที่ต้องรักษา
+- ห้ามสมัครบริการใหม่ เพิ่มบัตร เปิด billing หรือสร้างทรัพยากรที่มีค่าใช้จ่าย
+- ใช้เฉพาะโควตา Apps Script และพื้นที่ Drive ที่มีอยู่ในบัญชีเดิม
+- หาก quota/พื้นที่เต็ม ให้หยุดหรือปฏิเสธงานอย่างปลอดภัย ห้าม fallback ไปบริการเสียเงิน
+- ไม่สามารถรับประกันว่า Google จะคงโควตาฟรีหรือเงื่อนไขเดิมตลอดไป
+- ยังไม่มีการสร้าง Apps Script project, Spreadsheet, Drive folder, deploy, initialize schema หรือสร้าง Admin
 
-- Guest checkout อนุญาต
-- Member Login ID เป็น ASCII letters/digits 4–30 ตัว ไม่แยกตัวพิมพ์เล็ก/ใหญ่
-- คูปองรองรับ public, member-only และ member-game-spend รวมถึง UID allowlist และยอดเติมสะสมรายเกม
-- นับยอดสะสมจากออเดอร์ Completed เท่านั้น และใช้ยอดหลังหักส่วนลด
+## สถานะปัจจุบัน
+
+Source มี GAS Schema v1, repositories, business handlers, private Drive helpers และ signed gateway แต่ยังไม่ผ่านการทดสอบใน Apps Script runtime จริง ส่วนหน้าร้าน/Admin ยังเรียก Vercel REST API จึงต้องทำ compatibility port ก่อนทดสอบจริง ไม่มีการเปลี่ยน Production หรือรับชำระเงินจริง
+
+## Business rules ที่ต้องรักษา
+
+- Guest checkout อนุญาต; Member Login ID เป็น ASCII alphanumeric 4–30 ตัว ไม่แยกตัวพิมพ์เล็ก/ใหญ่
+- Coupons: public, member-only, member-game-spend; UID allowlist และยอดสะสมรายเกมเป็นเงื่อนไขแยกกัน
+- นับยอดสะสมเฉพาะ Completed หลังหักส่วนลด; Pending/Rejected/Expired/Guest ไม่นับ
 - Reserve coupon เมื่อ Pending, Consume เมื่อ Completed, Release เมื่อ Rejected/Expired
-- ออเดอร์ปกติหรือคูปองที่ไม่มีวันหมดอายุ: ชำระและอัปโหลดสลิปภายใน 15 นาที
-- คูปองที่มีวันหมดอายุ: ชำระและอัปโหลดสลิปได้ถึงสิ้นวันหมดอายุในเวลา Asia/Bangkok
-- Server เป็นผู้คำนวณ deadline, ราคา, ส่วนลด และยอดชำระ
-- สลิปที่รับก่อน deadline สามารถให้ Admin ตรวจและอนุมัติภายหลังได้
-- Admin/Member sessions อายุสูงสุด 8 ชั่วโมง, idle timeout 30 นาที; revoke เมื่อ logout/เปลี่ยนรหัสผ่าน/ระงับบัญชี
-- Admin ดู Member login/IP history ได้; เก็บ IP history และ Admin audit logs 90 วัน แล้วลบหรือทำให้ไม่สามารถระบุตัวบุคคลได้ถาวร
-- สลิปและรูปภาพทั้งหมดต้องเป็น Private; สลิปอ่านได้เฉพาะ Admin และรูปหน้าร้านส่งผ่าน proxy ที่ตรวจ reference
-- ตรวจสลิปด้วย Admin ด้วยตนเอง; ยังไม่มีการตรวจยอดโอนจากธนาคารอัตโนมัติหรือระบบเติมเกมอัตโนมัติ
+- ออเดอร์ปกติหรือคูปองไม่มีวันหมดอายุ: 15 นาที; คูปองมีวันหมดอายุ: ถึงสิ้นวันหมดอายุ Asia/Bangkok
+- Server คำนวณราคา ส่วนลด ยอดชำระ และ deadline; สลิปที่ส่งทันเวลาตรวจภายหลังได้
+- Sessions สูงสุด 8 ชั่วโมง, idle timeout 30 นาที; revoke เมื่อ logout/password change/suspension
+- Admin-only IP history; retention 90 วันแล้วลบหรือ anonymize
+- สลิปและรูปภาพเป็น Private; สลิปอ่านได้เฉพาะ Admin; ตรวจสลิปด้วยคน
 
-## การพัฒนาและทดสอบ
+## ข้อจำกัด
 
-- Node.js 22.x และ npm ตาม `package.json`
-- ใช้ข้อมูลสังเคราะห์และรูปทดสอบเท่านั้น
-- ต้องมี PostgreSQL migrations และ isolated test database ก่อนเปลี่ยน production adapter
-- ห้าม fallback ไปใช้ SQLite ใน Vercel เมื่อ PostgreSQL ขัดข้อง
-- ยังไม่อนุญาต Production deployment, การเปลี่ยนโดเมน, การตั้งค่า PromptPay จริง, การรับออเดอร์จริง หรือการ initialize ข้อมูลจริง
+Apps Script มี execution/daily quotas, Sheets ไม่มี relational transactions และ Drive มีพื้นที่จำกัด ต้องทดสอบ concurrency, recovery, PBKDF2, file transfer และ quota ก่อนใช้งานจริง ใช้ข้อมูลสังเคราะห์เท่านั้น
 
-## Legacy documentation
+## เอกสารหลัก
 
-คู่มือ `docs/GOOGLE_APPS_SCRIPT_SETUP.md` และ `docs/VERCEL_GOOGLE_SETUP.md` เป็นข้อมูลอ้างอิงของสถาปัตยกรรมเดิมเท่านั้น ไม่ใช่ขั้นตอนที่ต้องทำต่อสำหรับแนวทางใหม่
+- [Architecture](docs/ARCHITECTURE.md)
+- [Zero-Cost Migration Plan](docs/ZERO_COST_MIGRATION_PLAN.md)
+- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
+- [Apps Script Setup](docs/GOOGLE_APPS_SCRIPT_SETUP.md)
+- [Sheets / Drive Data Model](docs/DATA_MODEL.md)
