@@ -1,8 +1,8 @@
-> **ACTIVE DATA MODEL BASELINE (2026-11-05):** Google Sheets Schema v2 is the approved data model for the zero-cost Apps Script architecture. This is a schema reference only; it does not authorize spreadsheet creation or initialization. See [ZERO_COST_MIGRATION_PLAN.md](./ZERO_COST_MIGRATION_PLAN.md).
+ > **ACTIVE DATA MODEL BASELINE (2026-11-06):** Google Sheets Schema v3 is the approved data model for the zero-cost Apps Script architecture. This is a schema reference only; it does not authorize spreadsheet creation or initialization. See [ZERO_COST_MIGRATION_PLAN.md](./ZERO_COST_MIGRATION_PLAN.md).
 
 # Nobi Topup — Google Sheets and Drive Data Model
 
-Status: approved target schema baseline; version 2 headers are implemented in `google-apps-script/00_Config.gs` and initialized by `02_Database.gs`. Business repositories are still pending.
+Status: approved target schema baseline; version 3 headers are implemented in `google-apps-script/00_Config.gs` and initialized by `02_Database.gs`. Business repositories are still pending.
 
 ## Conventions
 - Row 1 contains exact headers; the first column is the stable string key (UUID for entity records, natural key for metadata and nonce-ledger rows).
@@ -128,7 +128,7 @@ One private root folder referenced only through Script Properties:
 No file or folder is shared as Anyone. Store Drive file IDs only. Slips and other uploaded images remain private in Drive. When an image is intended for storefront display, Vercel may proxy its bytes through an application route without changing the Drive file's sharing permissions; never return a public Drive URL.
 
 ## Setup behavior
-- `setupNobiDatabase()` initializes schema version 2 (including a non-destructive v1-to-v2 upgrade) after preflighting all existing sheets. It creates missing sheets, writes exact headers, stores `schema_version` in `system_metadata`; a v1 database is upgraded only by adding the new recovery-journal sheet and updating the version marker after successful preflight, and records the spreadsheet ID in Script Properties only after successful completion.
+- `setupNobiDatabase()` initializes schema version 3 (including non-destructive v1/v2-to-v3 upgrades) after preflighting all existing sheets. It creates missing sheets, writes exact headers, stores `schema_version` in `system_metadata`; a v1 or v2 database is upgraded only after full preflight; missing recovery-journal headers are added and the version marker is updated after successful initialization, and records the spreadsheet ID in Script Properties only after successful completion.
 - If an existing sheet has unexpected headers, an unknown schema version, or populated data without a version marker, stop before changing any sheet; never append columns, clear rows, or rewrite existing content.
 - Do not seed catalog data during schema initialization; catalog seeding is a separate reviewed operation.
 - Do not create an Admin with a hard-coded password.
@@ -141,4 +141,4 @@ No file or folder is shared as Anyone. Store Drive file IDs only. Slips and othe
 4. Login/IP-history and Admin audit-log retention: CONFIRMED — 90 days, then delete or irreversibly anonymize.
 5. Admin and Member sessions: CONFIRMED — 8-hour maximum lifetime, 30-minute idle timeout, revoke on logout or password change.
 
-Implementation note: these are approved target policies. Member authentication, durable session enforcement and scheduled log-retention enforcement are later implementation work; documentation does not imply those features are already live.
+Implementation note: the source now includes daily 90-day cleanup for member IP fields, Member/Admin session IP fields, member login/IP logs and Admin audit logs. The trigger is not installed automatically; an authorized project owner must run `ensureNobiRetentionTrigger()` once. Actual Apps Script trigger execution and real Sheets retention behavior remain unverified.
