@@ -138,6 +138,22 @@ Static source review confirms:
 
 ### IP-history feasibility blocker
 
+
+### Zero-cost Google-only feasibility check (2026-11-05)
+
+The follow-up check examined whether existing Apps Script or Google logging facilities can replace the missing trusted request IP without adding a server/proxy or incurring charges.
+
+1. **Apps Script Web App request event (`doGet(e)` / `doPost(e)`) — not viable.** Google's documented event fields include query parameters, path information, content length, and POST body metadata. There is no documented remote address or trusted client-IP field. A value added to query/body by the browser remains client-controlled. See [Web Apps request parameters](https://developers.google.com/apps-script/guides/web#request_parameters).
+2. **HtmlService `google.script.run` — not viable for trusted IP.** It invokes a named server-side Apps Script function from the HTML page; it does not expose the browser's network peer address to that function. The client cannot turn a browser-supplied IP into trusted server metadata. See [google.script.run reference](https://developers.google.com/apps-script/guides/html/reference/run).
+3. **Apps Script execution logs / Cloud Logging — not a substitute.** Google's Apps Script logging documentation describes execution logs, Cloud Logging, Error Reporting, and temporary active-user keys. The documented user key is a rotating pseudonymous identifier, not a network IP. It cannot satisfy the required IP-history field. See [Apps Script logging](https://developers.google.com/apps-script/guides/logging).
+4. **Cloud Audit Logs — not an acceptable workaround.** Cloud Audit Logs can include a caller IP for supported Google Cloud resource API audit events, but this is not a documented per-visitor IP feed for Apps Script HtmlService executions. Google also states that resources accessible without signing in to Google Cloud/Workspace/Cloud Identity/Drive Enterprise do not generate Data Access audit logs. Data Access logs are disabled by default, and enabling them may incur additional charges. Therefore this path is neither a proven source for public storefront visitor IPs nor compatible with the strict no-cost rule. See [Cloud Audit Logs](https://docs.cloud.google.com/logging/docs/audit).
+5. **UrlFetchApp / public IP echo services — not viable.** UrlFetch requests originate from Google's outbound network IP ranges, so the result identifies Google's egress, not the original browser visitor. Asking the browser to call an IP echo service and submit the result to Apps Script would still be client-controlled and spoofable. See [UrlFetch Service](https://developers.google.com/apps-script/reference/url-fetch).
+
+**Finding:** No supported Google-only, zero-additional-cost mechanism was identified that supplies a trusted visitor IP to the approved HtmlService + `google.script.run` application. This is a platform boundary, not a code defect. Do not implement a browser-reported IP, Google outbound IP, rotating user key, or audit-log guess as if it were a verified Member IP address. Do not enable any audit logging or Cloud feature that could create charges as part of this investigation.
+
+**Decision:** P0-12 remains a hard blocker. Keep the original Admin-only Member IP-history requirement unchanged. Keep the zero-cost constraint unchanged. Do not start P1, deploy, provision a proxy/server, or alter the requirement unless the user explicitly approves a compliant change. No source code or Google resources were changed during this feasibility check.
+
+
 The approved policy requires Admin to view Member IP history. The former Express gateway obtained the address from the server request and forwarded it to GAS. In a direct HtmlService + `google.script.run` deployment, the GAS function does not receive the original browser network connection metadata. A value fetched or submitted by browser JavaScript is client-controlled and must not be treated as verified IP history. No code change can safely preserve this requirement without an IP-observing server/proxy. Because adding a service or a potentially billable intermediary is outside the approved Zero Cost boundary, P1 must not proceed by silently weakening or relabelling this requirement.
 
 ## 6. File-by-file port matrix
