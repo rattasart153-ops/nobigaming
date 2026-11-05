@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const crypto = require('node:crypto');
 
 class FakeRange {
   constructor(sheet, row, column, rowCount = 1, columnCount = 1) {
@@ -199,4 +200,46 @@ test('legacy write helpers reject unknown tables and primary-key mutation', () =
 
   assert.throws(() => context.__append('unknown_table', { id: 'x' }), /DATABASE_TABLE_NOT_ALLOWED/);
   assert.throws(() => context.__updateById('games', 'game-1', { game_id: 'game-2' }), /DATABASE_PRIMARY_KEY_IMMUTABLE/);
+});
+
+
+test('Apps Script PBKDF2-SHA256 helper matches the Node.js reference implementation', () => {
+  const utilitiesSource = fs.readFileSync(
+    path.join(__dirname, '..', 'google-apps-script', '10_Utilities.gs'), 'utf8'
+  );
+  const context = {
+    Utilities: {
+      newBlob: value => ({ getBytes: () => Array.from(Buffer.from(String(value), 'utf8')) }),
+      computeHmacSha256Signature: (value, key) => Array.from(
+        crypto.createHmac('sha256', String(key)).update(Buffer.from(value.map(v => (v + 256) % 256))).digest()
+      ).map(v => v > 127 ? v - 256 : v),
+      base64EncodeWebSafe: bytes => Buffer.from(bytes.map(v => (v + 256) % 256)).toString('base64url')
+    }
+  };
+  vm.runInNewContext(
+    utilitiesSource + '\nglobalThis.__passwordHash = passwordHash_;',
+    context
+  );
+  const password = 'Correct Horse Battery Staple 2026!';
+  const salt = 'fixed-test-salt-for-pbkdf2';
+  const expected = crypto.pbkdf2Sync(password, salt, 120000, 32, 'sha256').toString('base64url');
+  assert.equal(context.__passwordHash(password, salt), expected);
+});
+
+test('Schema v1 business modules no longer call legacy field-based Sheets helpers', () => {
+  const gasDir = path.join(__dirname, '..', 'google-apps-script');
+  const migrated = ['03_Catalog.gs','04_Coupons.gs','06_Orders.gs','07_Auth.gs','08_Admin.gs'];
+  for (const file of migrated) {
+    const source = fs.readFileSync(path.join(gasDir, file), 'utf8');
+    assert.doesNotMatch(source, /\brows_\s*\(/, file + ' must read through the schema-aware repository');
+    assert.doesNotMatch(source, /\bappend_\s*\(|\bupdateById_\s*\(/, file + ' must write through the schema-aware repository');
+  }
+  const auth = fs.readFileSync(path.join(gasDir, '07_Auth.gs'), 'utf8');
+  assert.match(auth, /admin_sessions/);
+  assert.match(auth, /SESSION_IDLE_TIMEOUT_MS/);
+  assert.match(auth, /PBKDF2-SHA256-120000/);
+  const orders = fs.readFileSync(path.join(gasDir, '06_Orders.gs'), 'utf8');
+  assert.match(orders, /coupon_redemptions/);
+  assert.match(orders, /payment_expires_at/);
+  assert.match(orders, /submitOrderSlip/);
 });
