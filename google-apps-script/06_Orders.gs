@@ -1,67 +1,263 @@
-/** Nobi Topup Apps Script 06_Orders module. */
+/** Order lifecycle backed by Schema v1, with idempotent checkout and coupon reservations. */
+
+const NOBI_PAYMENT_WINDOW_MS = 15 * 60 * 1000;
 
 function createOrder(payload) {
   payload = payload || {};
   const key = String(payload.request_key || '').trim();
-  if (key.length < 12 || key.length > 120) throw new Error('ต้องมี request_key ที่ไม่ซ้ำและยาวอย่างน้อย 12 ตัวอักษร');
-  const prior = rows_('orders').find(o => String(o.request_key) === key);
-  if (prior) return { ok:true, order:publicOrder_(prior), duplicate:true };
+  if (!/^[A-Za-z0-9._:-]{16,128}$/.test(key)) {
+    throw new Error('ต้องมี request_key ที่ถูกต้องเพื่อป้องกันออเดอร์ซ้ำ');
+  }
+
+  const gameId = String(payload.game_id || '');
+  const packageId = String(payload.package_id || '');
+  const playerId = String(payload.player_id || '').trim();
+  const serverId = String(payload.server_id || '').trim();
+  const memberId = String(payload.member_id || '').trim();
+  const couponCode = String(payload.coupon_code || '').trim().toUpperCase();
+  if (!gameId || !packageId || !playerId || playerId.length > 100 || serverId.length > 100) {
+    throw new Error('ข้อมูลเกม แพ็กเกจ หรือ UID ไม่ถูกต้อง');
+  }
+
+  const payloadHash = sha256_(JSON.stringify({
+    game_id:gameId, package_id:packageId, player_id:playerId,
+    server_id:serverId, member_id:memberId, coupon_code:couponCode
+  }));
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const again = rows_('orders').find(o => String(o.request_key) === key);
-    if (again) return { ok:true, order:publicOrder_(again), duplicate:true };
-    const game = rows_('games').find(r => String(r.id) === String(payload.game_id) && truth_(r.active));
-    const pack = rows_('packages').find(r => String(r.id) === String(payload.package_id) && truth_(r.active) && String(r.game_id) === String(payload.game_id));
-    const playerId = String(payload.player_id || '').trim();
-    const serverId = String(payload.server_id || '').trim();
-    if (!game || !pack) throw new Error('ไม่พบเกมหรือแพ็กเกจที่เปิดขาย');
-    if (!playerId || playerId.length > 100 || serverId.length > 100) throw new Error('UID/Server ID ไม่ถูกต้อง');
-    const subtotal = money_(Number(pack.price));
-    if (!Number.isFinite(subtotal) || subtotal < 0) throw new Error('ราคาแพ็กเกจไม่ถูกต้อง');
-    let coupon = null, discount = 0;
-    if (payload.coupon_code) {
-      const checked = validateCoupon(payload.coupon_code, game.id, subtotal, playerId);
+    expirePendingOrdersLocked_(Date.now());
+    const existingKey = repositoryFindByField_('idempotency_records', 'request_key', key)
+      .find(function(item) { return item.scope === 'create_order'; });
+    if (existingKey) {
+      if (String(existingKey.payload_hash) !== payloadHash) {
+        throw new Error('IDEMPOTENCY_CONFLICT: request_key นี้ถูกใช้กับข้อมูลอื่นแล้ว');
+      }
+      const existingOrder = repositoryGetById_('orders', existingKey.resource_id);
+      if (!existingOrder) throw new Error('ไม่สามารถกู้คืนออเดอร์เดิมได้');
+      return {ok:true, order:publicOrder_(existingOrder), duplicate:true, checkout_token:null};
+    }
+
+    const game = repositoryGetById_('games', gameId);
+    const pack = repositoryGetById_('packages', packageId);
+    if (!game || !truth_(game.active) || !pack || !truth_(pack.active) ||
+        String(pack.game_id) !== gameId) {
+      throw new Error('ไม่พบเกมหรือแพ็กเกจที่เปิดขาย');
+    }
+
+    const subtotalSatang = Number(pack.price_satang);
+    if (!Number.isSafeInteger(subtotalSatang) || subtotalSatang < 0) {
+      throw new Error('ราคาแพ็กเกจไม่ถูกต้อง');
+    }
+
+    let coupon = null;
+    let discountSatang = 0;
+    if (couponCode) {
+      const checked = validateCoupon(couponCode, gameId, subtotalSatang / 100, playerId, memberId);
       if (!checked.valid) throw new Error(checked.error);
-      coupon = rows_('coupons').find(c => String(c.id) === String(checked.coupon_id));
-      discount = checked.discount;
-      // Recheck usage while holding the write lock.
-      if (coupon.usage_limit !== '' && coupon.usage_limit != null && Number(coupon.used_count || 0) >= Number(coupon.usage_limit)) throw new Error('คูปองถูกใช้ครบจำนวนแล้ว');
+      coupon = repositoryGetById_('coupons', checked.coupon_id);
+      if (!coupon) throw new Error('ไม่พบคูปอง');
+      discountSatang = checked.discount_satang;
     }
-    const slip = payload.slip;
-    if (!slip || !slip.base64 || !/^image\/(png|jpeg|webp)$/.test(String(slip.mimeType || ''))) throw new Error('กรุณาแนบสลิป PNG/JPG/WebP');
-    const bytes = Utilities.base64Decode(String(slip.base64).replace(/^data:[^,]+,/, ''));
-    if (!bytes.length || bytes.length > NOBI.MAX_SLIP_BYTES) throw new Error('ไฟล์สลิปต้องมีขนาดไม่เกิน 5 MB');
-    if (!validImageSignature_(bytes, slip.mimeType)) throw new Error('ชนิดไฟล์ไม่ตรงกับเนื้อหาไฟล์ภาพ');
-    const ext = slip.mimeType === 'image/png' ? 'png' : slip.mimeType === 'image/webp' ? 'webp' : 'jpg';
-    const orderId = 'NBI-' + Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyyMMddHHmmss') + '-' + Utilities.getUuid().slice(0,8).toUpperCase();
-    const folder = DriveApp.getFolderById(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_DRIVE_FOLDER_ID'));
-    const file = folder.createFile(Utilities.newBlob(bytes, slip.mimeType, orderId + '.' + ext));
-    file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
-    const now = new Date().toISOString();
-    const order = {id:orderId,game_id:game.id,package_id:pack.id,game_name:game.name,package_name:pack.name,player_id:playerId,server_id:serverId,coupon_id:coupon?coupon.id:'',coupon_code:coupon?coupon.code:'',subtotal:subtotal,discount:discount,total:money_(subtotal-discount),slip_file_id:file.getId(),status:'Pending',created_at:now,updated_at:now,request_key:key};
-    let orderWritten = false;
+
+    const now = new Date();
+    const nowMs = now.getTime();
+    const couponCutoff = coupon && coupon.expires_at ? couponExpiryCutoff_(coupon.expires_at) : NaN;
+    const deadlineMs = Number.isFinite(couponCutoff) ? couponCutoff : nowMs + NOBI_PAYMENT_WINDOW_MS;
+    if (deadlineMs <= nowMs) throw new Error('คูปองหมดอายุแล้ว');
+    const deadline = new Date(deadlineMs).toISOString();
+    const orderId = Utilities.getUuid();
+    const orderNumber = 'NBI-' + Utilities.formatDate(now, 'Asia/Bangkok', 'yyyyMMddHHmmss') +
+      '-' + Utilities.getUuid().slice(0, 6).toUpperCase();
+    const checkoutToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
+    const totalSatang = Math.max(0, subtotalSatang - discountSatang);
+
+    const order = {
+      order_id:orderId,
+      order_number:orderNumber,
+      request_key:key,
+      member_id:memberId,
+      game_id:gameId,
+      package_id:packageId,
+      player_id:playerId,
+      server_id:serverId,
+      coupon_id:coupon ? coupon.coupon_id : '',
+      subtotal_satang:subtotalSatang,
+      discount_satang:discountSatang,
+      total_satang:totalSatang,
+      slip_file_id:'',
+      slip_mime_type:'',
+      slip_size_bytes:0,
+      slip_submitted_at:'',
+      checkout_token_hash:sha256_(checkoutToken),
+      status:'Pending',
+      status_reason:'',
+      payment_expires_at:deadline,
+      created_at:now.toISOString(),
+      updated_at:now.toISOString(),
+      completed_at:'',
+      rejected_at:''
+    };
+
+    repositoryInsertLocked_('orders', order);
     try {
-      append_('orders', order);
-      orderWritten = true;
-      if (coupon) updateById_('coupons', coupon.id, {used_count:Number(coupon.used_count||0)+1});
-      return {ok:true,order:publicOrder_(order),duplicate:false};
-    } catch (writeError) {
-      if (orderWritten) { try { deleteById_('orders', order.id); } catch (ignored) {} }
-      try { file.setTrashed(true); } catch (ignored) {}
-      throw writeError;
+      if (coupon) {
+        const redemption = {
+          redemption_id:Utilities.getUuid(),
+          coupon_id:coupon.coupon_id,
+          order_id:orderId,
+          member_id:memberId,
+          player_id:playerId,
+          game_id:gameId,
+          discount_satang:discountSatang,
+          state:'Reserved',
+          reserved_at:now.toISOString(),
+          reserved_until:deadline,
+          finalized_at:'',
+          released_at:''
+        };
+        repositoryInsertLocked_('coupon_redemptions', redemption);
+      }
+      repositoryInsertLocked_('idempotency_records', {
+        idempotency_id:Utilities.getUuid(),
+        scope:'create_order',
+        request_key:key,
+        payload_hash:payloadHash,
+        resource_id:orderId,
+        state:'Completed',
+        created_at:now.toISOString(),
+        expires_at:deadline
+      });
+    } catch (error) {
+      // Sheets has no multi-row transaction. Mark the order as failed and make
+      // it ineligible for payment if a later write in the reservation sequence fails.
+      repositoryUpdateLocked_('orders', orderId, {
+        status:'Rejected', status_reason:'CHECKOUT_PERSISTENCE_FAILED', updated_at:new Date().toISOString()
+      });
+      throw error;
     }
+
+    return {
+      ok:true,
+      order:publicOrder_(order),
+      duplicate:false,
+      checkout_token:checkoutToken
+    };
   } finally {
     lock.releaseLock();
   }
 }
 
-function publicOrder_(o) { const c=Object.assign({},o); delete c.slip_file_id; delete c.request_key; return c; }
+function submitOrderSlip(payload) {
+  payload = payload || {};
+  const orderId = String(payload.order_id || '').trim();
+  const checkoutToken = String(payload.checkout_token || '');
+  const slip = payload.slip || {};
+  if (!orderId || !checkoutToken || !slip.base64 ||
+      !/^image\/(png|jpeg|webp)$/.test(String(slip.mimeType || ''))) {
+    throw new Error('กรุณาแนบสลิป PNG/JPG/WebP และยืนยันสิทธิ์อัปโหลด');
+  }
 
-function validImageSignature_(bytes,mime) {
-  const b=bytes.map(x=>(x+256)%256);
-  if(mime==='image/png') return b.length>=8 && b.slice(0,8).join(',')==='137,80,78,71,13,10,26,10';
-  if(mime==='image/jpeg') return b.length>=3 && b[0]===255 && b[1]===216 && b[2]===255;
-  if(mime==='image/webp') return b.length>=12 && String.fromCharCode.apply(null,b.slice(0,4))==='RIFF' && String.fromCharCode.apply(null,b.slice(8,12))==='WEBP';
+  const bytes = Utilities.base64Decode(String(slip.base64).replace(/^data:[^,]+,/, ''));
+  if (!bytes.length || bytes.length > NOBI.MAX_SLIP_BYTES ||
+      !validImageSignature_(bytes, slip.mimeType)) {
+    throw new Error('ไฟล์สลิปไม่ถูกต้องหรือมีขนาดเกิน 5 MB');
+  }
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  let file = null;
+  try {
+    const order = repositoryGetById_('orders', orderId);
+    if (!order || !order.checkout_token_hash ||
+        !constantTimeHexEqual_(String(order.checkout_token_hash), sha256_(checkoutToken))) {
+      throw new Error('ไม่พบออเดอร์หรือสิทธิ์อัปโหลดไม่ถูกต้อง');
+    }
+    if (order.status !== 'Pending' || order.slip_submitted_at) {
+      throw new Error('ออเดอร์นี้มีการส่งสลิปแล้วหรือไม่สามารถแก้ไขได้');
+    }
+    const deadline = Date.parse(order.payment_expires_at);
+    if (!Number.isFinite(deadline) || Date.now() >= deadline) {
+      expireOrderLocked_(order, new Date().toISOString());
+      throw new Error('หมดเวลาชำระเงินและอัปโหลดสลิปแล้ว');
+    }
+
+    const folderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_DRIVE_FOLDER_ID') || '').trim();
+    if (!folderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์ Drive ส่วนตัว');
+    const ext = slip.mimeType === 'image/png' ? 'png' : slip.mimeType === 'image/webp' ? 'webp' : 'jpg';
+    file = DriveApp.getFolderById(folderId).createFile(
+      Utilities.newBlob(bytes, slip.mimeType, String(order.order_number) + '.' + ext)
+    );
+    file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+    const now = new Date().toISOString();
+    repositoryUpdateLocked_('orders', orderId, {
+      slip_file_id:file.getId(),
+      slip_mime_type:slip.mimeType,
+      slip_size_bytes:bytes.length,
+      slip_submitted_at:now,
+      updated_at:now
+    });
+    return {ok:true, slip_submitted_at:now};
+  } catch (error) {
+    if (file) {
+      try { file.setTrashed(true); } catch (ignored) {}
+    }
+    throw error;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function expirePendingOrdersLocked_(nowMs) {
+  const now = new Date(nowMs).toISOString();
+  repositoryRows_('orders').filter(function(order) {
+    return order.status === 'Pending' && !order.slip_submitted_at &&
+      Date.parse(order.payment_expires_at) <= nowMs;
+  }).forEach(function(order) {
+    expireOrderLocked_(order, now);
+  });
+}
+
+function expireOrderLocked_(order, now) {
+  repositoryUpdateLocked_('orders', order.order_id, {
+    status:'Expired', status_reason:'PAYMENT_TIMEOUT', updated_at:now
+  });
+  repositoryFindByField_('coupon_redemptions', 'order_id', order.order_id)
+    .filter(function(item) { return item.state === 'Reserved'; })
+    .forEach(function(item) {
+      repositoryUpdateLocked_('coupon_redemptions', item.redemption_id, {
+        state:'Released', released_at:now
+      });
+    });
+}
+
+function publicOrder_(order) {
+  return {
+    id:order.order_number,
+    order_id:order.order_id,
+    game_id:order.game_id,
+    package_id:order.package_id,
+    player_id:order.player_id,
+    server_id:order.server_id,
+    coupon_id:order.coupon_id,
+    subtotal:Number(order.subtotal_satang || 0) / 100,
+    discount:Number(order.discount_satang || 0) / 100,
+    total:Number(order.total_satang || 0) / 100,
+    status:order.status,
+    payment_expires_at:order.payment_expires_at,
+    slip_submitted_at:order.slip_submitted_at || null,
+    created_at:order.created_at
+  };
+}
+
+function validImageSignature_(bytes, mime) {
+  const b = bytes.map(function(value) { return (value + 256) % 256; });
+  if (mime === 'image/png') return b.length >= 8 && b.slice(0, 8).join(',') === '137,80,78,71,13,10,26,10';
+  if (mime === 'image/jpeg') return b.length >= 3 && b[0] === 255 && b[1] === 216 && b[2] === 255;
+  if (mime === 'image/webp') {
+    return b.length >= 12 &&
+      String.fromCharCode.apply(null, b.slice(0, 4)) === 'RIFF' &&
+      String.fromCharCode.apply(null, b.slice(8, 12)) === 'WEBP';
+  }
   return false;
 }
