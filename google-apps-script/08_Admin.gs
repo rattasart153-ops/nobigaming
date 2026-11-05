@@ -288,7 +288,7 @@ function adminStoreMedia(token, media, ipAddress) {
   const file = folder.createFile(
     Utilities.newBlob(bytes, mimeType, 'nobi-media-' + Utilities.getUuid() + '.' + ext)
   );
-  file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.NONE);
+  file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
   if (file.getSharingAccess && file.getSharingAccess() !== DriveApp.Access.PRIVATE) {
     file.setTrashed(true);
     throw new Error('DRIVE_FILE_NOT_PRIVATE');
