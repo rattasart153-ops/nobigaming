@@ -81,7 +81,7 @@
 - Admin ดู Member login/IP history ได้; เก็บประวัติและ Admin audit logs 90 วัน
 - Shared login IP throttling ใช้ Sheets ledger ที่เก็บ HMAC bucket hash เท่านั้น: login 10 ครั้ง/15 นาที, registration 5 ครั้ง/15 นาที และ account failures 5 ครั้ง/15 นาที
 - รหัสผ่านใช้ PBKDF2-SHA256 120,000 iterations; ต้อง benchmark ใน Apps Script runtime จริงก่อนใช้งาน
-- สลิปและรูปภาพเก็บใน Drive แบบ Private และส่งผ่าน API proxy ที่ตรวจสิทธิ์
+- สลิปและรูปภาพเก็บใน Drive แบบ Private และส่งผ่าน API proxy ที่ตรวจสิทธิ์; จำกัดไฟล์แต่ละรายการไม่เกิน 3 MB เพื่อเผื่อ Base64/JSON overhead ภายใต้ Vercel Function request/response body limit 4.5 MB
 
 ## ข้อจำกัดและ Release Gates
 
@@ -90,6 +90,7 @@
 - Node tests ยืนยัน API contract, schema behavior และ PBKDF2 reference vector แต่ยังไม่แทนการทดสอบใน Apps Script runtime จริง
 - ต้องทดสอบ bad signature, stale timestamp, replay, concurrent nonce/order/coupon claims, quota และ Drive privacy
 - ต้องทำ Browser/device end-to-end tests ของ Guest, Member, Admin, coupon, checkout, slip, status และ CRUD
+- Vercel Function request/response payload จำกัด 4.5 MB; ห้ามเพิ่ม upload cap เป็น 5 MB โดยไม่ออกแบบ chunked upload/direct upload ใหม่
 - ห้ามใช้สลิปจริงหรือเปิดรับออเดอร์จริงในการทดสอบ
 - ห้าม Deploy Apps Script Web App หรือ Vercel production จนกว่าจะได้รับอนุญาตแยกต่างหาก
 
