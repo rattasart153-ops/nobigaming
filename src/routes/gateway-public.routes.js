@@ -149,7 +149,7 @@ function createGatewayPublicRouter({client, slipUpload, getPaymentInfo, loginLim
   }));
 
   router.post('/api/public/orders/:id/slip', slipUpload.single('slip'), validateImageFile, asyncRoute(async (req, res) => {
-    if (!req.file) return res.status(400).json({error:'กรุณาแนบสลิป PNG/JPG/WebP ไม่เกิน 5 MB'});
+    if (!req.file) return res.status(400).json({error:'กรุณาแนบสลิป PNG/JPG/WebP ไม่เกิน 3 MB'});
     const cookieName = 'nobi_checkout_' + String(req.params.id).replace(/[^A-Za-z0-9_-]/g, '');
     const checkoutToken = readCookie(req, cookieName);
     if (!checkoutToken) {
