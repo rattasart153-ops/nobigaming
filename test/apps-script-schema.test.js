@@ -186,10 +186,10 @@ test('legacy write helpers fail closed on schema and field mismatches without wr
 
   assert.throws(() => context.__append('games', {
     id: 'legacy-game-1', name: 'RoV', category: 'moba'
-  }), /DATABASE_FIELD_NOT_ALLOWED|DATABASE_PRIMARY_KEY_REQUIRED/);
+  }), /DATABASE_FIELD_NOT_ALLOWED|DATABASE_PRIMARY_KEY_REQUIRED|REPOSITORY_FIELD_NOT_ALLOWED|REPOSITORY_PRIMARY_KEY_REQUIRED/);
   assert.throws(() => context.__updateById('games', 'game-1', {
     name: 'Changed', legacy_column: 'not allowed'
-  }), /DATABASE_FIELD_NOT_ALLOWED/);
+  }), /DATABASE_FIELD_NOT_ALLOWED|REPOSITORY_FIELD_NOT_ALLOWED/);
   assert.deepEqual(games.rows, before, 'invalid legacy writes must not change Sheets data');
 });
 
@@ -198,8 +198,8 @@ test('legacy write helpers reject unknown tables and primary-key mutation', () =
   const { context } = loadGasDatabase(spreadsheet);
   context.__setupNobiDatabase();
 
-  assert.throws(() => context.__append('unknown_table', { id: 'x' }), /DATABASE_TABLE_NOT_ALLOWED/);
-  assert.throws(() => context.__updateById('games', 'game-1', { game_id: 'game-2' }), /DATABASE_PRIMARY_KEY_IMMUTABLE/);
+  assert.throws(() => context.__append('unknown_table', { id: 'x' }), /DATABASE_TABLE_NOT_ALLOWED|REPOSITORY_TABLE_NOT_ALLOWED/);
+  assert.throws(() => context.__updateById('games', 'game-1', { game_id: 'game-2' }), /DATABASE_PRIMARY_KEY_IMMUTABLE|REPOSITORY_PRIMARY_KEY_IMMUTABLE/);
 });
 
 
