@@ -135,7 +135,7 @@ function consumeRateLimitBucketLocked_(scope, identity, limit, nowMs) {
     repositoryUpdateLocked_('security_rate_limits', bucketHash, record);
   }
 
-  const rows = repositoryRows_('security_rate_limits');
+  let rows = repositoryRows_('security_rate_limits');
   if (rows.length > 1000) {
     const cutoff = now - 24 * 60 * 60 * 1000;
     rows.filter(function(row) {
@@ -143,6 +143,7 @@ function consumeRateLimitBucketLocked_(scope, identity, limit, nowMs) {
     }).slice(0, 250).forEach(function(row) {
       repositoryDeleteLocked_('security_rate_limits', row.bucket_key_hash);
     });
+    rows = repositoryRows_('security_rate_limits');
   }
   if (rows.length > 5000) throw new Error('RATE_LIMIT_STORE_FULL');
 }
