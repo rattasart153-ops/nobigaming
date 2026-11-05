@@ -1,32 +1,111 @@
-/** Nobi Topup Apps Script 04_Coupons module. */
+/** Coupon eligibility against Schema v1; all persisted money values are satang. */
 
-function couponSuggestions_(gameId, subtotal, playerId) {
-  const amount = Number(subtotal);
-  if (!Number.isFinite(amount) || amount < 0) return {suggestion:null};
-  const candidates = rows_('coupons').filter(c => truth_(c.active)).map(c => validateCoupon(c.code, gameId, amount, playerId)).filter(c => c.valid);
-  candidates.sort((a,b) => Number(b.discount)-Number(a.discount));
-  return {suggestion:candidates.length ? {code:candidates[0].code, discount:candidates[0].discount, message:'ประหยัด '+money_(candidates[0].discount)+' บาท'} : null};
+function couponExpiryCutoff_(expiresAt) {
+  const match = String(expiresAt || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) {
+    const parsed = Date.parse(expiresAt);
+    return Number.isFinite(parsed) ? parsed : NaN;
+  }
+  // Date-only expiry is inclusive through 23:59:59.999 Asia/Bangkok (UTC+7).
+  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + 1) - 7 * 60 * 60 * 1000;
 }
 
-function validateCoupon(code, gameId, subtotal, playerId) {
+function couponEligibility_(coupon, gameId, subtotalSatang, playerId, memberId, nowMs) {
+  if (!truth_(coupon.active)) return {valid:false, error:'คูปองปิดใช้งาน'};
+  if (coupon.expires_at) {
+    const cutoff = couponExpiryCutoff_(coupon.expires_at);
+    if (!Number.isFinite(cutoff) || nowMs >= cutoff) return {valid:false, error:'คูปองหมดอายุแล้ว'};
+  }
+  if (subtotalSatang < Number(coupon.min_order_satang || 0)) return {valid:false, error:'ยอดซื้อไม่ถึงขั้นต่ำ'};
+  if (coupon.game_id && String(coupon.game_id) !== String(gameId)) return {valid:false, error:'คูปองนี้ใช้กับเกมที่เลือกไม่ได้'};
+
+  const uid = String(playerId || '').trim();
+  let allowedIds = [];
+  if (coupon.allowed_player_ids_json) {
+    try {
+      allowedIds = JSON.parse(String(coupon.allowed_player_ids_json));
+      if (!Array.isArray(allowedIds)) throw new Error('invalid allowlist');
+    } catch (ignored) {
+      return {valid:false, error:'ข้อมูลเงื่อนไขคูปองไม่ถูกต้อง'};
+    }
+  }
+  if (allowedIds.length && !allowedIds.map(String).includes(uid)) {
+    return {valid:false, error:'คูปองนี้จำกัดเฉพาะ UID ที่แอดมินกำหนด'};
+  }
+
+  if (coupon.access_type === 'member_only' || coupon.access_type === 'member_game_spend') {
+    if (!memberId) return {valid:false, error:'คูปองนี้สำหรับสมาชิกเท่านั้น กรุณาเข้าสู่ระบบ'};
+    const member = repositoryGetById_('members', memberId);
+    if (!member || member.status !== 'Active') return {valid:false, error:'ไม่พบสมาชิกหรือบัญชีสมาชิกถูกระงับ'};
+  } else if (coupon.access_type !== 'public') {
+    return {valid:false, error:'รูปแบบสิทธิ์คูปองไม่ถูกต้อง'};
+  }
+
+  if (coupon.access_type === 'member_game_spend') {
+    const qualifyingGame = String(coupon.member_spend_game_id || '');
+    const minimum = Number(coupon.member_min_game_spend_satang || 0);
+    if (!qualifyingGame || minimum <= 0) return {valid:false, error:'ข้อมูลเงื่อนไขสมาชิกของคูปองไม่ครบ'};
+    const spent = repositoryRows_('orders').filter(function(order) {
+      return String(order.member_id) === String(memberId) &&
+        String(order.game_id) === qualifyingGame && order.status === 'Completed';
+    }).reduce(function(sum, order) {
+      return sum + Number(order.total_satang || 0);
+    }, 0);
+    if (spent < minimum) {
+      return {valid:false, error:'ยอดเติมสะสมของสมาชิกในเกมที่กำหนดยังไม่ถึง ฿' + (minimum / 100).toLocaleString('th-TH')};
+    }
+  }
+
+  const redemptions = repositoryRows_('coupon_redemptions').filter(function(item) {
+    return String(item.coupon_id) === String(coupon.coupon_id) &&
+      (item.state === 'Reserved' || item.state === 'Consumed');
+  }).length;
+  if (coupon.usage_limit !== '' && coupon.usage_limit !== null &&
+      coupon.usage_limit !== undefined && redemptions >= Number(coupon.usage_limit)) {
+    return {valid:false, error:'คูปองถูกใช้ครบจำนวนแล้ว'};
+  }
+
+  const discountSatang = coupon.discount_type === 'percent'
+    ? Math.floor(subtotalSatang * Number(coupon.discount_value) / 100)
+    : Math.round(Number(coupon.discount_value));
+  const finalDiscount = Math.min(subtotalSatang, Math.max(0, discountSatang));
+  return {
+    valid:true,
+    code:coupon.code_display,
+    coupon_id:coupon.coupon_id,
+    discount:finalDiscount / 100,
+    discount_satang:finalDiscount,
+    total:(subtotalSatang - finalDiscount) / 100,
+    total_satang:subtotalSatang - finalDiscount,
+    expires_at:coupon.expires_at || ''
+  };
+}
+
+function validateCoupon(code, gameId, subtotal, playerId, memberId) {
   const normalized = String(code || '').trim().toUpperCase();
   const amount = Number(subtotal);
-  if (!normalized || !Number.isFinite(amount) || amount < 0) return { valid:false, error:'ข้อมูลคูปองไม่ถูกต้อง' };
-  const c = rows_('coupons').find(r => String(r.code).toUpperCase() === normalized && truth_(r.active));
-  if (!c) return { valid:false, error:'ไม่พบคูปองหรือคูปองปิดใช้งาน' };
-  if (c.expires_at && Date.parse(c.expires_at) < Date.now()) return { valid:false, error:'คูปองหมดอายุแล้ว' };
-  if (amount < Number(c.min_spend || 0)) return { valid:false, error:'ยอดซื้อไม่ถึงขั้นต่ำ' };
-  if (c.game_id && String(c.game_id) !== String(gameId)) return { valid:false, error:'คูปองนี้ใช้กับเกมที่เลือกไม่ได้' };
-  const uid = String(playerId || '').trim();
-  const allowedIds = String(c.allowed_player_ids || '').split(/[\n,;]+/).map(v => v.trim()).filter(Boolean);
-  if (allowedIds.length && !allowedIds.includes(uid)) return { valid:false, error:'คูปองนี้จำกัดเฉพาะ UID ที่แอดมินกำหนด' };
-  const minPlayerSpend = Number(c.min_player_spend || 0);
-  if (minPlayerSpend > 0) {
-    if (!uid) return { valid:false, error:'กรุณากรอก UID ก่อนตรวจสอบสิทธิ์คูปอง' };
-    const spent = rows_('orders').filter(o => String(o.game_id) === String(gameId) && String(o.player_id).trim() === uid && String(o.status) === 'Completed').reduce((sum,o)=>sum+Number(o.total||0),0);
-    if (spent < minPlayerSpend) return { valid:false, error:'ยอดเติมสะสมของ UID นี้ในเกมที่เลือกยังไม่ถึง ฿'+minPlayerSpend.toLocaleString('th-TH')+' (ปัจจุบัน ฿'+spent.toLocaleString('th-TH')+')' };
+  if (!normalized || !Number.isFinite(amount) || amount < 0) {
+    return {valid:false, error:'ข้อมูลคูปองไม่ถูกต้อง'};
   }
-  if (c.usage_limit !== '' && c.usage_limit != null && Number(c.used_count || 0) >= Number(c.usage_limit)) return { valid:false, error:'คูปองถูกใช้ครบจำนวนแล้ว' };
-  const discount = Math.min(amount, c.discount_type === 'percent' ? amount * Number(c.discount_value) / 100 : Number(c.discount_value));
-  return { valid:true, code:c.code, coupon_id:c.id, discount:money_(discount), total:money_(amount-discount) };
+  const coupon = repositoryRows_('coupons').find(function(item) {
+    return String(item.code_normalized).toUpperCase() === normalized;
+  });
+  if (!coupon) return {valid:false, error:'ไม่พบคูปองหรือคูปองปิดใช้งาน'};
+  return couponEligibility_(coupon, gameId, Math.round(amount * 100), playerId, memberId, Date.now());
+}
+
+function couponSuggestions_(gameId, subtotal, playerId, memberId) {
+  const amount = Number(subtotal);
+  if (!Number.isFinite(amount) || amount < 0) return {suggestion:null};
+  const candidates = repositoryRows_('coupons').map(function(coupon) {
+    return couponEligibility_(coupon, gameId, Math.round(amount * 100), playerId, memberId, Date.now());
+  }).filter(function(result) { return result.valid; });
+  candidates.sort(function(a, b) { return b.discount_satang - a.discount_satang; });
+  return {
+    suggestion: candidates.length ? {
+      code:candidates[0].code,
+      discount:candidates[0].discount,
+      message:'ประหยัด ' + money_(candidates[0].discount) + ' บาท'
+    } : null
+  };
 }
