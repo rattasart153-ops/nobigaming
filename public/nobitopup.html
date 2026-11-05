@@ -1636,7 +1636,7 @@ body {
       <div class="coupon-row"><label class="field"><span class="field-label">โค้ดส่วนลด</span><input type="text" id="couponCode" class="field-input" placeholder="เช่น NOBI10" autocomplete="off" /></label><button type="button" class="btn btn-ghost coupon-apply" id="applyCoupon">ใช้โค้ด</button></div>
       <p class="coupon-message" id="couponMessage" aria-live="polite"></p>
       <div class="coupon-suggestion" id="couponSuggestion" hidden></div>
-      <div class="payment-box"><div><strong>ชำระผ่าน PromptPay</strong><p id="paymentMessage">กำลังตรวจสอบการตั้งค่า QR…</p><img id="paymentQr" alt="QR Code PromptPay" hidden /></div><label class="field slip-field"><span class="field-label">แนบสลิปโอนเงิน (PNG/JPG/WebP ไม่เกิน 5 MB)</span><input type="file" id="paymentSlip" accept="image/png,image/jpeg,image/webp" /></label></div>
+      <div class="payment-box"><div><strong>ชำระผ่าน PromptPay</strong><p id="paymentMessage">กำลังตรวจสอบการตั้งค่า QR…</p><img id="paymentQr" alt="QR Code PromptPay" hidden /></div><label class="field slip-field"><span class="field-label">แนบสลิปโอนเงิน (PNG/JPG/WebP ไม่เกิน 3 MB)</span><input type="file" id="paymentSlip" accept="image/png,image/jpeg,image/webp" /></label></div>
     </div>
 
     <div class="modal-foot">
@@ -2076,7 +2076,7 @@ async function apiRequest(url,options={}){const response=await fetch(url,{creden
     if(!activeCheckout && !uid){showToast("กรุณากรอก UID หรือชื่อตัวละครก่อนยืนยัน",false);playerId.focus();return;}
     if(!activeCheckout && (!selected||!selectedPackageId||!currentGameId)){showToast("กรุณาเลือกแพ็กเกจ",false);return;}
     const slip=$("#paymentSlip").files[0];
-    if(slip&&(!['image/png','image/jpeg','image/webp'].includes(slip.type)||slip.size>5*1024*1024)){showToast("ไฟล์สลิปต้องเป็น PNG/JPG/WebP และไม่เกิน 5 MB",false);return;}
+    if(slip&&(!['image/png','image/jpeg','image/webp'].includes(slip.type)||slip.size>3*1024*1024)){showToast("ไฟล์สลิปต้องเป็น PNG/JPG/WebP และไม่เกิน 3 MB",false);return;}
     if(!activeCheckout&&$("#couponCode").value.trim()&&!(await validateCouponUi()))return;
     confirmBtn.disabled=true;confirmBtn.style.opacity=".65";
     try{
