@@ -1,16 +1,19 @@
-> **CURRENT MIGRATION NOTE (2026-11-05):** The lower sections of this inventory describe two different historical frontend states and conflict with each other. The latest approved target is Apps Script HtmlService + an allowlisted `google.script.run` facade. The Express REST contract is now a legacy reference, not the target transport. P0 must re-verify every route against the current HTML source before porting. No frontend code has been changed as part of the architecture switch.
+> **P0 AUDIT CORRECTION (2026-11-05):** The current committed HTML source was re-checked directly. Both `public/nobitopup.html` and `public/admin.html` use same-origin HTTP `fetch()` to `/api/...`; neither uses `google.script.run`. The statements below that describe the frontends as direct GAS RPC clients are stale historical notes and must not be used as the current implementation baseline. The approved target remains Apps Script HtmlService + an explicit allowlisted `google.script.run` facade. The current frontend is therefore not yet compatible with that target. See [P0_COMPATIBILITY_AUDIT.md](./P0_COMPATIBILITY_AUDIT.md) for verified route/action mapping and blockers.
 
 # Frontend → Backend Compatibility Inventory
 
 Branch: `vercel-drive-setup`
 
-Status: source inventory completed. This is a compatibility record, not permission to switch either frontend to the Express API.
+Status: historical REST contract plus current-source correction. The current HTML source is REST-based; the approved target is HtmlService + GAS RPC. No production deployment or live checkout is authorized.
 
 ## Executive finding
 
-Both HTML frontends currently use Google Apps Script RPC directly. The REST-looking calls in `public/admin.html` are a local JavaScript adapter that translates those calls into `google.script.run.rpc(action, args)`; they do not use HTTP fetch to call Express. The storefront in `public/nobitopup.html` calls `google.script.run` directly.
+- Storefront `public/nobitopup.html`: same-origin `fetch()` to public REST routes, member routes and two-step order/slip submission.
+- Admin `public/admin.html`: same-origin `fetch()` to Admin REST routes, cookie credentials, binary slip retrieval and multipart image upload.
+- GAS `Code.gs` currently exposes a JSON `doGet()`, and `13_HttpGateway.gs` exposes signed `doPost()`; there is no HtmlService page renderer or browser-callable `rpc()` facade in the current GAS source.
+- GAS `01_HttpEntry.gs` is an action dispatcher used by the signed HTTP gateway. It is not currently a browser-callable facade.
+- The route/action mapping in this document must be treated as a migration reference, not proof of runtime compatibility. P0 audit verifies each endpoint against both source trees.
 
-The Express API exists as a separate backend baseline. Until the adapters are deliberately replaced and end-to-end tested, serving these HTML files from Express does not make the pages compatible with the Express API. In particular, the storefront explicitly reports that it must be opened as an Apps Script Web App if `google.script.run` is absent.
 
 ## 1. Storefront call inventory
 
