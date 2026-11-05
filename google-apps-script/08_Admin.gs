@@ -2,6 +2,7 @@
 
 function adminDashboard(token) {
   requireAdmin_(token);
+  expirePendingOrders_();
   const orders = repositoryRows_('orders');
   const completed = orders.filter(function(order) { return order.status === 'Completed'; });
   return {
@@ -20,6 +21,7 @@ function adminDashboard(token) {
 
 function adminOrders(token) {
   requireAdmin_(token);
+  expirePendingOrders_();
   return repositoryRows_('orders').sort(function(a, b) {
     return String(b.created_at).localeCompare(String(a.created_at));
   }).map(function(order) {
@@ -134,6 +136,7 @@ function adminSetOrderStatus(token, orderId, status, ipAddress) {
 
 function adminList(token, tableName) {
   requireAdmin_(token);
+  if (String(tableName) === 'coupons') expirePendingOrders_();
   if (!['games', 'packages', 'coupons', 'promotions'].includes(String(tableName))) {
     throw new Error('ไม่อนุญาตให้เข้าถึงตารางนี้');
   }
