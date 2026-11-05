@@ -88,7 +88,7 @@ function loadGasDatabase(spreadsheet, initialProperties = {}) {
     fs.readFileSync(path.join(gasDir, '00_Config.gs'), 'utf8'),
     fs.readFileSync(path.join(gasDir, '02_Database.gs'), 'utf8'),
     fs.readFileSync(path.join(gasDir, '11_Repositories.gs'), 'utf8'),
-    'globalThis.__nobi = NOBI; globalThis.__setupNobiDatabase = setupNobiDatabase; globalThis.__repoInsert = repositoryInsert_; globalThis.__repoFind = repositoryFindByField_; globalThis.__repoUpdate = repositoryUpdate_;'
+    'globalThis.__nobi = NOBI; globalThis.__setupNobiDatabase = setupNobiDatabase; globalThis.__repoInsert = repositoryInsert_; globalThis.__repoFind = repositoryFindByField_; globalThis.__repoUpdate = repositoryUpdate_; globalThis.__append = append_; globalThis.__updateById = updateById_;'
   ].join('\n');
   vm.runInNewContext(source, context);
   return { context, properties };
@@ -173,4 +173,30 @@ test('idempotency repository uniqueness is scoped by both scope and request key'
   assert.throws(() => context.__repoInsert('idempotency_records', {
     idempotency_id: 'idem-3', scope: 'create-order', request_key: 'key-1', payload_hash: 'hash-3'
   }), /REPOSITORY_DUPLICATE/);
+});
+
+
+test('legacy write helpers fail closed on schema and field mismatches without writing data', () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const { context } = loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  const games = spreadsheet.getSheetByName('games');
+  const before = games.rows.map(row => row.slice());
+
+  assert.throws(() => context.__append('games', {
+    id: 'legacy-game-1', name: 'RoV', category: 'moba'
+  }), /DATABASE_FIELD_NOT_ALLOWED|DATABASE_PRIMARY_KEY_REQUIRED/);
+  assert.throws(() => context.__updateById('games', 'game-1', {
+    name: 'Changed', legacy_column: 'not allowed'
+  }), /DATABASE_FIELD_NOT_ALLOWED/);
+  assert.deepEqual(games.rows, before, 'invalid legacy writes must not change Sheets data');
+});
+
+test('legacy write helpers reject unknown tables and primary-key mutation', () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const { context } = loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+
+  assert.throws(() => context.__append('unknown_table', { id: 'x' }), /DATABASE_TABLE_NOT_ALLOWED/);
+  assert.throws(() => context.__updateById('games', 'game-1', { game_id: 'game-2' }), /DATABASE_PRIMARY_KEY_IMMUTABLE/);
 });
