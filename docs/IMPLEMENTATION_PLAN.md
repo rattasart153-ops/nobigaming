@@ -73,7 +73,10 @@ Progress: GAS source is split into focused HTTP, catalog, coupon, payment, order
 - [x] Add matching Vercel Node client with bounded timeout, typed errors and no implicit mutation retries.
 - [x] Add Node tests for request signing, success response, gateway rejection and no implicit retry.
 - [x] Implement schema-versioned, idempotent Sheets setup (schema version 1) that preflights all existing headers, stops on incompatibility or unknown versions, never clears existing content, and is covered by repeat-run/legacy-schema/version tests.
-- [ ] Implement the approved complete Sheets model, including Members, Member/Admin sessions, coupon reservations, order deadlines, audit and idempotency records.
+- [x] Add schema-aware repository primitives with exact header checks, allowed-field validation, immutable primary keys, unique-key checks, and ScriptLock-protected inserts/updates.
+- [x] Harden legacy Sheets write helpers to fail closed on unknown tables, schema mismatches, unknown fields, missing primary keys, and primary-key mutation; add regression tests proving rejected writes do not alter data.
+- [ ] Migrate every legacy business handler to the version 1 repository field model; keep live Sheets initialization blocked until this migration is complete.
+- [ ] Implement the approved complete Sheets model workflows, including Members, Member/Admin sessions, coupon reservations, order deadlines, audit and idempotency records.
 - [ ] Implement private Drive storage for slips and all storefront/catalog/promotion images, plus authorized Vercel proxy delivery.
 - [ ] Add GAS runtime tests for bad signature, stale timestamp, replay, invalid action, missing schema, concurrent nonce claims and quota behavior.
 - [ ] Wire the Express repository adapter only after every action is mapped and tested.
