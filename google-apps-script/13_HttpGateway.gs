@@ -24,6 +24,8 @@ const NOBI_GATEWAY = {
     'memberLogin',
     'memberMe',
     'memberLogout',
+    'memberChangePassword',
+    'adminChangePassword',
     'adminMe',
     'adminLogout',
     'adminDashboard',
