@@ -28,8 +28,8 @@ This is a source compatibility gap, not permission to change the approved archit
 - Current branch HEAD at audit start: `aa00179aa0d5cc46168809ae4e690100d686ce83`.
 - `main` → `vercel-drive-setup` comparison: ahead 497, behind 0; common base `b51b682b99e6e1dc06b949078e72402251683bb0`.
 - Repository default branch is `main`; all changes in this audit were explicitly directed to `vercel-drive-setup`.
-- Last CI run observed before audit: run `42000316537`, conclusion `success`, on the pre-audit HEAD.
-- Project `package.json` requires Node `>=22 <23`, while the workflow selected Node 20. This was corrected to Node 22 on `vercel-drive-setup`; the new workflow run must still be observed before treating the correction as verified.
+- Last pre-audit CI run: `42000316537`, conclusion `success`.
+- Project `package.json` requires Node `>=22 <23`; workflow Node 20 mismatch was corrected to Node 22. CI run `42001254891` on the corrected workflow commit `891517675290e2a9dd158e1ec05f58ccb3e18b4d` completed successfully.
 
 ## 3. Verified source inventory
 
@@ -104,6 +104,8 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 | P0-10 | Medium | Frontend API inventory contained a false statement that the current HTML already used GAS RPC; implementation plan contained a cancelled PostgreSQL decision in a section labelled as superseding the Apps Script target | Corrected in this P0 pass; keep historical notes explicitly labelled |
 | P0-11 | Medium | CI used Node 20 while package.json declares Node 22 only | Corrected workflow to Node 22; await new CI result |
 
+> **Coupon-rule clarification from prior approved decisions:** UID cumulative spend is based on Completed orders matching the same game and player UID, including Guest orders. The separate Member-game-spend threshold counts only Completed orders for that authenticated Member. Do not add a `member_id` requirement to UID spend; that would change the approved legacy UID rule. Existing test `UID cumulative spend coupon is enforced per game using Completed orders only` intentionally uses a Guest order.
+
 ## 5. Business invariants that must not change
 
 - Guest checkout remains enabled.
@@ -137,6 +139,43 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 | `src/db/sqlite.js`, legacy `src/routes/*.routes.js` | Local characterization baseline only | No SQLite fallback for hosted/live use |
 | `test/*.test.js` | Extend static/unit tests for new facade and templates | Keep existing regression tests and add real-runtime checks later |
 
+
+## 6A. Request/response contract details for the HtmlService facade
+
+The browser facade must expose named, typed operations rather than accepting arbitrary REST paths. The following mapping is grounded in the current gateway route adapters and `01_HttpEntry.gs` dispatcher:
+
+| UI action | Current browser input | Server-derived / protected input | GAS action and argument contract |
+|---|---|---|---|
+| Load catalog | none | none | `catalog` |
+| Load promotions | none | none | `promotions` |
+| Coupon suggestions | `gameId, subtotal, playerId` | Member ID from verified session | `couponSuggestions`: `gameId, subtotal, playerId, memberId` |
+| Validate coupon | `code, gameId, subtotal, playerId` | Member ID from verified session | `coupon`: `code, gameId, subtotal, playerId, memberId` |
+| PromptPay information | `amount` | PromptPay ID from Script Properties | `paymentInfo`: `amount` |
+| Create order | `gameId, packageId, playerId, serverId, couponCode`, Idempotency-Key | Member token from verified session; price, discount and deadline from Sheets | `createOrder`: `request_key, game_id, package_id, player_id, server_id, coupon_code, member_token` |
+| Submit slip | `orderId, slip file` | Order-scoped checkout token | `submitOrderSlip`: `order_id, checkout_token, slip{name,mimeType,base64}` |
+| Member register | `fullName, loginId, password` | Source IP and user agent must be server-derived where available | `memberRegister`: currently receives `fullName, loginId, password, ipAddress`; dispatcher currently does not forward userAgent |
+| Member login | `loginId, password` | Source IP and user agent | `memberLogin`: `loginId, password, ipAddress, userAgent` |
+| Member session | none / logout / password change | Member token from protected session | `memberMe, memberLogout, memberChangePassword` |
+| Admin login | `username, password` | Source IP | `adminLogin`: `username, password, ipAddress` |
+| Admin session | none / logout / password change | Admin token from protected session | `adminMe, adminLogout, adminChangePassword` |
+| Admin dashboard/orders | none | Admin token | `adminDashboard, adminOrders` |
+| Admin order status | `orderId, status` | Admin token, source IP | `adminSetOrderStatus`: `token, orderId, status, ipAddress` |
+| Admin slip view | `orderId` | Admin token, source IP | `adminSlipData`: `token, orderId, ipAddress` |
+| Admin list | table allowlist only | Admin token | `adminList`: `token, tableName` |
+| Admin create/update | allowlisted record fields per table | Admin token, source IP | `adminUpsert`: `token, tableName, record, ipAddress` |
+| Admin delete | allowlisted table + record ID | Admin token, source IP | `adminDelete`: `token, tableName, id, ipAddress` |
+| Member administration | search/limit/status/member ID | Admin token, source IP | `adminMembers, adminSetMemberStatus, adminMemberLoginLogs` |
+| Admin media upload | image file | Admin token, source IP | `adminStoreMedia`: `token, media{name,mimeType,base64}, ipAddress` |
+| Public media | opaque media reference | Active record reference and private Drive folder checks | `publicMediaData`: `fileId` |
+
+### Payload and response risks to resolve before P1/P2 acceptance
+
+- Current frontend uses two-step order/slip submission; the GAS order handler must preserve the one-time order-scoped upload authorization and idempotent retry semantics without exposing reusable tokens to page storage.
+- Current Admin browser relies on HttpOnly cookie sessions, whereas GAS handlers issue opaque tokens. The facade design must not silently downgrade to long-lived tokens in `localStorage` or weaken Admin authorization.
+- Admin media upload and public media retrieval currently move base64 through the Express/GAS gateway. HtmlService RPC must impose bounded file size, validate before Drive writes, and avoid large unbounded response payloads.
+- Member registration currently forwards `userAgent` through the Express route but the GAS dispatcher does not pass it into `memberRegister`; inspect whether the registration audit schema requires it and either wire it through or explicitly document why it is not collected.
+- `paymentInfo_` remains a stub; the facade must return a consistent explicit unconfigured/error response until PromptPay QR generation is implemented and verified.
+
 ## 7. P0 exit checklist
 
 - [x] Verify repository, branch and branch isolation.
@@ -147,7 +186,7 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 - [x] Correct false frontend transport documentation.
 - [x] Mark the PostgreSQL option as cancelled history.
 - [x] Align CI Node runtime with package engine.
-- [ ] Observe and record CI result after the Node 22 workflow change.
+- [x] Observe and record CI result after the Node 22 workflow change (`42001254891`: success).
 - [ ] Complete detailed field-by-field response/payload mapping for every Admin CRUD and checkout action.
 - [ ] Complete Apps Script HTML templating/security review before P1 implementation.
 
