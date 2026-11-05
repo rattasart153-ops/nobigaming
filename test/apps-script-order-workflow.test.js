@@ -558,3 +558,24 @@ test('TRANSITION recovery rejects unsupported status and unexpected patch fields
   assert.equal(context.repositoryGetById_('orders','order-invalid-transition').status,'Pending');
   assert.equal(data.order_recovery_journal[0].state,'Pending');
 });
+
+
+test('TRANSITION recovery rejects attempts to mutate immutable redemption fields',()=>{
+  const {context,data}=makeOrderHarness();
+  data.orders.push({order_id:'order-redemption-patch',coupon_id:'coupon-locked',status:'Pending'});
+  data.coupon_redemptions.push({
+    redemption_id:'redemption-locked',order_id:'order-redemption-patch',
+    coupon_id:'coupon-locked',state:'Reserved'
+  });
+  const journal=context.createOrderRecoveryJournalLocked_({
+    order_id:'order-redemption-patch',operation:'TRANSITION',
+    order_patch:{status:'Rejected',rejected_at:'2026-11-05T04:40:00.000Z',status_reason:'ADMIN_REJECTED',updated_at:'2026-11-05T04:40:00.000Z'},
+    redemption_id:'redemption-locked',
+    redemption_patch:{state:'Released',released_at:'2026-11-05T04:40:00.000Z',coupon_id:'attacker-coupon'},
+    created_at:'2026-11-05T04:40:00.000Z'
+  });
+  assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/RECOVERY_REDEMPTION_TRANSITION_INVALID/);
+  assert.equal(data.coupon_redemptions[0].coupon_id,'coupon-locked');
+  assert.equal(data.coupon_redemptions[0].state,'Reserved');
+  assert.equal(data.orders[0].status,'Pending');
+});
