@@ -293,13 +293,39 @@ function applyOrderRecoveryJournalLocked_(journal) {
       if (!orderRecord.order_id || String(orderRecord.order_id) !== String(journal.order_id)) {
         throw new Error('RECOVERY_ORDER_PAYLOAD_INVALID');
       }
-      if (!repositoryGetById_('orders',journal.order_id)) {
+      const existingOrder = repositoryGetById_('orders',journal.order_id);
+      if (!existingOrder) {
         repositoryInsertLocked_('orders',orderRecord);
+      } else {
+        const immutableOrderFields = [
+          'order_id','request_key','member_id','game_id','package_id','player_id',
+          'server_id','coupon_id','subtotal_satang','discount_satang','total_satang',
+          'checkout_token_hash'
+        ];
+        const orderConflict = immutableOrderFields.some(function(field) {
+          return String(existingOrder[field] == null ? '' : existingOrder[field]) !==
+            String(orderRecord[field] == null ? '' : orderRecord[field]);
+        });
+        if (orderConflict) throw new Error('RECOVERY_ORDER_CONFLICT');
       }
+      const existingRedemptions = repositoryFindByField_('coupon_redemptions','order_id',journal.order_id);
       if (journal.redemption_record_json) {
         const redemptionRecord = JSON.parse(journal.redemption_record_json);
-        const existing = repositoryFindByField_('coupon_redemptions','order_id',journal.order_id)[0];
-        if (!existing) repositoryInsertLocked_('coupon_redemptions',redemptionRecord);
+        const existingRedemption = existingRedemptions[0];
+        if (!existingRedemption) {
+          repositoryInsertLocked_('coupon_redemptions',redemptionRecord);
+        } else {
+          const immutableRedemptionFields = [
+            'redemption_id','coupon_id','order_id','member_id','player_id','game_id','discount_satang'
+          ];
+          const redemptionConflict = immutableRedemptionFields.some(function(field) {
+            return String(existingRedemption[field] == null ? '' : existingRedemption[field]) !==
+              String(redemptionRecord[field] == null ? '' : redemptionRecord[field]);
+          }) || existingRedemption.state !== 'Reserved';
+          if (redemptionConflict) throw new Error('RECOVERY_REDEMPTION_CONFLICT');
+        }
+      } else if (existingRedemptions.length) {
+        throw new Error('RECOVERY_UNEXPECTED_REDEMPTION');
       }
       if (journal.idempotency_record_json) {
         const idem = JSON.parse(journal.idempotency_record_json);
