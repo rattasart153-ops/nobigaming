@@ -362,3 +362,142 @@ test('checkout retry recovers a partially persisted order before returning the o
   assert.equal(data.idempotency_records.length,1);
   assert.equal(data.order_recovery_journal.find(x=>x.order_id===partiallyCreatedOrderId&&x.operation==='CREATE').state,'Completed');
 });
+
+
+test('CREATE recovery retries each primary write failure without duplicating order, redemption or idempotency rows', () => {
+  for (const failedTable of ['orders','coupon_redemptions','idempotency_records']) {
+    const {context,data}=makeOrderHarness();
+    data.coupons.push({
+      coupon_id:'coupon-'+failedTable,code_normalized:'SAVE'+failedTable,code_display:'SAVE',
+      discount_type:'fixed',discount_value:1000,access_type:'public',active:true,
+      expires_at:'',min_order_satang:0,usage_limit:1,game_id:''
+    });
+    const payload={
+      request_key:'request-key-'+failedTable+'-0001',game_id:'game-1',package_id:'pack-1',
+      player_id:'uid-'+failedTable,server_id:'',coupon_code:'SAVE'+failedTable
+    };
+    const originalInsert=context.repositoryInsertLocked_;
+    let failOnce=true;
+    context.repositoryInsertLocked_=(table,record)=>{
+      if(table===failedTable&&failOnce){failOnce=false;throw new Error('SIMULATED_'+failedTable.toUpperCase()+'_WRITE');}
+      return originalInsert(table,record);
+    };
+    assert.throws(()=>context.createOrder(payload),new RegExp('SIMULATED_'+failedTable.toUpperCase()+'_WRITE'));
+    assert.equal(data.order_recovery_journal.length,1);
+    assert.equal(data.order_recovery_journal[0].state,'Pending');
+    context.repositoryInsertLocked_=originalInsert;
+    context.recoverPendingOrderJournalsLocked_();
+    context.recoverPendingOrderJournalsLocked_();
+    assert.equal(data.orders.length,1,failedTable+' recovery must create one order');
+    assert.equal(data.coupon_redemptions.length,1,failedTable+' recovery must create one redemption');
+    assert.equal(data.idempotency_records.length,1,failedTable+' recovery must create one idempotency record');
+    assert.equal(data.order_recovery_journal[0].state,'Completed');
+  }
+});
+
+test('CREATE stops before business writes when the write-ahead journal cannot be persisted', () => {
+  const {context,data}=makeOrderHarness();
+  const originalInsert=context.repositoryInsertLocked_;
+  context.repositoryInsertLocked_=(table,record)=>{
+    if(table==='order_recovery_journal') throw new Error('SIMULATED_JOURNAL_INSERT_FAILURE');
+    return originalInsert(table,record);
+  };
+  assert.throws(()=>context.createOrder({
+    request_key:'request-key-journal-fail-0001',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-journal-fail',server_id:'',coupon_code:''
+  }),/SIMULATED_JOURNAL_INSERT_FAILURE/);
+  assert.equal(data.orders.length,0);
+  assert.equal(data.idempotency_records.length,0);
+  assert.equal(data.coupon_redemptions.length,0);
+  assert.equal(data.order_recovery_journal.length,0);
+});
+
+test('TRANSITION recovery retries redemption, order and journal-finalization write failures', () => {
+  for (const failedPoint of ['coupon_redemptions','orders','journal_complete']) {
+    const {context,data}=makeOrderHarness();
+    const now='2026-11-05T04:20:00.000Z';
+    const orderId='order-transition-'+failedPoint;
+    data.orders.push({order_id:orderId,status:'Pending',updated_at:now});
+    data.coupon_redemptions.push({
+      redemption_id:'redemption-'+failedPoint,order_id:orderId,state:'Reserved'
+    });
+    const journal=context.createOrderRecoveryJournalLocked_({
+      order_id:orderId,operation:'TRANSITION',
+      order_patch:{status:'Completed',completed_at:now,updated_at:now},
+      redemption_id:'redemption-'+failedPoint,
+      redemption_patch:{state:'Consumed',finalized_at:now},
+      created_at:now
+    });
+    const originalUpdate=context.repositoryUpdateLocked_;
+    let failOnce=true;
+    context.repositoryUpdateLocked_=(table,id,patch)=>{
+      const shouldFail=failedPoint==='journal_complete'
+        ? table==='order_recovery_journal'&&patch.state==='Completed'
+        : table===failedPoint;
+      if(shouldFail&&failOnce){failOnce=false;throw new Error('SIMULATED_'+failedPoint.toUpperCase()+'_UPDATE');}
+      return originalUpdate(table,id,patch);
+    };
+    assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/SIMULATED_/);
+    context.repositoryUpdateLocked_=originalUpdate;
+    assert.equal(journal.state,'Pending');
+    context.applyOrderRecoveryJournalLocked_(data.order_recovery_journal[0]);
+    context.applyOrderRecoveryJournalLocked_(data.order_recovery_journal[0]);
+    assert.equal(context.repositoryGetById_('orders',orderId).status,'Completed');
+    assert.equal(context.repositoryGetById_('coupon_redemptions','redemption-'+failedPoint).state,'Consumed');
+    assert.equal(data.order_recovery_journal[0].state,'Completed');
+  }
+});
+
+test('TRANSITION recovery remains pending and fail-closed when its referenced redemption is missing', () => {
+  const {context,data}=makeOrderHarness();
+  data.orders.push({order_id:'order-missing-redemption',status:'Pending'});
+  const journal=context.createOrderRecoveryJournalLocked_({
+    order_id:'order-missing-redemption',operation:'TRANSITION',
+    order_patch:{status:'Rejected',status_reason:'ADMIN_REJECTED'},
+    redemption_id:'redemption-does-not-exist',
+    redemption_patch:{state:'Released'},
+    created_at:'2026-11-05T04:30:00.000Z'
+  });
+  assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/RECOVERY_REDEMPTION_NOT_FOUND/);
+  assert.equal(context.repositoryGetById_('orders','order-missing-redemption').status,'Pending');
+  assert.equal(data.order_recovery_journal[0].state,'Pending');
+});
+
+test('CREATE recovery rejects an existing order whose immutable payload conflicts with the journal', () => {
+  const {context,data}=makeOrderHarness();
+  const order={
+    order_id:'order-conflict',request_key:'request-key-conflict-0001',member_id:'',
+    game_id:'game-1',package_id:'pack-1',player_id:'uid-expected',server_id:'',
+    coupon_id:'',subtotal_satang:10000,discount_satang:0,total_satang:10000,
+    checkout_token_hash:'expected-hash'
+  };
+  data.orders.push({...order,player_id:'uid-attacker'});
+  const journal=context.createOrderRecoveryJournalLocked_({
+    order_id:order.order_id,operation:'CREATE',order_record:order,
+    idempotency_record:{
+      idempotency_id:'idem-conflict',scope:'create_order',request_key:order.request_key,
+      payload_hash:'payload-hash',resource_id:order.order_id,state:'Completed',
+      created_at:'2026-11-05T04:00:00.000Z',expires_at:'2027-02-03T04:00:00.000Z'
+    },
+    created_at:'2026-11-05T04:00:00.000Z'
+  });
+  assert.throws(()=>context.applyOrderRecoveryJournalLocked_(journal),/RECOVERY_ORDER_CONFLICT/);
+  assert.equal(data.idempotency_records.length,0);
+  assert.equal(data.order_recovery_journal[0].state,'Pending');
+});
+
+test('replayed checkout calls with the same idempotency key preserve one order under serialized execution', async () => {
+  const {context,data}=makeOrderHarness();
+  const payload={
+    request_key:'request-key-replay-serialized-01',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-replay',server_id:'',coupon_code:''
+  };
+  const results=await Promise.all([
+    Promise.resolve().then(()=>context.createOrder(payload)),
+    Promise.resolve().then(()=>context.createOrder(payload)),
+    Promise.resolve().then(()=>context.createOrder(payload))
+  ]);
+  assert.equal(data.orders.length,1);
+  assert.equal(data.idempotency_records.length,1);
+  assert.equal(results.filter(result=>result.duplicate).length,2);
+});
