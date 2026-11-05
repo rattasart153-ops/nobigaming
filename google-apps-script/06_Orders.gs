@@ -305,7 +305,7 @@ function applyOrderRecoveryJournalLocked_(journal) {
             return !Object.prototype.hasOwnProperty.call(idem,field);
           }) || idem.scope !== 'create_order' ||
           String(idem.request_key) !== String(orderRecord.request_key) ||
-          String(idem.resource_id) !== String(journal.order_id) ||
+          String(idem.resource_id) !== String(journal.order_id) || idem.state !== 'Completed' ||
           !/^[a-f0-9]{64}$/i.test(String(idem.payload_hash || '')) ||
           !Number.isFinite(Date.parse(idem.created_at)) ||
           !Number.isFinite(Date.parse(idem.expires_at)) ||
@@ -376,19 +376,21 @@ function applyOrderRecoveryJournalLocked_(journal) {
       const allowedFields = allowedPatchFields[targetStatus];
       if (!allowedFields || Object.keys(patch).some(function(field) {
         return allowedFields.indexOf(field) === -1;
-      }) || !patch.updated_at ||
-          (targetStatus === 'Completed' && (!patch.completed_at || !order.slip_submitted_at ||
-            !Number.isFinite(Date.parse(order.slip_submitted_at)) ||
+      }) || !Number.isFinite(Date.parse(patch.updated_at)) ||
+          (targetStatus === 'Completed' && (!Number.isFinite(Date.parse(patch.completed_at)) ||
+            !order.slip_submitted_at || !Number.isFinite(Date.parse(order.slip_submitted_at)) ||
             !Number.isFinite(Date.parse(order.payment_expires_at)) ||
             Date.parse(order.slip_submitted_at) >= Date.parse(order.payment_expires_at))) ||
-          (targetStatus === 'Rejected' && (!patch.rejected_at || patch.status_reason !== 'ADMIN_REJECTED')) ||
+          (targetStatus === 'Rejected' && (!Number.isFinite(Date.parse(patch.rejected_at)) ||
+            patch.status_reason !== 'ADMIN_REJECTED')) ||
           (targetStatus === 'Expired' && patch.status_reason !== 'PAYMENT_TIMEOUT')) {
         throw new Error('RECOVERY_TRANSITION_PAYLOAD_INVALID');
       }
       if (order.status !== 'Pending' && order.status !== targetStatus) {
         throw new Error('RECOVERY_TERMINAL_STATE_CONFLICT');
       }
-      if (Boolean(order.coupon_id) !== Boolean(journal.redemption_id && journal.redemption_patch_json)) {
+      if (Boolean(journal.redemption_id) !== Boolean(journal.redemption_patch_json) ||
+          Boolean(order.coupon_id) !== Boolean(journal.redemption_id)) {
         throw new Error('RECOVERY_REDEMPTION_JOURNAL_MISSING');
       }
       if (journal.redemption_id && journal.redemption_patch_json) {
@@ -402,7 +404,13 @@ function applyOrderRecoveryJournalLocked_(journal) {
         const targetRedemptionState = String(redemptionPatch.state || '');
         const expectedRedemptionState = targetStatus === 'Completed' ? 'Consumed' :
           (['Rejected','Expired'].includes(targetStatus) ? 'Released' : '');
-        if (!expectedRedemptionState || targetRedemptionState !== expectedRedemptionState) {
+        const allowedRedemptionFields = targetStatus === 'Completed'
+          ? ['state','finalized_at'] : ['state','released_at'];
+        const redemptionTimestampField = targetStatus === 'Completed' ? 'finalized_at' : 'released_at';
+        if (!expectedRedemptionState || targetRedemptionState !== expectedRedemptionState ||
+            Object.keys(redemptionPatch).some(function(field) {
+              return allowedRedemptionFields.indexOf(field) === -1;
+            }) || !Number.isFinite(Date.parse(redemptionPatch[redemptionTimestampField]))) {
           throw new Error('RECOVERY_REDEMPTION_TRANSITION_INVALID');
         }
         if (redemption.state !== 'Reserved' && redemption.state !== targetRedemptionState) {
