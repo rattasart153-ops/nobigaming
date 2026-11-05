@@ -440,13 +440,19 @@ function applyOrderRecoveryJournalLocked_(journal) {
     return {ok:true};
   } catch (error) {
     try {
-      repositoryUpdateLocked_('order_recovery_journal',journal.journal_id,{
-        state:'Pending',
-        attempts:Number(journal.attempts || 0)+1,
-        last_error_code:/^[A-Z0-9_:-]{1,100}$/.test(String(error && error.message || ''))
-          ? String(error.message) : 'RECOVERY_FAILED',
-        updated_at:now
-      });
+      // A Sheets write may have committed even if its response failed. Re-read
+      // before marking Pending so a completed journal is never resurrected
+      // after its recovery payload has already been cleared.
+      const persistedJournal = repositoryGetById_('order_recovery_journal',journal.journal_id);
+      if (persistedJournal && persistedJournal.state !== 'Completed') {
+        repositoryUpdateLocked_('order_recovery_journal',journal.journal_id,{
+          state:'Pending',
+          attempts:Number(persistedJournal.attempts || 0)+1,
+          last_error_code:/^[A-Z0-9_:-]{1,100}$/.test(String(error && error.message || ''))
+            ? String(error.message) : 'RECOVERY_FAILED',
+          updated_at:now
+        });
+      }
     } catch (journalError) {}
     throw error;
   }
