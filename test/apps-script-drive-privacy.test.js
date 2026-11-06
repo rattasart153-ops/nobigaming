@@ -141,7 +141,7 @@ function makeAdminMediaHarness(options = {}) {
 
 test('Admin media upload keeps private files and returns the media reference after audit succeeds',()=>{
   const {context,state}=makeAdminMediaHarness();
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   const result=context.adminStoreMedia('admin-token',{
     mimeType:'image/png',base64:png.toString('base64')
   });
@@ -153,7 +153,7 @@ test('Admin media upload keeps private files and returns the media reference aft
 
 test('Admin media upload trashes the file when Drive ACL verification fails',()=>{
   const {context,state}=makeAdminMediaHarness({fileAccess:'ANYONE'});
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   assert.throws(()=>context.adminStoreMedia('admin-token',{
     mimeType:'image/png',base64:png.toString('base64')
   }),/DRIVE_FILE_NOT_PRIVATE/);
@@ -163,7 +163,7 @@ test('Admin media upload trashes the file when Drive ACL verification fails',()=
 
 test('Admin media upload trashes the unreferenced file when audit logging fails',()=>{
   const {context,state}=makeAdminMediaHarness({auditFailure:true});
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   assert.throws(()=>context.adminStoreMedia('admin-token',{
     mimeType:'image/png',base64:png.toString('base64')
   }),/SIMULATED_AUDIT_WRITE_FAILURE/);
@@ -173,7 +173,7 @@ test('Admin media upload trashes the unreferenced file when audit logging fails'
 
 test('Admin media upload rejects a shared folder before creating a file',()=>{
   const {context,state}=makeAdminMediaHarness({folderAccess:'ANYONE'});
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   assert.throws(()=>context.adminStoreMedia('admin-token',{
     mimeType:'image/png',base64:png.toString('base64')
   }),/DRIVE_FOLDER_NOT_PRIVATE/);
@@ -210,4 +210,13 @@ test('Admin media upload rejects decoded payloads larger than 3 MiB before creat
     mimeType:'image/png',base64:oversized.toString('base64')
   }),/ไฟล์ภาพไม่ถูกต้องหรือมีขนาดเกิน 3 MB/);
   assert.equal(state.files.length,0,'oversized decoded bytes must never reach Drive');
+});
+
+test('Admin media upload rejects a truncated PNG even when its signature is correct',()=>{
+  const {context,state}=makeAdminMediaHarness();
+  const truncated=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  assert.throws(()=>context.adminStoreMedia('admin-token',{
+    mimeType:'image/png',base64:truncated.toString('base64')
+  }),/ไฟล์ภาพไม่ถูกต้องหรือมีขนาดเกิน 3 MB/);
+  assert.equal(state.files.length,0,'truncated image data must never reach Drive');
 });
