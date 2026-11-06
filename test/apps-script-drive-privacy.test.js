@@ -79,3 +79,103 @@ test('private Drive file validator rejects files shared beyond private access', 
     /DRIVE_FILE_NOT_PRIVATE/
   );
 });
+
+
+function makeAdminMediaHarness(options = {}) {
+  const state = {
+    folderAccess:options.folderAccess || 'PRIVATE',
+    fileAccess:options.fileAccess || 'PRIVATE',
+    parentId:options.parentId || 'media-folder',
+    auditFailure:Boolean(options.auditFailure),
+    files:[]
+  };
+  const context = vm.createContext({
+    NOBI:{MAX_SLIP_BYTES:3*1024*1024},
+    DriveApp:{
+      Access:{PRIVATE:'PRIVATE'},
+      Permission:{VIEW:'VIEW'},
+      getFolderById:()=>({
+        getSharingAccess:()=>state.folderAccess,
+        createFile:blob=>{
+          const file={
+            id:'media-file-'+(state.files.length+1),
+            blob,
+            trashed:false,
+            getId(){return this.id;},
+            getSharingAccess:()=>state.fileAccess,
+            getParents(){
+              let consumed=false;
+              return {hasNext:()=>!consumed,next:()=>{consumed=true;return {getId:()=>state.parentId};}};
+            },
+            setSharing(){},
+            setTrashed(value){this.trashed=value;}
+          };
+          state.files.push(file);
+          return file;
+        }
+      })
+    },
+    PropertiesService:{
+      getScriptProperties:()=>({getProperty:key=>key==='NOBI_PRIVATE_MEDIA_FOLDER_ID'?'media-folder':''})
+    },
+    Utilities:{
+      getUuid:()=>'media-uuid',
+      base64Decode:value=>Array.from(Buffer.from(String(value),'base64')).map(x=>x>127?x-256:x),
+      newBlob:(bytes,mimeType,name)=>({bytes,mimeType,name})
+    },
+    LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
+    requireAdmin_:()=>({admin_id:'admin-1'}),
+    appendAdminAuditLogLocked_:()=>{
+      if(state.auditFailure) throw new Error('SIMULATED_AUDIT_WRITE_FAILURE');
+    }
+  });
+  for (const file of ['06_Orders.gs','08_Admin.gs']) {
+    vm.runInContext(
+      fs.readFileSync(path.join(__dirname, '..', 'google-apps-script', file), 'utf8'),
+      context,
+      {filename:file}
+    );
+  }
+  return {context,state};
+}
+
+test('Admin media upload keeps private files and returns the media reference after audit succeeds',()=>{
+  const {context,state}=makeAdminMediaHarness();
+  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const result=context.adminStoreMedia('admin-token',{
+    mimeType:'image/png',base64:png.toString('base64')
+  });
+  assert.equal(result.ok,true);
+  assert.equal(result.file_id,'media-file-1');
+  assert.equal(state.files.length,1);
+  assert.equal(state.files[0].trashed,false);
+});
+
+test('Admin media upload trashes the file when Drive ACL verification fails',()=>{
+  const {context,state}=makeAdminMediaHarness({fileAccess:'ANYONE'});
+  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  assert.throws(()=>context.adminStoreMedia('admin-token',{
+    mimeType:'image/png',base64:png.toString('base64')
+  }),/DRIVE_FILE_NOT_PRIVATE/);
+  assert.equal(state.files.length,1);
+  assert.equal(state.files[0].trashed,true);
+});
+
+test('Admin media upload trashes the unreferenced file when audit logging fails',()=>{
+  const {context,state}=makeAdminMediaHarness({auditFailure:true});
+  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  assert.throws(()=>context.adminStoreMedia('admin-token',{
+    mimeType:'image/png',base64:png.toString('base64')
+  }),/SIMULATED_AUDIT_WRITE_FAILURE/);
+  assert.equal(state.files.length,1);
+  assert.equal(state.files[0].trashed,true);
+});
+
+test('Admin media upload rejects a shared folder before creating a file',()=>{
+  const {context,state}=makeAdminMediaHarness({folderAccess:'ANYONE'});
+  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  assert.throws(()=>context.adminStoreMedia('admin-token',{
+    mimeType:'image/png',base64:png.toString('base64')
+  }),/DRIVE_FOLDER_NOT_PRIVATE/);
+  assert.equal(state.files.length,0);
+});
