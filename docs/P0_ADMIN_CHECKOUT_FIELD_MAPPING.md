@@ -13,10 +13,10 @@ This is a migration contract reference, not a claim that the current Express rou
 
 | Browser operation | Browser request | GAS action and arguments | Browser response / behavior |
 |---|---|---|---|
-| Login | `POST /api/admin/login`, JSON `{username,password}` | `adminLogin(username,password,ipAddress)`; IP is server-derived | Sets HttpOnly `nobi_admin_session`; JSON `{ok:true,username}`. Raw GAS session token is not returned to browser JSON. |
+| Login | `POST /api/admin/login`, JSON `{username,password}` | `adminLogin(username,password)`; no IP argument | Sets HttpOnly `nobi_admin_session`; JSON `{ok:true,username}`. Raw GAS session token is not returned to browser JSON. |
 | Logout | `POST /api/admin/logout`, Admin cookie | `adminLogout({token})` | Revokes session; clears cookie; `{ok:true}`. |
 | Session check | `GET /api/admin/me`, Admin cookie | `adminMe({token})` | `{authenticated:boolean}`; invalid session clears cookie. |
-| Change password | `POST /api/admin/password`, JSON `{currentPassword,newPassword}` | `adminChangePassword({token,currentPassword,newPassword,ipAddress})` | Returns GAS result; clears cookie after password rotation/revocation. |
+| Change password | `POST /api/admin/password`, JSON `{currentPassword,newPassword}` | `adminChangePassword({token,currentPassword,newPassword})` | Returns GAS result; clears cookie after password rotation/revocation. |
 | Dashboard | `GET /api/admin/dashboard` | `adminDashboard({token})` | `{orders,pending,completed,revenue,games,packages,coupons,promotions}`; revenue is Completed-order total. |
 | Orders | `GET /api/admin/orders` | `adminOrders({token})` | Array of safe order records, enriched with `id,game_name,package_name,coupon_code,has_slip,subtotal,discount,total`. Does not expose `slip_file_id,checkout_token_hash,request_key`. |
 | Change order status | `PATCH /api/admin/orders/:id/status`, JSON `{status}` | `adminSetOrderStatus({token,orderId,status,ipAddress})` | Only `Completed` or `Rejected`; normal success `{ok:true,status}`, no-op `{ok:true,unchanged:true}`; expired completion maps to HTTP 409. |
@@ -33,7 +33,7 @@ Only four tables are exposed: `games`, `packages`, `coupons`, `promotions`. All 
 | Update | `PUT /api/admin/{table}/:id` | `adminUpsert({token,tableName,record,ipAddress})`; route ID is copied to the table's primary-key field | HTTP 200, `{ok:true,id}`. |
 | Delete | `DELETE /api/admin/{table}/:id` | `adminDelete({token,tableName,id,ipAddress})` | `{ok:true}`; deletion is rejected if protected references/redemptions exist. |
 
-The server-derived IP is an audit argument, not a browser-editable form field. The GAS handler writes it into the Admin audit log. Never accept `ipAddress` from browser JSON.
+Legacy gateway rows may still list `ipAddress` for historical request compatibility, but the approved HtmlService dispatcher does not forward IP values and the Apps Script handlers write blank IP fields. Never accept `ipAddress` from browser JSON or present it as verified provenance.
 
 ### Admin CRUD — record fields and transformations
 
@@ -71,7 +71,7 @@ Checkout invariants: request key is 16–128 allowed characters and bound to a c
 
 ### Source defect found and corrected during P0-R9
 
-The Admin `PUT /api/admin/{table}/:id` route called `adminUpsert` without forwarding `ipAddress`, unlike the matching POST route. GAS therefore wrote an empty IP into the audit event for updates. The route now forwards `String(req.ip || '')`, and a regression test asserts the update request sends the server-derived loopback address to the GAS client. This does not accept an IP from the browser.
+The legacy Admin `PUT /api/admin/{table}/:id` route originally omitted the request-derived `ipAddress` argument, unlike POST. The route now forwards `String(req.ip || '')`, with a regression test proving it comes from the server request rather than the browser body. Under approved decision B, Apps Script deliberately discards this legacy argument and leaves audit IP fields blank; it is not used as Member IP history.
 
 ## P0-R10 — Approved decision B: no Member IP history
 
