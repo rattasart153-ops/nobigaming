@@ -28,6 +28,9 @@ function promptPayPayload_(promptpayId, amount) {
   if (/^0[0-9]{9}$/.test(digits)) {
     type = '01';
     target = '0066' + digits.slice(1);
+  } else if (/^66[0-9]{9}$/.test(digits)) {
+    type = '01';
+    target = '00' + digits;
   } else if (/^[0-9]{13}$/.test(digits)) {
     type = '02';
     target = digits;
