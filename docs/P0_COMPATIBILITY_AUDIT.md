@@ -79,7 +79,7 @@ The legacy local-SQLite route modules remain in `src/routes/public.routes.js` an
 | `12_Seed.gs` | Default catalog seed | Present; must only run on an explicitly authorized synthetic database |
 | `13_HttpGateway.gs` | Signed HTTP `doPost()` gateway | Present; target browser transport is not this gateway |
 | `14_Retention.gs` | 90-day IP/log cleanup and daily trigger setup | P0-R4 source and mock tests added; IP columns use batched writes, log deletion uses bottom-up contiguous batches, trigger installation uses ScriptLock; trigger deliberately not installed on a real Google account |
-| `Code.gs` | Web entry point | **`doGet()` returns JSON via ContentService; it does not render HtmlService** |
+| `Code.gs` | Web entry point | **P0-R11 implemented:** `doGet()` renders the selected HtmlService template; no DB initialization |
 | `appsscript.json` | V8 manifest, Asia/Bangkok | Present; no HtmlService templates are referenced |
 
 ### Current GAS action dispatcher
@@ -93,9 +93,9 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 
 | ID | Severity | Finding | Required action |
 |---|---|---|---|
-| P0-01 | Critical | GAS `doGet()` returns JSON; no HtmlService renderer or HTML template files exist | P1: implement HtmlService entry and template routing |
-| P0-02 | Critical | Current HTML pages call Express REST, not `google.script.run`; they cannot run as the approved standalone HtmlService app | P1/P2: implement facade then frontend adapter |
-| P0-03 | Critical | `01_HttpEntry.gs` dispatcher is invoked through signed `doPost()`; no browser-callable facade exists | P1: add allowlisted facade; do not expose arbitrary table/action dispatch |
+| P0-01 | Critical | GAS `doGet()` previously returned JSON with no HtmlService renderer | **P0-R11 source implemented:** `Code.gs` routes to Storefront/Admin templates; no resource initialization occurs during rendering. Runtime verification remains gated. |
+| P0-02 | Critical | Current HTML pages still call Express REST, not `google.script.run`; template copies are not end-to-end functional yet | **Still open:** implement and test the P2 frontend adapter before accepting the HtmlService app as functional. |
+| P0-03 | Critical | `01_HttpEntry.gs` dispatcher was only reachable through signed `doPost()` | **P0-R12 source implemented:** `BrowserFacade.gs` exposes named typed functions, strict argument allowlists and no generic browser action dispatcher. Runtime verification remains gated. |
 | P0-04 | High | PromptPay payload generation was previously a stub | P0-R7 now returns a validated EMVCo payload without a paid service; HtmlService must render it with a local QR encoder and complete runtime verification before real payment |
 | P0-05 | High | Existing Admin slip and media paths transfer base64 data through Apps Script actions | P1/P3: design bounded upload/download and memory-safe limits; preserve 3 MB upload cap and private Drive access |
 | P0-06 | High | Current frontend/Admin session model assumes Express same-origin cookie sessions; GAS business handlers issue opaque tokens | P1/P2: define secure HtmlService session transport, token lifecycle and XSS protections before switching |
@@ -155,16 +155,16 @@ P0-12 is resolved as a requirements decision, not because a trusted IP source wa
 
 | File(s) | P1/P2 action | Preserve / verify |
 |---|---|---|
-| `Code.gs` | Replace JSON-only `doGet()` with HtmlService router and template output | No DB initialization or Admin bootstrap in `doGet()` |
-| New `*.html` templates | Add storefront/Admin templates using existing HTML as source | Keep Thai copy, layout, responsive UI and accessibility |
-| `01_HttpEntry.gs` | Keep internal dispatcher; add explicit typed browser facade functions | Per-action argument validation and authorization |
+| `Code.gs` | **Implemented P0-R11:** HtmlService router selects `Storefront` or `Admin` template | No DB initialization or Admin bootstrap in `doGet()` |
+| `Storefront.html`, `Admin.html` | **Implemented P0-R11:** template copies of existing public HTML with top-level navigation base | Preserve Thai copy, layout, responsive UI and accessibility; REST-to-RPC adapter remains P2 |
+| `01_HttpEntry.gs`, `BrowserFacade.gs` | **Implemented P0-R12:** keep dispatcher internal and expose named typed facade functions only | Strict payload allowlists; business handlers enforce authorization and invariants |
 | `13_HttpGateway.gs` | Retain only if needed for internal/diagnostic compatibility; not the browser app transport | Never expose shared HMAC secret to browser |
 | `02_Database.gs`, `11_Repositories.gs` | Keep Sheets repository foundation | Schema checks, lock behavior, recovery, quota handling |
 | `03_Catalog.gs`, `04_Coupons.gs`, `06_Orders.gs`, `08_Admin.gs`, `09_Validation.gs`, `10_Utilities.gs` | Preserve business handlers; adapt facade arguments only | All business invariants, authorization, idempotency and safe failures |
 | `05_Payments.gs` | Implement PromptPay QR generation | No external paid QR service; verify Thai PromptPay payload and exact amount |
 | `07_Auth.gs` | Preserve auth/session core; connect to facade/session transport | PBKDF2 benchmark, token protection, revocation, rate limiting |
 | `public/nobitopup.html` | Move into HtmlService template and replace REST adapter with RPC client | Catalog, coupon, QR, checkout, slip, member flows and retry behavior |
-| `public/admin.html` | Move into HtmlService template and replace REST adapter with RPC client | Admin CRUD, members/IP, order review, private slip/media |
+| `public/admin.html`, `Admin.html` | Template source copied; replace REST adapter with RPC client in P2 | Admin CRUD, member/login history without IP, order review, private slip/media |
 | `src/routes/gateway-*.routes.js`, `src/clients/apps-script.client.js` | Legacy Express gateway; do not use as the final web host | Keep unchanged until P1/P2 replacement is tested; do not silently enable Vercel |
 | `src/db/sqlite.js`, legacy `src/routes/*.routes.js` | Local characterization baseline only | No SQLite fallback for hosted/live use |
 | `test/*.test.js` | Extend static/unit tests for new facade and templates | Keep existing regression tests and add real-runtime checks later |
