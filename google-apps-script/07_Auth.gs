@@ -340,14 +340,12 @@ function appendMemberLoginLogLocked_(memberId, loginId, result, reason, userAgen
 
 function pruneMemberLoginLogsLocked_(nowMs) {
   const cutoff = nowMs - NOBI.LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-  const sheet = repositorySheet_('member_login_logs');
-  const values = sheet.getDataRange().getValues();
-  const headers = NOBI.SHEETS.member_login_logs;
-  const createdIndex = headers.indexOf('created_at');
-  for (let row = values.length - 1; row >= 1; row--) {
-    const created = Date.parse(String(values[row][createdIndex] || ''));
-    if (Number.isFinite(created) && created < cutoff) sheet.deleteRow(row + 1);
-  }
+  repositoryRows_('member_login_logs').filter(function(log) {
+    const created = Date.parse(String(log.created_at || ''));
+    return Number.isFinite(created) && created < cutoff;
+  }).forEach(function(log) {
+    repositoryDeleteLocked_('member_login_logs', log.log_id);
+  });
 }
 
 
