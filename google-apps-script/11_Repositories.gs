@@ -35,14 +35,17 @@ function repositoryRowObject_(headers, row) {
   return record;
 }
 
-function repositoryRows_(tableName) {
-  const sheet = repositorySheet_(tableName);
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return [];
+function repositoryRecordsFromValues_(values) {
+  if (!Array.isArray(values) || values.length < 2) return [];
   const headers = values[0].map(String);
   return values.slice(1)
     .filter(function(row) { return row.some(function(value) { return value !== '' && value !== null; }); })
     .map(function(row) { return repositoryRowObject_(headers, row); });
+}
+
+function repositoryRows_(tableName) {
+  const sheet = repositorySheet_(tableName);
+  return repositoryRecordsFromValues_(sheet.getDataRange().getValues());
 }
 
 function repositoryGetById_(tableName, id) {
@@ -65,12 +68,12 @@ function repositoryFindByField_(tableName, field, value) {
   });
 }
 
-function repositoryAssertUniqueLocked_(tableName, record, exceptId) {
+function repositoryAssertUniqueLocked_(tableName, record, exceptId, existingRecords) {
   const uniqueConstraints = NOBI_REPOSITORY_UNIQUE_FIELDS[tableName] || [];
   if (!uniqueConstraints.length) return;
   const headers = NOBI.SHEETS[tableName];
   const primaryKey = headers[0];
-  const existing = repositoryRows_(tableName);
+  const existing = Array.isArray(existingRecords) ? existingRecords : repositoryRows_(tableName);
   uniqueConstraints.forEach(function(constraint) {
     const fields = Array.isArray(constraint) ? constraint : [constraint];
     const values = fields.map(function(field) {
@@ -111,8 +114,15 @@ function repositoryInsertLocked_(tableName, record) {
   const safe = repositoryNormalizeRecord_(tableName, record, true);
   const primaryKey = String(safe[headers[0]] || '').trim();
   if (!primaryKey) throw new Error('REPOSITORY_PRIMARY_KEY_REQUIRED');
-  if (repositoryGetById_(tableName, primaryKey)) throw new Error('REPOSITORY_DUPLICATE: ' + tableName + '.' + headers[0]);
-  repositoryAssertUniqueLocked_(tableName, safe, null);
+  // Reuse one snapshot for primary-key and unique-key checks. Each getDataRange()
+  // is a remote Sheets read, so avoid separate full-sheet reads while holding the lock.
+  const values = sheet.getDataRange().getValues();
+  const existingRecords = repositoryRecordsFromValues_(values);
+  const idIndex = headers.indexOf(headers[0]);
+  if (values.slice(1).some(function(row) { return String(row[idIndex] || '') === primaryKey; })) {
+    throw new Error('REPOSITORY_DUPLICATE: ' + tableName + '.' + headers[0]);
+  }
+  repositoryAssertUniqueLocked_(tableName, safe, null, existingRecords);
   sheet.appendRow(headers.map(function(field) {
     return safe[field] === undefined || safe[field] === null ? '' : safe[field];
   }));
@@ -132,7 +142,7 @@ function repositoryUpdateLocked_(tableName, id, patch) {
     if (String(values[rowIndex][idIndex]) !== normalizedId) continue;
     const current = repositoryRowObject_(headers, values[rowIndex]);
     const next = Object.assign({}, current, safePatch);
-    repositoryAssertUniqueLocked_(tableName, next, normalizedId);
+    repositoryAssertUniqueLocked_(tableName, next, normalizedId, repositoryRecordsFromValues_(values));
     sheet.getRange(rowIndex + 1, 1, 1, headers.length).setValues([headers.map(function(field) {
       return next[field] === undefined || next[field] === null ? '' : next[field];
     })]);
