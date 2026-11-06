@@ -108,6 +108,46 @@ test('Admin facade accepts no browser-supplied IP and keeps CRUD table names exp
   assert.equal(calls.length, 3);
 });
 
+test('every named browser wrapper maps to one fixed existing business action', () => {
+  const { context, calls } = loadFacade();
+  context.nobiGetCatalog();
+  context.nobiGetPromotions();
+  context.nobiValidateCoupon({ gameId: 'g', subtotal: 1 });
+  context.nobiGetCouponSuggestions({ gameId: 'g', subtotal: 1 });
+  context.nobiGetPaymentInfo({});
+  context.nobiCreateOrder({ requestKey: '1234567890123456', gameId: 'g', packageId: 'p', playerId: 'uid' });
+  context.nobiSubmitOrderSlip({ orderId: 'o', checkoutToken: 'c', slip: { mimeType: 'image/png', base64: 'x' } });
+  context.nobiLoginAdmin({ username: 'admin', password: 'password' });
+  context.nobiRegisterMember({ fullName: 'Member', loginId: 'user1', password: 'password123' });
+  context.nobiLoginMember({ loginId: 'user1', password: 'password123' });
+  context.nobiGetMemberSession('member-token');
+  context.nobiLogoutMember('member-token');
+  context.nobiChangeMemberPassword({ token: 'member-token', currentPassword: 'old', newPassword: 'new' });
+  context.nobiChangeAdminPassword({ token: 'admin-token', currentPassword: 'old', newPassword: 'new' });
+  context.nobiGetAdminSession('admin-token');
+  context.nobiLogoutAdmin('admin-token');
+  context.nobiGetAdminDashboard('admin-token');
+  context.nobiGetAdminOrders('admin-token');
+  context.nobiGetAdminSlip({ token: 'admin-token', orderId: 'o' });
+  context.nobiSetAdminOrderStatus({ token: 'admin-token', orderId: 'o', status: 'Completed' });
+  context.nobiListAdminRecords({ token: 'admin-token', tableName: 'games' });
+  context.nobiUpsertAdminRecord({ token: 'admin-token', tableName: 'games', record: { name: 'RoV' } });
+  context.nobiDeleteAdminRecord({ token: 'admin-token', tableName: 'games', id: 'g' });
+  context.nobiGetAdminMemberLoginLogs({ token: 'admin-token' });
+  context.nobiGetAdminMembers({ token: 'admin-token' });
+  context.nobiSetAdminMemberStatus({ token: 'admin-token', memberId: 'm', status: 'Active' });
+  context.nobiUploadAdminMedia({ token: 'admin-token', media: { mimeType: 'image/png', base64: 'x' } });
+  context.nobiGetPublicMedia('media-id');
+  assert.deepEqual(calls.map(call => call.action), [
+    'catalog','promotions','coupon','couponSuggestions','paymentInfo','createOrder',
+    'submitOrderSlip','adminLogin','memberRegister','memberLogin','memberMe',
+    'memberLogout','memberChangePassword','adminChangePassword','adminMe','adminLogout',
+    'adminDashboard','adminOrders','adminSlipData','adminSetOrderStatus','adminList',
+    'adminUpsert','adminDelete','adminMemberLoginLogs','adminMembers',
+    'adminSetMemberStatus','adminStoreMedia','publicMediaData'
+  ]);
+});
+
 test('token and file identifiers reject invalid types and oversized values', () => {
   const { context, calls } = loadFacade();
   assert.throws(() => context.nobiGetAdminDashboard({ token: 'admin-token' }), /โทเคนไม่ถูกต้อง/);
