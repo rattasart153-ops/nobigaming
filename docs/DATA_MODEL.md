@@ -42,7 +42,7 @@ Retention policy (CONFIRMED): retain login/IP history for 90 days, then delete o
 
 Retention policy (CONFIRMED): retain Admin audit logs for 90 days, then delete or irreversibly anonymize them. The scheduled cleanup removes rows at or beyond the 90-day boundary.
 
-Audit sensitive actions: viewing member IP history, viewing private slips, changing order status, coupon changes and account/session administration. Never log secrets or slip bytes.
+Audit sensitive actions: viewing private slips, changing order status, coupon changes and account/session administration. Legacy IP columns remain blank; never collect caller-supplied IP or present it as verified. Never log secrets or slip bytes.
 
 ### games
 `game_id, name, category, description, active, sort_order, created_at, updated_at`
