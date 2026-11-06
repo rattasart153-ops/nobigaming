@@ -45,8 +45,8 @@ test('PromptPay payload is static without an amount and dynamic with a positive 
   const context = makePaymentHarness();
   const staticResult = context.paymentInfo_(0);
   const dynamicResult = context.paymentInfo_(25);
-  assert.equal(staticResult.payload.slice(4, 8), '0101');
-  assert.equal(dynamicResult.payload.slice(4, 8), '0102');
+  assert.equal(staticResult.payload.slice(6, 12), '010211');
+  assert.equal(dynamicResult.payload.slice(6, 12), '010212');
   assert.equal(staticResult.payload.includes('540'), false);
   assert.equal(dynamicResult.payload.includes('540525.00'), true);
 });
