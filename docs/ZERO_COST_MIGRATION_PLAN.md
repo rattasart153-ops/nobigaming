@@ -29,8 +29,8 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - Produce a file-by-file port matrix. No business-logic changes.
 
 ### P1 — Apps Script web facade
-- Add doGet routing and HtmlService templates for storefront/Admin.
-- Add explicit allowlisted server functions; no generic table access.
+- [x] Add doGet routing and HtmlService templates for storefront/Admin (P0-R11 source implementation).
+- [x] Add explicit allowlisted server functions; no generic browser action/table dispatcher (P0-R12 source implementation).
 - Use success/failure handlers and validate/authorize every call server-side.
 - Keep secrets in Script Properties.
 
@@ -56,12 +56,12 @@ Separate approval is required before creating an Apps Script project, spreadshee
 
 ## Preserved business rules
 
-Guest checkout; ASCII Member Login ID 4–30; public/member-only/member-game-spend coupons; UID allowlist; cumulative Completed post-discount spend; coupon reserve/consume/release; default 15-minute payment window; expiring coupon deadline through end of Asia/Bangkok expiry date; sessions 8h/30m idle; Admin-only IP history; 90-day retention; private slips/media; manual Admin review.
+Guest checkout; ASCII Member Login ID 4–30; public/member-only/member-game-spend coupons; UID allowlist; cumulative Completed post-discount spend; coupon reserve/consume/release; default 15-minute payment window; expiring coupon deadline through end of Asia/Bangkok expiry date; sessions 8h/30m idle; no Member IP history (approved decision B); non-IP login/security logs retained 90 days; private slips/media; manual Admin review.
 
 ## Current facts
 
 - GAS source includes Schema v1 setup/repository primitives, business handlers, auth/session logic, coupon/order workflows, private Drive helpers and signed HTTP gateway.
-- Signed gateway currently supports Express → GAS; it is not yet the HtmlService callable facade.
-- Storefront/Admin still call Vercel same-origin REST endpoints and are not yet HtmlService-compatible.
+- Signed gateway remains for legacy characterization only; `BrowserFacade.gs` exposes named typed `google.script.run` functions.
+- HtmlService router and template copies now exist. Template JavaScript still calls legacy REST endpoints; P2 frontend transport adapter is not yet implemented, so the web app is not end-to-end functional.
 - Apps Script runtime, quotas, concurrency and Drive ACLs are unverified.
 - No live Google resources have been initialized; no web app deployed.
