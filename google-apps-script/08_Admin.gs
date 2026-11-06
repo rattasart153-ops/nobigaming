@@ -302,12 +302,7 @@ function adminStoreMedia(token, media) {
   const folderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_MEDIA_FOLDER_ID') || '').trim();
   if (!folderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์ Drive ส่วนตัวสำหรับรูปภาพ');
   const folder = DriveApp.getFolderById(folderId);
-  if (!folder || typeof folder.getSharingAccess !== 'function') {
-    throw new Error('DRIVE_FOLDER_INVALID');
-  }
-  if (folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
-    throw new Error('DRIVE_FOLDER_NOT_PRIVATE');
-  }
+  assertDriveFolderPrivate_(folder);
   const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
   let file = null;
   try {
@@ -337,21 +332,44 @@ function adminStoreMedia(token, media) {
   }
 }
 
-function assertDriveFileInPrivateFolder_(file, folderId) {
-  const expected = String(folderId || '').trim();
-  if (!expected || !file || typeof file.getParents !== 'function' ||
-      typeof file.getSharingAccess !== 'function') {
-    throw new Error('DRIVE_FOLDER_INVALID');
-  }
-  const folder = DriveApp.getFolderById(expected);
-  if (!folder || typeof folder.getSharingAccess !== 'function') {
-    throw new Error('DRIVE_FOLDER_INVALID');
+function assertDriveFolderPrivate_(folder) {
+  if (!folder || typeof folder.getSharingAccess !== 'function' ||
+      typeof folder.getEditors !== 'function' || typeof folder.getViewers !== 'function') {
+    throw new Error('DRIVE_ACL_UNVERIFIABLE');
   }
   if (folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
     throw new Error('DRIVE_FOLDER_NOT_PRIVATE');
   }
+  const editors = folder.getEditors();
+  const viewers = folder.getViewers();
+  if (!Array.isArray(editors) || !Array.isArray(viewers)) {
+    throw new Error('DRIVE_ACL_UNVERIFIABLE');
+  }
+  if (editors.length || viewers.length) {
+    throw new Error('DRIVE_RESOURCE_HAS_EXPLICIT_SHARES');
+  }
+  return true;
+}
+
+function assertDriveFileInPrivateFolder_(file, folderId) {
+  const expected = String(folderId || '').trim();
+  if (!expected || !file || typeof file.getParents !== 'function' ||
+      typeof file.getSharingAccess !== 'function' ||
+      typeof file.getEditors !== 'function' || typeof file.getViewers !== 'function') {
+    throw new Error('DRIVE_ACL_UNVERIFIABLE');
+  }
+  const folder = DriveApp.getFolderById(expected);
+  assertDriveFolderPrivate_(folder);
   if (file.getSharingAccess() !== DriveApp.Access.PRIVATE) {
     throw new Error('DRIVE_FILE_NOT_PRIVATE');
+  }
+  const editors = file.getEditors();
+  const viewers = file.getViewers();
+  if (!Array.isArray(editors) || !Array.isArray(viewers)) {
+    throw new Error('DRIVE_ACL_UNVERIFIABLE');
+  }
+  if (editors.length || viewers.length) {
+    throw new Error('DRIVE_RESOURCE_HAS_EXPLICIT_SHARES');
   }
   const parents = file.getParents();
   let found = false;
