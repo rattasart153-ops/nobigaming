@@ -19,8 +19,8 @@ This is a migration contract reference, not a claim that the current Express rou
 | Change password | `POST /api/admin/password`, JSON `{currentPassword,newPassword}` | `adminChangePassword({token,currentPassword,newPassword})` | Returns GAS result; clears cookie after password rotation/revocation. |
 | Dashboard | `GET /api/admin/dashboard` | `adminDashboard({token})` | `{orders,pending,completed,revenue,games,packages,coupons,promotions}`; revenue is Completed-order total. |
 | Orders | `GET /api/admin/orders` | `adminOrders({token})` | Array of safe order records, enriched with `id,game_name,package_name,coupon_code,has_slip,subtotal,discount,total`. Does not expose `slip_file_id,checkout_token_hash,request_key`. |
-| Change order status | `PATCH /api/admin/orders/:id/status`, JSON `{status}` | `adminSetOrderStatus({token,orderId,status,ipAddress})` | Only `Completed` or `Rejected`; normal success `{ok:true,status}`, no-op `{ok:true,unchanged:true}`; expired completion maps to HTTP 409. |
-| View slip | `GET /api/admin/orders/:id/slip` | `adminSlipData({token,orderId,ipAddress})` | GAS returns `{name,mimeType,base64}`; Express returns private binary with `Cache-Control: private, no-store`. Admin session and private Drive folder/file validation are required. |
+| Change order status | `PATCH /api/admin/orders/:id/status`, JSON `{status}` | `adminSetOrderStatus({token,orderId,status})` | Only `Completed` or `Rejected`; normal success `{ok:true,status}`, no-op `{ok:true,unchanged:true}`; expired completion maps to HTTP 409. |
+| View slip | `GET /api/admin/orders/:id/slip` | `adminSlipData({token,orderId})` | GAS returns `{name,mimeType,base64}`; Express returns private binary with `Cache-Control: private, no-store`. Admin session and private Drive folder/file validation are required. |
 
 ### Admin CRUD — common contract
 
@@ -29,9 +29,9 @@ Only four tables are exposed: `games`, `packages`, `coupons`, `promotions`. All 
 | Operation | Browser route | GAS arguments | Browser result |
 |---|---|---|---|
 | List | `GET /api/admin/{table}` | `adminList({token,tableName})` | Array of converted records. Coupon rows additionally contain `used_count`; packages/coupons are enriched with `game_name`; coupons also get `member_spend_game_name`. |
-| Create | `POST /api/admin/{table}` | `adminUpsert({token,tableName,record,ipAddress})` | HTTP 201, `{ok:true,id}`. |
+| Create | `POST /api/admin/{table}` | `adminUpsert({token,tableName,record})` | HTTP 201, `{ok:true,id}`. |
 | Update | `PUT /api/admin/{table}/:id` | `adminUpsert({token,tableName,record,ipAddress})`; route ID is copied to the table's primary-key field | HTTP 200, `{ok:true,id}`. |
-| Delete | `DELETE /api/admin/{table}/:id` | `adminDelete({token,tableName,id,ipAddress})` | `{ok:true}`; deletion is rejected if protected references/redemptions exist. |
+| Delete | `DELETE /api/admin/{table}/:id` | `adminDelete({token,tableName,id})` | `{ok:true}`; deletion is rejected if protected references/redemptions exist. |
 
 Legacy gateway rows may still list `ipAddress` for historical request compatibility, but the approved HtmlService dispatcher does not forward IP values and the Apps Script handlers write blank IP fields. Never accept `ipAddress` from browser JSON or present it as verified provenance.
 
@@ -51,9 +51,9 @@ Image URLs must be application media references, not direct Google Drive/Googleu
 | Browser operation | GAS action / arguments | Result contract |
 |---|---|---|
 | List members | `adminMembers({token,search,limit})` | Member records; limit bounded by GAS handler. Response excludes all IP fields. |
-| Change member status | `adminSetMemberStatus({token,memberId,status,ipAddress})` | Result object; status transition revokes sessions as required. |
+| Change member status | `adminSetMemberStatus({token,memberId,status})` | Result object; status transition revokes sessions as required. |
 | Member login/security history | `adminMemberLoginLogs({token,memberId,limit})` | Admin-only event array, newest first, bounded limit; includes time, Login ID, result, failure reason and user-agent metadata, never IP address or IP-change flags. |
-| Upload media | `adminStoreMedia({token,media:{name,mimeType,base64},ipAddress})` | `{ok:true,file_id,url}`; PNG/JPEG/WebP, max 3 MB, private folder/file checks, audit before returning reference. |
+| Upload media | `adminStoreMedia({token,media:{name,mimeType,base64}})` | `{ok:true,file_id,url}`; PNG/JPEG/WebP, max 3 MB, private folder/file checks, audit before returning reference. |
 
 ### Checkout and payment contract
 
