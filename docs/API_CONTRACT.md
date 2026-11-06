@@ -98,9 +98,10 @@ ContentService does not provide arbitrary HTTP status mapping; the Node client m
 ## Shared abuse controls
 
 - Express has a process-local first-layer limiter; it is not treated as global protection across Vercel instances.
-- Apps Script enforces shared HMAC-keyed Sheets buckets: 10 combined Admin/Member login attempts per source IP per 15 minutes; 5 registrations per source IP per 15 minutes; and 5 failed password attempts per account per 15 minutes.
-- Raw IP addresses and login IDs are not stored in the rate-limit ledger. Member IP history and Admin audit logs are separate protected records with 90-day retention.
-- Apps Script requires a trusted source IP passed by the Vercel server; the browser cannot override it in JSON.
+- Apps Script enforces shared HMAC-keyed Sheets buckets: 10 Admin login attempts per normalized Admin username per 15 minutes; 10 Member login attempts per normalized Login ID per 15 minutes; 5 registrations per normalized Login ID per 15 minutes; and 5 failed password attempts per account per 15 minutes.
+- The approved HtmlService + Apps Script-only target has no trusted visitor-IP source. Caller-supplied IP arguments are ignored for Member and Admin security records; no browser-provided IP is stored or presented as verified.
+- Member registration/login, Member sessions and Member login/security history do not collect IP addresses. Legacy schema columns remain blank for compatibility. Admin member APIs omit IP fields. Member login/security events retain time, outcome, failure reason and user-agent metadata for 90 days.
+- Retention cleanup immediately clears legacy Member IP fields, Member session IP fields, Member login-log IP fields, and untrusted Admin session/audit IP fields. It continues to delete login/audit event rows after 90 days.
 
 ## Error mapping
 
