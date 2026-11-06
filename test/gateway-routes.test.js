@@ -211,3 +211,57 @@ test('slip upload keeps a short receipt cookie for safe retry and clears it afte
     fs.rmSync(root,{recursive:true,force:true});
   }
 });
+
+
+test('Admin CRUD updates forward the server-derived request IP for audit logging', async () => {
+  const calls = [];
+  const client = {
+    async call(action, args = {}) {
+      calls.push({action, args});
+      if (action === 'adminLogin') return {
+        token:'admin-secret-token',
+        expires_at:new Date(Date.now()+3600000).toISOString(),
+        username:'Admin'
+      };
+      if (action === 'adminUpsert') return {ok:true,id:args.record.game_id};
+      throw new Error('Unexpected action: '+action);
+    }
+  };
+  const app = express();
+  app.use(express.json({limit:'1mb'}));
+  const gatewaySession = createGatewaySession(client);
+  const upload = createUpload(fs.mkdtempSync(path.join(os.tmpdir(),'nobi-admin-ip-')));
+  app.use(createGatewayAdminRouter({
+    client, requireAdmin:gatewaySession.requireAdmin,
+    loginLimiter:(req,res,next)=>next(), upload, gatewaySession
+  }));
+  app.use((error,req,res,next)=>res.status(500).json({error:error.message}));
+  const server = await new Promise(resolve => {
+    const instance = app.listen(0,'127.0.0.1',()=>resolve(instance));
+  });
+  const base = 'http://127.0.0.1:'+server.address().port;
+  try {
+    const login = await fetch(base+'/api/admin/login',{
+      method:'POST',
+      headers:{Origin:base,'Content-Type':'application/json'},
+      body:JSON.stringify({username:'Admin',password:'admin-password'})
+    });
+    assert.equal(login.status,200);
+    const cookie = cookieFrom(login);
+    const response = await fetch(base+'/api/admin/games/game-1',{
+      method:'PUT',
+      headers:{Origin:base,Cookie:cookie,'Content-Type':'application/json'},
+      body:JSON.stringify({name:'RoV Updated',category:'moba',description:'',active:true,sort_order:1})
+    });
+    assert.equal(response.status,200);
+    assert.deepEqual(await response.json(),{ok:true,id:'game-1'});
+    const upsert = calls.find(item=>item.action==='adminUpsert');
+    assert.ok(upsert);
+    assert.equal(upsert.args.token,'admin-secret-token');
+    assert.equal(upsert.args.tableName,'games');
+    assert.equal(upsert.args.record.game_id,'game-1');
+    assert.equal(upsert.args.ipAddress,'127.0.0.1');
+  } finally {
+    await new Promise(resolve=>server.close(resolve));
+  }
+});
