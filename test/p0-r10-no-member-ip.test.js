@@ -43,7 +43,8 @@ test('Admin authentication and HtmlService dispatcher do not forward client IP v
   const entry = read('google-apps-script/01_HttpEntry.gs');
   assert.match(entry, /case 'memberRegister': return memberRegister\(args.fullName, args.loginId, args.password\)/);
   assert.match(entry, /case 'memberLogin': return memberLogin\(args.loginId, args.password, args.userAgent\)/);
-  assert.doesNotMatch(entry, /case 'member(Login|Register)'.*args\.ipAddress/);
+  assert.doesNotMatch(entry, /args\.ipAddress/);
+  assert.doesNotMatch(admin, /function [A-Za-z0-9_]+\([^)]*ipAddress/);
 });
 
 test('Admin member APIs never return Member IP fields or IP history', () => {
