@@ -251,7 +251,7 @@ test('Drive permission failure trashes the newly created unreferenced media file
 
 test('private Drive file validator fails closed when folder sharing metadata is unavailable',()=>{
   const original = context.DriveApp.getFolderById;
-  context.DriveApp.getFolderById = () => ({});
+  context.DriveApp.getFolderById = () => ({getSharingAccess:()=> 'PRIVATE'});
   try {
     assert.throws(
       () => context.assertDriveFileInPrivateFolder_(driveFile(['private-folder']), 'private-folder'),
