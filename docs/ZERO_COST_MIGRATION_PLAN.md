@@ -78,6 +78,7 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - [x] Strengthen Drive ACL checks to reject explicit file/folder editors and viewers even when the broad sharing mode reports PRIVATE; fail closed when ACL metadata cannot be inspected. New tests cover explicit viewer/editor shares, missing ACL metadata, and cleanup of an unreferenced file after a Drive permission failure.
 - [x] Add a deterministic overlapping-request harness: a competing insert cannot enter while the first request holds the simulated ScriptLock, and a later retry detects the committed duplicate.
 - These are offline fault-injection and lock-model tests, not proof of Google's actual scheduler, quota counters, or Drive permission inheritance.
+- Latest P4 follow-up regression CI: [run 42244248968](https://github.com/rattasart153-ops/nobigaming/actions/runs/42244248968) passed **162/162** tests, 0 failed, 0 skipped on commit `28253a59f435c92fce964730e4c33ed90d962679`.
 - Runtime-only follow-up (outside the approved P4 mock acceptance): real Google Apps Script quota enforcement, simultaneous execution scheduling, and actual Drive ACL enforcement must be checked if/when a synthetic Google runtime is later authorized. Mock tests do not prove Google service behavior.
 
 ### P5 — Browser/device tests
