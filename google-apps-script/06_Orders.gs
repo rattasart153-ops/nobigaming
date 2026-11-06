@@ -523,15 +523,103 @@ function publicOrder_(order) {
   };
 }
 
+function imageUint32BE_(bytes, offset) {
+  return (((bytes[offset] << 24) >>> 0) +
+    (bytes[offset + 1] << 16) +
+    (bytes[offset + 2] << 8) +
+    bytes[offset + 3]) >>> 0;
+}
+
+function imageCrc32_(bytes, start, end) {
+  let crc = 0xffffffff;
+  for (let i = start; i < end; i++) {
+    crc = (crc ^ bytes[i]) >>> 0;
+    for (let bit = 0; bit < 8; bit++) {
+      crc = (crc & 1) ? ((crc >>> 1) ^ 0xedb88320) >>> 0 : (crc >>> 1);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function validPngStructure_(bytes) {
+  const signature = [137,80,78,71,13,10,26,10];
+  if (bytes.length < 45 || signature.some(function(value, index) { return bytes[index] !== value; })) return false;
+  let offset = 8, hasHeader = false, hasData = false, hasEnd = false;
+  while (offset + 12 <= bytes.length) {
+    const length = imageUint32BE_(bytes, offset);
+    const typeStart = offset + 4;
+    const dataStart = offset + 8;
+    const crcOffset = dataStart + length;
+    const nextOffset = crcOffset + 4;
+    if (nextOffset > bytes.length) return false;
+    const type = String.fromCharCode.apply(null, bytes.slice(typeStart, typeStart + 4));
+    if (!hasHeader && (type !== 'IHDR' || length !== 13)) return false;
+    if (type === 'IHDR') {
+      if (hasHeader || length !== 13 ||
+          imageUint32BE_(bytes, dataStart) === 0 ||
+          imageUint32BE_(bytes, dataStart + 4) === 0) return false;
+      hasHeader = true;
+    } else if (type === 'IDAT') {
+      if (!hasHeader || hasEnd) return false;
+      hasData = true;
+    } else if (type === 'IEND') {
+      if (!hasData || length !== 0 || hasEnd) return false;
+      hasEnd = true;
+      if (nextOffset !== bytes.length) return false;
+    } else if (hasEnd) {
+      return false;
+    }
+    if (imageCrc32_(bytes, typeStart, crcOffset) !== imageUint32BE_(bytes, crcOffset)) return false;
+    offset = nextOffset;
+    if (hasEnd) return true;
+  }
+  return false;
+}
+
+function validJpegStructure_(bytes) {
+  if (bytes.length < 12 || bytes[0] !== 255 || bytes[1] !== 216 ||
+      bytes[bytes.length - 2] !== 255 || bytes[bytes.length - 1] !== 217) return false;
+  let offset = 2, hasFrame = false;
+  while (offset < bytes.length - 2) {
+    if (bytes[offset] !== 255) return false;
+    while (offset < bytes.length && bytes[offset] === 255) offset++;
+    if (offset >= bytes.length) return false;
+    const marker = bytes[offset++];
+    if (marker === 0xd9) return hasFrame && offset === bytes.length;
+    if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    if (offset + 2 > bytes.length) return false;
+    const segmentLength = (bytes[offset] << 8) | bytes[offset + 1];
+    if (segmentLength < 2 || offset + segmentLength > bytes.length) return false;
+    if ((marker >= 0xc0 && marker <= 0xcf) &&
+        ![0xc4,0xc8,0xcc].includes(marker)) hasFrame = true;
+    if (marker === 0xda) return hasFrame && offset + segmentLength <= bytes.length - 2;
+    offset += segmentLength;
+  }
+  return false;
+}
+
+function validWebpStructure_(bytes) {
+  if (bytes.length < 20 ||
+      String.fromCharCode.apply(null, bytes.slice(0, 4)) !== 'RIFF' ||
+      String.fromCharCode.apply(null, bytes.slice(8, 12)) !== 'WEBP' ||
+      imageUint32BE_([bytes[7],bytes[6],bytes[5],bytes[4]], 0) !== bytes.length - 8) return false;
+  let offset = 12, hasImageChunk = false;
+  while (offset + 8 <= bytes.length) {
+    const type = String.fromCharCode.apply(null, bytes.slice(offset, offset + 4));
+    const length = imageUint32BE_([bytes[offset + 7],bytes[offset + 6],bytes[offset + 5],bytes[offset + 4]], 0);
+    const end = offset + 8 + length;
+    if (end > bytes.length) return false;
+    if (type === 'VP8 ' || type === 'VP8L' || type === 'VP8X') hasImageChunk = length > 0;
+    offset = end + (length % 2);
+  }
+  return hasImageChunk && offset === bytes.length;
+}
+
 function validImageSignature_(bytes, mime) {
   const b = bytes.map(function(value) { return (value + 256) % 256; });
-  if (mime === 'image/png') return b.length >= 8 && b.slice(0, 8).join(',') === '137,80,78,71,13,10,26,10';
-  if (mime === 'image/jpeg') return b.length >= 3 && b[0] === 255 && b[1] === 216 && b[2] === 255;
-  if (mime === 'image/webp') {
-    return b.length >= 12 &&
-      String.fromCharCode.apply(null, b.slice(0, 4)) === 'RIFF' &&
-      String.fromCharCode.apply(null, b.slice(8, 12)) === 'WEBP';
-  }
+  if (mime === 'image/png') return validPngStructure_(b);
+  if (mime === 'image/jpeg') return validJpegStructure_(b);
+  if (mime === 'image/webp') return validWebpStructure_(b);
   return false;
 }
 
