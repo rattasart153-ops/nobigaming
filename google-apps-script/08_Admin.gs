@@ -174,7 +174,7 @@ function adminUpsert(token, tableName, record) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const id = record[primaryKey] ? String(record[primaryKey]) : '';
+    let id = record[primaryKey] ? String(record[primaryKey]) : '';
     const current = id ? repositoryGetById_(tableName, id) : null;
     if (id && !current) throw new Error('ไม่พบรายการ');
     const candidate = Object.assign({}, current || {}, safe);
@@ -215,8 +215,8 @@ function adminUpsert(token, tableName, record) {
       safe.updated_at = now;
       repositoryUpdateLocked_(tableName, id, safe);
     } else {
-      const newId = Utilities.getUuid();
-      safe[primaryKey] = newId;
+      id = Utilities.getUuid();
+      safe[primaryKey] = id;
       safe.created_at = now;
       safe.updated_at = now;
       repositoryInsertLocked_(tableName, safe);
