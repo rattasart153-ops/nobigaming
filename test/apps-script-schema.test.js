@@ -223,7 +223,7 @@ test('repository update reuses its single Sheets snapshot for unique-key validat
 
   context.__repoUpdate('games', 'perf-game-1', { name: 'Renamed Game' });
   assert.equal(games.metrics.dataRangeReads, 1, 'update should fetch the table body once');
-  assert.equal(games.metrics.rangeReads, 1, 'update should validate the schema header once');
+  assert.equal(games.metrics.rangeReads, 2, 'update should read the schema header once and obtain one write range');
   assert.equal(games.metrics.setValuesCalls, 1);
   assert.equal(games.metrics.appendRowCalls, 0);
 
