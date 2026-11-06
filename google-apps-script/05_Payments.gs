@@ -49,10 +49,10 @@ function promptPayPayload_(promptpayId, amount) {
     promptPayField_('00', '01'),
     promptPayField_('01', rounded > 0 ? '12' : '11'),
     promptPayField_('29', promptPayField_('00', 'A000000677010111') + promptPayField_(type, target)),
+    promptPayField_('58', 'TH'),
     promptPayField_('53', '764')
   ];
   if (rounded > 0) parts.push(promptPayField_('54', rounded.toFixed(2)));
-  parts.push(promptPayField_('58', 'TH'));
   const body = parts.join('') + '6304';
   return body + promptPayCrc16_(body);
 }
@@ -64,6 +64,7 @@ function paymentInfo_(amount) {
   const value = Number(amount == null || amount === '' ? 0 : amount);
   if (!Number.isFinite(value) || value < 0) throw new Error('PROMPTPAY_AMOUNT_INVALID');
   const rounded = Math.round((value + Number.EPSILON) * 100) / 100;
+  if (value > 0 && rounded <= 0) throw new Error('PROMPTPAY_AMOUNT_INVALID');
   return {
     configured:true,
     promptpayId:promptpayId,
