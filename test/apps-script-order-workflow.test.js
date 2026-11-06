@@ -49,13 +49,14 @@ function makeOrderHarness() {
       getFolderById:()=>({createFile:blob=>{
         const file={id:'drive-file-'+(files.length+1),blob,trashed:false,
           getId(){return this.id;},setSharing(){},setTrashed(value){this.trashed=value;},
+          getEditors:()=>[],getViewers:()=>[],
           getParents(){
             let consumed=false;
             return {hasNext:()=>!consumed,next:()=>{consumed=true;return {getId:()=>fileParentId};}};
           }};
         if(fileMetadataAvailable) file.getSharingAccess=()=>fileAccess;
         files.push(file); return file;
-      },getSharingAccess:()=> folderAccess})
+      },getSharingAccess:()=> folderAccess,getEditors:()=>[],getViewers:()=>[]})
     },
     checkoutTokenForOrder_:(orderId,requestKey)=>'derived-checkout-token.'+orderId+'.'+requestKey,
     requireMemberLocked_:token=>{
