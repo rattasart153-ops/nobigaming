@@ -212,3 +212,38 @@ test('Admin password change increments auth_version, revokes all Admin sessions 
   assert.equal(data.admin_audit_logs[0].ip_address,'');
   assert.throws(()=>context.requireAdmin_('admin-token'),/เซสชันหมดอายุ/);
 });
+
+
+test('Member password change rejects a stale credential snapshot if another change wins during KDF',()=>{
+  const {context,data}=makeAuthContext();
+  context.passwordHash_=()=>{
+    data.members[0].password_hash='concurrent-newer-hash';
+    data.members[0].auth_version=4;
+    return 'stale-request-hash';
+  };
+  assert.throws(
+    ()=>context.memberChangePassword('member-token','current-password','requested-password'),
+    /ข้อมูลบัญชีเปลี่ยนแปลง/
+  );
+  assert.equal(data.members[0].password_hash,'concurrent-newer-hash');
+  assert.equal(data.members[0].auth_version,4);
+  assert.equal(data.member_sessions[0].revoked_at,'',
+    'the losing request must not partially revoke or mutate sessions');
+});
+
+test('Admin password change rejects a stale credential snapshot if another change wins during KDF',()=>{
+  const {context,data}=makeAuthContext();
+  context.passwordHash_=()=>{
+    data.admins[0].password_hash='concurrent-newer-hash';
+    data.admins[0].auth_version=3;
+    return 'stale-request-hash';
+  };
+  assert.throws(
+    ()=>context.adminChangePassword('admin-token','current-password','requested-password-long'),
+    /ข้อมูลบัญชีเปลี่ยนแปลง/
+  );
+  assert.equal(data.admins[0].password_hash,'concurrent-newer-hash');
+  assert.equal(data.admins[0].auth_version,3);
+  assert.equal(data.admin_sessions[0].revoked_at,'',
+    'the losing request must not partially revoke or mutate sessions');
+});
