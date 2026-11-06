@@ -25,7 +25,7 @@
 
 ## สถานะปัจจุบัน
 
-Source มี GAS Schema v1, repositories, business handlers, private Drive helpers และ signed gateway แต่ยังไม่ผ่านการทดสอบใน Apps Script runtime จริง ส่วนหน้าร้าน/Admin ยังเรียก Vercel REST API จึงต้องทำ compatibility port ก่อนทดสอบจริง ไม่มีการเปลี่ยน Production หรือรับชำระเงินจริง
+Source มี GAS schema/repositories/business handlers/private Drive helpers, HtmlService router/templates และ typed browser facade แล้ว แต่ยังไม่ผ่านการทดสอบ Apps Script runtime จริง และ JavaScript ใน template ยังเรียก REST API เดิม จึงยังต้องทำ frontend adapter และ session transport ก่อนใช้งานจริง ไม่มีการเปลี่ยน Production หรือรับชำระเงินจริง
 
 ## Business rules ที่ต้องรักษา
 
