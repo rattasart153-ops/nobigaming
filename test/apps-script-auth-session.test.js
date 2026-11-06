@@ -99,3 +99,67 @@ test('revoked session is rejected before last-seen can be refreshed',()=>{
   assert.throws(()=>context.requireAdmin_('admin-token'),/เซสชันหมดอายุ/);
   assert.equal(data.admin_sessions[0].last_seen_at,before);
 });
+
+
+test('Admin absolute eight-hour expiry is enforced even when the session was recently active',()=>{
+  const {context,data}=makeAuthContext();
+  data.admin_sessions[0].expires_at=new Date(Date.now()-1).toISOString();
+  data.admin_sessions[0].last_seen_at=new Date().toISOString();
+  const before=data.admin_sessions[0].last_seen_at;
+  assert.throws(()=>context.requireAdmin_('admin-token'),/เซสชันหมดอายุ/);
+  assert.equal(data.admin_sessions[0].last_seen_at,before);
+});
+
+test('Member absolute eight-hour expiry is enforced independently of idle activity',()=>{
+  const {context,data}=makeAuthContext();
+  data.member_sessions[0].expires_at=new Date(Date.now()-1).toISOString();
+  data.member_sessions[0].last_seen_at=new Date().toISOString();
+  const before=data.member_sessions[0].last_seen_at;
+  assert.throws(()=>context.requireMember_('member-token'),/เซสชันสมาชิกหมดอายุ/);
+  assert.equal(data.member_sessions[0].last_seen_at,before);
+});
+
+test('Admin idle timeout revokes the session at the thirty-minute boundary',()=>{
+  const {context,data}=makeAuthContext();
+  data.admin_sessions[0].last_seen_at=new Date(Date.now()-30*60*1000).toISOString();
+  assert.throws(()=>context.requireAdmin_('admin-token'),/ไม่มีการใช้งานเกินกำหนด/);
+  assert.ok(data.admin_sessions[0].revoked_at);
+});
+
+test('Member idle timeout revokes the session at the thirty-minute boundary',()=>{
+  const {context,data}=makeAuthContext();
+  data.member_sessions[0].last_seen_at=new Date(Date.now()-30*60*1000).toISOString();
+  assert.throws(()=>context.requireMember_('member-token'),/ไม่มีการใช้งานเกินกำหนด/);
+  assert.ok(data.member_sessions[0].revoked_at);
+});
+
+test('Admin and Member sessions are rejected when the account auth_version changes',()=>{
+  const admin=makeAuthContext();
+  admin.data.admins[0].auth_version++;
+  assert.throws(()=>admin.context.requireAdmin_('admin-token'),/เซสชันถูกเพิกถอน/);
+
+  const member=makeAuthContext();
+  member.data.members[0].auth_version++;
+  assert.throws(()=>member.context.requireMember_('member-token'),/บัญชีสมาชิกถูกระงับหรือเซสชันถูกเพิกถอน/);
+});
+
+test('Admin and Member logout revoke their matching sessions and make reuse impossible',()=>{
+  const {context,data}=makeAuthContext();
+  assert.deepEqual(context.adminLogout('admin-token'),{ok:true});
+  assert.deepEqual(context.memberLogout('member-token'),{ok:true});
+  assert.ok(data.admin_sessions[0].revoked_at);
+  assert.ok(data.member_sessions[0].revoked_at);
+  assert.throws(()=>context.requireAdmin_('admin-token'),/เซสชันหมดอายุ/);
+  assert.throws(()=>context.requireMember_('member-token'),/เซสชันสมาชิกหมดอายุ/);
+});
+
+test('malformed Admin and Member expiry or idle timestamps fail closed',()=>{
+  const admin=makeAuthContext();
+  admin.data.admin_sessions[0].expires_at='not-a-date';
+  assert.throws(()=>admin.context.requireAdmin_('admin-token'),/เซสชันหมดอายุ/);
+
+  const member=makeAuthContext();
+  member.data.member_sessions[0].last_seen_at='not-a-date';
+  assert.throws(()=>member.context.requireMember_('member-token'),/ไม่มีการใช้งานเกินกำหนด/);
+  assert.ok(member.data.member_sessions[0].revoked_at);
+});
