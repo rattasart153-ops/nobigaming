@@ -20,7 +20,8 @@ function couponEligibility_(coupon, gameId, subtotalSatang, playerId, memberId, 
   const discountType = String(coupon.discount_type || '');
   const discountValue = Number(coupon.discount_value);
   if (!['fixed','percent'].includes(discountType) || !Number.isFinite(discountValue) ||
-      discountValue <= 0 || (discountType === 'percent' && discountValue > 100)) {
+      discountValue <= 0 || (discountType === 'fixed' && !Number.isSafeInteger(discountValue)) ||
+      (discountType === 'percent' && discountValue > 100)) {
     return {valid:false, error:'ข้อมูลส่วนลดของคูปองไม่ถูกต้อง'};
   }
   const minimumOrder = Number(coupon.min_order_satang || 0);
@@ -67,15 +68,19 @@ function couponEligibility_(coupon, gameId, subtotalSatang, playerId, memberId, 
 
   if (coupon.access_type === 'member_game_spend') {
     const qualifyingGame = String(coupon.member_spend_game_id || '');
-    const minimum = Number(coupon.member_min_game_spend_satang || 0);
-    if (!qualifyingGame || minimum <= 0) return {valid:false, error:'ข้อมูลเงื่อนไขสมาชิกของคูปองไม่ครบ'};
+    const minimum = Number(coupon.member_min_game_spend_satang);
+    if (!qualifyingGame || !Number.isSafeInteger(minimum) || minimum <= 0) {
+      return {valid:false, error:'ข้อมูลเงื่อนไขสมาชิกของคูปองไม่ครบ'};
+    }
     const spent = repositoryRows_('orders').filter(function(order) {
       return String(order.member_id) === String(memberId) &&
         String(order.game_id) === qualifyingGame && order.status === 'Completed';
     }).reduce(function(sum, order) {
-      return sum + Number(order.total_satang || 0);
+      const amount = Number(order.total_satang);
+      return Number.isSafeInteger(sum) && Number.isSafeInteger(amount) && amount >= 0 &&
+        Number.isSafeInteger(sum + amount) ? sum + amount : NaN;
     }, 0);
-    if (spent < minimum) {
+    if (!Number.isSafeInteger(spent) || spent < minimum) {
       return {valid:false, error:'ยอดเติมสะสมของสมาชิกในเกมที่กำหนดยังไม่ถึง ฿' + (minimum / 100).toLocaleString('th-TH')};
     }
   }
@@ -85,9 +90,11 @@ function couponEligibility_(coupon, gameId, subtotalSatang, playerId, memberId, 
       return String(order.player_id) === uid &&
         String(order.game_id) === String(gameId) && order.status === 'Completed';
     }).reduce(function(sum, order) {
-      return sum + Number(order.total_satang || 0);
+      const amount = Number(order.total_satang);
+      return Number.isSafeInteger(sum) && Number.isSafeInteger(amount) && amount >= 0 &&
+        Number.isSafeInteger(sum + amount) ? sum + amount : NaN;
     }, 0);
-    if (playerSpent < playerMinimum) {
+    if (!Number.isSafeInteger(playerSpent) || playerSpent < playerMinimum) {
       return {valid:false, error:'UID นี้มียอดเติมสะสมในเกมที่เลือกยังไม่ถึง ฿' + (playerMinimum / 100).toLocaleString('th-TH')};
     }
   }
