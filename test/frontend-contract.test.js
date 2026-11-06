@@ -71,7 +71,9 @@ test('HtmlService storefront and Admin use named google.script.run facade with m
   assert.ok(storefront.includes('nobiGetPublicMedia'));
   assert.ok(storefront.includes('mediaRpcQueue'));
   assert.ok(storefront.includes('resolveMediaUrl(imageUrl)'));
-  assert.ok(storefront.includes("!href.startsWith('//')"),'protocol-relative promotion links must be rejected');
+  assert.ok(storefront.includes('function safePromoHref(value)'));
+  assert.ok(storefront.includes("raw.startsWith('//')"),'protocol-relative promotion links must be rejected');
+  assert.ok(storefront.includes('const mediaUrlCache = new Map()'));
   assert.equal(storefront.includes('nobi_active_checkout'),false);
   assert.ok(storefront.includes('nobi_order_attempt'));
   assert.ok(admin.includes('const api = (() => {'));
