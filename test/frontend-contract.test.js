@@ -61,6 +61,16 @@ test('HtmlService storefront and Admin use named google.script.run facade with m
   assert.match(storefront,/new QRCode\\(qrHost/);
   assert.doesNotMatch(storefront,/nobi_active_checkout/);
   assert.match(storefront,/nobi_order_attempt/);
-  assert.match(admin,/let nobiAdminToken=''/);
+  assert.ok(admin.includes("let nobiAdminToken=''"));
   assert.doesNotMatch(admin,/nobi_admin_token|localStorage|sessionStorage/);
+});
+
+
+test('bundled QRCode asset is local, parseable, and carries its MIT notice', () => {
+  const html=fs.readFileSync(path.join(__dirname,'..','google-apps-script','QrCode.html'),'utf8');
+  const match=html.match(/<script>([\\s\\S]*?)<\\/script>/);
+  assert.ok(match,'QR asset must include a script block');
+  assert.match(html,/MIT License/);
+  assert.doesNotThrow(()=>new vm.Script(match[1],{filename:'QrCode.html'}));
+  assert.match(match[1],/function QRCodeModel/);
 });

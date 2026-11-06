@@ -14,6 +14,10 @@ function loadEntry() {
   const context = {
     HtmlService: {
       XFrameOptionsMode: { DEFAULT: 'DEFAULT' },
+      createHtmlOutputFromFile(name) {
+        calls.push('partial:' + name);
+        return { getContent() { return '<script>/* bundled */</script>'; } };
+      },
       createTemplateFromFile(name) {
         calls.push(name);
         return {
@@ -66,6 +70,14 @@ test('HtmlService templates preserve the existing public HTML and add top-level 
   const sourceAdmin = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin.html'), 'utf8');
   const templateStorefront = fs.readFileSync(path.join(gasDir, 'Storefront.html'), 'utf8');
   const templateAdmin = fs.readFileSync(path.join(gasDir, 'Admin.html'), 'utf8');
-  assert.equal(templateStorefront, sourceStorefront.replace('<head>', '<head>\n<base target="_top">\n<!-- HtmlService template; browser transport is ported in the following phase. -->'));
-  assert.equal(templateAdmin, sourceAdmin.replace('<head>', '<head>\n<base target="_top">\n<!-- HtmlService template; browser transport is ported in the following phase. -->'));
+  assert.ok(templateStorefront.includes('<base target="_top">'));
+  assert.ok(templateAdmin.includes('<base target="_top">'));
+  assert.ok(templateStorefront.includes("<?!= include('QrCode'); ?>"));
+  assert.ok(templateStorefront.includes('google.script.run'));
+  assert.ok(templateAdmin.includes('google.script.run'));
+  assert.ok(templateStorefront.includes('id="paymentQr"'));
+  assert.ok(templateAdmin.includes('id="loginForm"'));
+  assert.notEqual(templateStorefront, sourceStorefront);
+  assert.notEqual(templateAdmin, sourceAdmin);
+  assert.throws(() => { const entry = loadEntry(); entry.context.include('Code'); }, /ไม่อนุญาต/);
 });
