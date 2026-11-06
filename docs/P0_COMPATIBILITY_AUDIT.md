@@ -308,7 +308,7 @@ The browser facade must expose named, typed operations rather than accepting arb
 ### P0-R10 — Trusted IP decision B and implementation
 
 - The user explicitly selected B: keep HtmlService + Apps Script-only and Zero Cost; remove the Admin Member IP-history requirement. This supersedes earlier documentation that treated Member IP history as immutable.
-- Member registration/login no longer consume caller-supplied IP values or write Member IP fields. Member sessions and login logs store no IP; `is_new_ip` is always false.
+- Member registration/login no longer accept IP arguments or write Member IP fields. Member sessions and login logs store no IP; `is_new_ip` is always false. The optional User-Agent is client-reported metadata, not a verified device identity.
 - Admin member listing and Member login/security history APIs omit IP fields. The Admin UI no longer offers IP history or displays IP columns.
 - Apps Script rate limits are now HMAC-keyed and account-scoped (10 Admin login attempts per normalized username, 10 Member login attempts per normalized Login ID, 5 registrations per normalized Login ID per 15 minutes); existing five-failure account lockout remains.
 - Retention immediately clears legacy Member, Member-session, Member-login-log and untrusted Admin-session/Admin-audit IP fields, while retaining non-IP login/audit events for 90 days.
@@ -317,5 +317,6 @@ The browser facade must expose named, typed operations rather than accepting arb
 ### Validation boundary
 
 - R9 source, mapping documentation and regression test are retained. R10 implementation updates `07_Auth.gs`, `08_Admin.gs`, `10_Utilities.gs`, `14_Retention.gs`, `public/admin.html`, and the relevant tests/docs.
-- GitHub Actions on `vercel-drive-setup` is the required automated regression gate. Tests use local Node/VM mocks and do not prove live Apps Script, Google Sheets LockService contention, Drive ACLs, or production runtime/quota behavior.
-- No deployment, live Google resource, billing, paid service, production payment, or real customer data was used. Work remains isolated to `vercel-drive-setup`; `main` was not modified.
+- Focused validation completed: all changed Apps Script files and Node test files pass JavaScript syntax compilation; the Admin inline script parses; source assertions confirm no IP arguments reach Apps Script handlers or Member responses; an in-memory retention execution clears legacy IP fields while retaining recent non-IP security events. The dedicated regression tests were added to the repository.
+- Full `npm test` / GitHub Actions result is **not yet confirmed** for the latest commit: the GitHub status query returned no check statuses. Do not treat focused checks as a passing full CI run.
+- These in-memory checks do not prove live Apps Script, Google Sheets LockService contention, Drive ACLs, or production runtime/quota behavior. No deployment, live Google resource, billing, paid service, production payment, or real customer data was used. Work remains isolated to `vercel-drive-setup`; `main` was not modified.
