@@ -45,7 +45,7 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - Confirm quotas, concurrency and Drive capacity are sufficient for synthetic test volume.
 
 ### P4 — Security and business rules
-- Verify session expiry/revocation, Admin-only IP/slip access, audit retention, coupon reservations, deadlines, idempotency and recovery.
+- Verify session expiry/revocation, Admin-only slip access, no Member IP collection, audit retention, coupon reservations, deadlines, idempotency and recovery.
 - Test quota exhaustion and lock timeout fail-closed behavior.
 
 ### P5 — Browser/device tests
