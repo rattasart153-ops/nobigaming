@@ -116,36 +116,38 @@ function adminLogout(token) {
 }
 
 function requireAdmin_(token) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try { return requireAdminLocked_(token, Date.now()); }
+  finally { lock.releaseLock(); }
+}
+
+/** Caller must already hold ScriptLock. Used to make privileged multi-step reads atomic with revocation. */
+function requireAdminLocked_(token, nowMs) {
   const tokenValue = String(token || '');
   if (!tokenValue) throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
   const tokenHash = sha256_(tokenValue);
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
-  try {
-    // Re-read and validate under the same lock used by revocation/password changes.
-    const session = repositoryFindByField_('admin_sessions', 'token_hash', tokenHash)[0];
-    const now = Date.now();
-    if (!session || session.revoked_at || !Number.isFinite(Date.parse(session.expires_at)) ||
-        Date.parse(session.expires_at) <= now) {
-      throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
-    }
-    const lastSeen = Date.parse(session.last_seen_at || session.created_at);
-    if (!Number.isFinite(lastSeen) || now - lastSeen >= NOBI.SESSION_IDLE_TIMEOUT_MS) {
-      repositoryUpdateLocked_('admin_sessions', session.session_id, {revoked_at:new Date(now).toISOString()});
-      throw new Error('เซสชันไม่มีการใช้งานเกินกำหนด กรุณาเข้าสู่ระบบใหม่');
-    }
-    const admin = repositoryGetById_('admins', session.admin_id);
-    if (!admin || admin.status !== 'Active' ||
-        Number(admin.auth_version) !== Number(session.auth_version)) {
-      throw new Error('เซสชันถูกเพิกถอน กรุณาเข้าสู่ระบบใหม่');
-    }
-    repositoryUpdateLocked_('admin_sessions', session.session_id, {
-      last_seen_at:new Date(now).toISOString()
-    });
-    return admin;
-  } finally {
-    lock.releaseLock();
+  // Re-read and validate under the same lock used by revocation/password changes.
+  const session = repositoryFindByField_('admin_sessions', 'token_hash', tokenHash)[0];
+  const now = Number(nowMs) || Date.now();
+  if (!session || session.revoked_at || !Number.isFinite(Date.parse(session.expires_at)) ||
+      Date.parse(session.expires_at) <= now) {
+    throw new Error('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่');
   }
+  const lastSeen = Date.parse(session.last_seen_at || session.created_at);
+  if (!Number.isFinite(lastSeen) || now - lastSeen >= NOBI.SESSION_IDLE_TIMEOUT_MS) {
+    repositoryUpdateLocked_('admin_sessions', session.session_id, {revoked_at:new Date(now).toISOString()});
+    throw new Error('เซสชันไม่มีการใช้งานเกินกำหนด กรุณาเข้าสู่ระบบใหม่');
+  }
+  const admin = repositoryGetById_('admins', session.admin_id);
+  if (!admin || admin.status !== 'Active' ||
+      Number(admin.auth_version) !== Number(session.auth_version)) {
+    throw new Error('เซสชันถูกเพิกถอน กรุณาเข้าสู่ระบบใหม่');
+  }
+  repositoryUpdateLocked_('admin_sessions', session.session_id, {
+    last_seen_at:new Date(now).toISOString()
+  });
+  return admin;
 }
 function memberRegister(fullName, loginId, password) {
   const name = String(fullName || '').trim();
