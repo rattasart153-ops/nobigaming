@@ -42,13 +42,15 @@ function makeCatalogAdminContext(seed = {}) {
         return {
           id,
           getSharingAccess:()=> 'PRIVATE',
+          getEditors:()=>[],
+          getViewers:()=>[],
           getParents:()=>{
             let consumed=false;
             return {hasNext:()=>!consumed,next:()=>{consumed=true;return {getId:()=> 'private-media-folder'};}};
           }
         };
       },
-      getFolderById:()=>({getSharingAccess:()=> 'PRIVATE'})
+      getFolderById:()=>({getSharingAccess:()=> 'PRIVATE',getEditors:()=>[],getViewers:()=>[]})
     },
     requireAdmin_:token=>{assert.equal(token,'valid-admin-token');return {admin_id:'admin-1'};},
     truth_:value=>value===true||value===1||String(value).toLowerCase()==='true',
