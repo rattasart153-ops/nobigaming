@@ -95,7 +95,7 @@ test('slip and media facade enforce bounded image payloads and strict nested fie
 test('Admin facade accepts no browser-supplied IP and keeps CRUD table names explicit', () => {
   const { context, calls } = loadFacade();
   context.nobiLoginAdmin({ username: 'NobiAdmin', password: 'long-password' });
-  assert.deepEqual(calls[0], {
+  assert.deepEqual(plain(calls[0]), {
     action: 'adminLogin', args: { username: 'NobiAdmin', password: 'long-password' }
   });
   context.nobiListAdminRecords({ token: 'admin-token', tableName: 'games' });
