@@ -38,7 +38,7 @@ Sheets stores Admins, Members, sessions, games, packages, coupons, redemptions, 
 - Default payment/slip deadline 15 minutes; expiring coupon orders through end of expiry date Asia/Bangkok.
 - Server computes prices, discounts, totals and deadlines; timely slips may be reviewed later.
 - Sessions max 8h, idle 30m; revoke on logout/password change/suspension.
-- Admin-only IP history; 90-day retention then delete or irreversibly anonymize.
+- No Member IP history (approved decision B); retain non-IP login/security events for 90 days.
 - Private slips/media; manual Admin slip review only.
 
 ## Quota and safe-failure policy
