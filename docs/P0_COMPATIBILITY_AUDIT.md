@@ -183,19 +183,19 @@ The browser facade must expose named, typed operations rather than accepting arb
 | PromptPay information | `amount` | PromptPay ID from Script Properties | `paymentInfo`: `amount` |
 | Create order | `gameId, packageId, playerId, serverId, couponCode`, Idempotency-Key | Member token from verified session; price, discount and deadline from Sheets | `createOrder`: `request_key, game_id, package_id, player_id, server_id, coupon_code, member_token` |
 | Submit slip | `orderId, slip file` | Order-scoped checkout token | `submitOrderSlip`: `order_id, checkout_token, slip{name,mimeType,base64}` |
-| Member register | `fullName, loginId, password` | Source IP and user agent must be server-derived where available | `memberRegister`: currently receives `fullName, loginId, password, ipAddress`; dispatcher currently does not forward userAgent |
-| Member login | `loginId, password` | Source IP and user agent | `memberLogin`: `loginId, password, ipAddress, userAgent` |
+| Member register | `fullName, loginId, password` | No IP value is collected; Login ID is normalized server-side | `memberRegister(fullName, loginId, password)`; account-scoped registration limiter |
+| Member login | `loginId, password` | No IP value is collected; user-agent metadata is retained when available | `memberLogin(loginId, password, userAgent)`; account-scoped login limiter |
 | Member session | none / logout / password change | Member token from protected session | `memberMe, memberLogout, memberChangePassword` |
-| Admin login | `username, password` | Source IP | `adminLogin`: `username, password, ipAddress` |
+| Admin login | `username, password` | No IP value is collected | `adminLogin(username, password)`; account-scoped login limiter |
 | Admin session | none / logout / password change | Admin token from protected session | `adminMe, adminLogout, adminChangePassword` |
 | Admin dashboard/orders | none | Admin token | `adminDashboard, adminOrders` |
-| Admin order status | `orderId, status` | Admin token, source IP | `adminSetOrderStatus`: `token, orderId, status, ipAddress` |
-| Admin slip view | `orderId` | Admin token, source IP | `adminSlipData`: `token, orderId, ipAddress` |
+| Admin order status | `orderId, status` | Admin token; no IP value | `adminSetOrderStatus(token, orderId, status)`; audit IP field remains blank |
+| Admin slip view | `orderId` | Admin token; no IP value | `adminSlipData(token, orderId)`; audit IP field remains blank |
 | Admin list | table allowlist only | Admin token | `adminList`: `token, tableName` |
-| Admin create/update | allowlisted record fields per table | Admin token, source IP | `adminUpsert`: `token, tableName, record, ipAddress` |
-| Admin delete | allowlisted table + record ID | Admin token, source IP | `adminDelete`: `token, tableName, id, ipAddress` |
-| Member administration | search/limit/status/member ID | Admin token, source IP | `adminMembers, adminSetMemberStatus, adminMemberLoginLogs` |
-| Admin media upload | image file | Admin token, source IP | `adminStoreMedia`: `token, media{name,mimeType,base64}, ipAddress` |
+| Admin create/update | allowlisted record fields per table | Admin token; no IP value | `adminUpsert(token, tableName, record)`; audit IP field remains blank |
+| Admin delete | allowlisted table + record ID | Admin token; no IP value | `adminDelete(token, tableName, id)`; audit IP field remains blank |
+| Member administration | search/limit/status/member ID | Admin token; no IP value | `adminMembers, adminSetMemberStatus, adminMemberLoginLogs`; responses contain no IP fields |
+| Admin media upload | image file | Admin token; no IP value | `adminStoreMedia(token, media)`; audit IP field remains blank |
 | Public media | opaque media reference | Active record reference and private Drive folder checks | `publicMediaData`: `fileId` |
 
 ### Payload and response risks to resolve before P1/P2 acceptance
@@ -293,7 +293,7 @@ The browser facade must expose named, typed operations rather than accepting arb
 - Source and test changes are isolated to vercel-drive-setup.
 - GitHub Actions run 42148644591 on commit e566919bcdc854578fc116cd07f95abbc011025c completed successfully with 94/94 tests. The final expanded regression run 42148809409 on commit c62b0ad64bc4dea05f112a9584212537f3a31999 completed successfully with 95/95 tests and 0 failures, including the missing-folder-sharing-metadata case.
 - Node VM mocks cannot prove the behavior of real Google Drive inherited permissions, actual file/folder ACLs, or Apps Script execution. Those checks still require a separately authorized synthetic Google test environment; no Google resource or deployment was created here.
-- P0-12 trusted Member IP provenance remains unresolved. P0 is still blocked; do not start P1 or change the approved IP-history / Zero Cost requirements.
+- At the time of this historical R7/R8 validation, P0-12 had not yet been resolved. The later explicit decision B and implementation are recorded in Pair 5 below.
 
 
 ## 12. P0-R9/R10 — Admin/checkout mapping and trusted IP decision — 2026-11-06
