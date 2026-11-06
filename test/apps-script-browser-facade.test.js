@@ -7,6 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const sourcePath = path.join(__dirname, '..', 'google-apps-script', 'BrowserFacade.gs');
+const plain = value => JSON.parse(JSON.stringify(value));
 
 function loadFacade() {
   const calls = [];
@@ -44,7 +45,7 @@ test('public facade exposes named functions for every existing business action',
 test('coupon facade derives Member identity only from the optional verified token', () => {
   const { context, calls } = loadFacade();
   context.nobiValidateCoupon({ code: 'SAVE10', gameId: 'game-1', subtotal: 100, playerId: 'uid-1', memberToken: 'member-token' });
-  assert.deepEqual(calls[0], {
+  assert.deepEqual(plain(calls[0]), {
     action: 'coupon',
     args: { code: 'SAVE10', gameId: 'game-1', subtotal: 100, playerId: 'uid-1', member_token: 'member-token' }
   });
@@ -60,7 +61,7 @@ test('create-order facade maps only approved checkout fields and keeps server-ow
     requestKey: 'request-key-12345678', gameId: 'g1', packageId: 'p1',
     playerId: 'player-1', serverId: 'server-1', couponCode: 'SAVE10', memberToken: 'member-token'
   });
-  assert.deepEqual(calls[0].args, {
+  assert.deepEqual(plain(calls[0].args), {
     request_key: 'request-key-12345678', game_id: 'g1', package_id: 'p1',
     player_id: 'player-1', server_id: 'server-1', coupon_code: 'SAVE10',
     member_token: 'member-token'
@@ -98,9 +99,9 @@ test('Admin facade accepts no browser-supplied IP and keeps CRUD table names exp
     action: 'adminLogin', args: { username: 'NobiAdmin', password: 'long-password' }
   });
   context.nobiListAdminRecords({ token: 'admin-token', tableName: 'games' });
-  assert.deepEqual(calls[1].args, { token: 'admin-token', tableName: 'games' });
+  assert.deepEqual(plain(calls[1].args), { token: 'admin-token', tableName: 'games' });
   context.nobiUpsertAdminRecord({ token: 'admin-token', tableName: 'games', record: { name: 'RoV' } });
-  assert.deepEqual(calls[2].args.record, { name: 'RoV' });
+  assert.deepEqual(plain(calls[2].args.record), { name: 'RoV' });
   assert.throws(() => context.nobiLoginAdmin({
     username: 'NobiAdmin', password: 'long-password', ipAddress: '203.0.113.1'
   }), /ฟิลด์ที่ไม่อนุญาต/);
