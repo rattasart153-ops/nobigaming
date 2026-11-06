@@ -264,3 +264,14 @@ The browser facade must expose named, typed operations rather than accepting arb
 - P0-R6 workflow run `42129480514`: **79 tests passed, 0 failed**.
 - Both runs executed on `vercel-drive-setup`. No live Apps Script, Sheets, Drive, deployment, or production transaction was used.
 - P0 remains blocked by the unresolved trusted Member IP-history compatibility issue documented under P0-12. Do not start P1 or change the approved IP-history / Zero Cost requirements without a separate user decision.
+
+## 10. P0-R1 through P0-R6 consolidated revalidation — 2026-11-06
+
+- Re-read the current source and regression tests for the recovery journal, schema migrations, retention cleanup, slip-file uncertainty handling, HMAC envelope verification, nonce replay protection, and gateway session-call reduction.
+- Confirmed the current database schema is version 3. The setup preflight explicitly supports upgrades from schema versions 1 and 2 to version 3, preserves existing business rows, and refuses unknown versions or incompatible headers. Version 2 migration coverage preserves the recovery journal and business rows.
+- Corrected the stale schema-version comment at the top of `google-apps-script/08_Admin.gs`; the implementation uses the current versioned Sheets schema, not a version 1-only schema.
+- Revalidated the optional Member identity path. Invalid/expired/idle-expired/revoked/suspended Member sessions fall back to Guest identity for public coupon checks, while infrastructure errors continue to propagate. Added regression coverage in `test/apps-script-auth-session.test.js`.
+- Latest consolidated GitHub Actions run on `vercel-drive-setup`: run `42146915664`, commit `5cd3bc5c8c4324c480e99713ff144f47d6fce083`, result **success — 80 tests passed, 0 failed**.
+- The passing suite includes CREATE/TRANSITION journal recovery and fault injection, schema v1/v2-to-v3 migration checks, 90-day retention and trigger tests, uncertain Drive slip-write preservation, HMAC argument tampering, nonce replay/capacity/locking/corruption tests, and the optional Member-to-Guest regression.
+- These remain local Node test-harness/fake-service checks. They do not prove live Google Apps Script, real Sheets LockService contention, Drive ACL behavior, or production runtime/quota performance.
+- No deployment, production transaction, Google resource creation, billing change, or paid service was performed. Work remains isolated to `vercel-drive-setup`; `main` was not modified.
