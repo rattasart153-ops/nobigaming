@@ -79,7 +79,15 @@ class FakeSpreadsheet {
 
 function loadGasDatabase(spreadsheet, initialProperties = {}) {
   const properties = { ...initialProperties };
-  const lock = { waitLock() {}, releaseLock() {} };
+  const lockMetrics = { waitCalls: 0, releaseCalls: 0, lastTimeoutMs: null, failWait: false };
+  const lock = {
+    waitLock(timeoutMs) {
+      lockMetrics.waitCalls++;
+      lockMetrics.lastTimeoutMs = timeoutMs;
+      if (lockMetrics.failWait) throw new Error('LOCK_TIMEOUT');
+    },
+    releaseLock() { lockMetrics.releaseCalls++; }
+  };
   const context = {
     PropertiesService: { getScriptProperties: () => ({
       getProperty: key => properties[key] ?? null,
@@ -101,7 +109,7 @@ function loadGasDatabase(spreadsheet, initialProperties = {}) {
     'globalThis.__nobi = NOBI; globalThis.__setupNobiDatabase = setupNobiDatabase; globalThis.__seedDefaultCatalog = seedDefaultCatalog; globalThis.__repoInsert = repositoryInsert_; globalThis.__repoFind = repositoryFindByField_; globalThis.__repoUpdate = repositoryUpdate_; globalThis.__append = append_; globalThis.__updateById = updateById_;'
   ].join('\n');
   vm.runInNewContext(source, context);
-  return { context, properties };
+  return { context, properties, lockMetrics };
 }
 
 test('versioned Sheets setup creates the complete approved schema and is idempotent', () => {
@@ -429,4 +437,40 @@ test('schema v2 database upgrades to v3 while preserving recovery journal and bu
   assert.deepEqual(games.rows[1],['game-v2','Legacy v2 Game','moba','Preserve me',true,1,'2026-11-05T00:00:00.000Z','2026-11-05T00:00:00.000Z']);
   assert.deepEqual(journal.rows[1],['journal-v2','order-v2','CREATE','','','','','','','Pending',2,'RECOVERY_RETRY','2026-11-05T00:00:00.000Z','2026-11-05T00:01:00.000Z']);
   assert.equal(metadata.rows[1][1],'3');
+});
+
+
+test('repository writes acquire the script lock with a bounded wait and release it after success or validation failure', () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const { context, lockMetrics } = loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+
+  context.__repoInsert('games', { game_id: 'lock-game-1', name: 'Lock Game' });
+  assert.equal(lockMetrics.waitCalls, 1);
+  assert.equal(lockMetrics.lastTimeoutMs, 15000);
+  assert.equal(lockMetrics.releaseCalls, 1);
+
+  assert.throws(() => context.__repoInsert('games', {
+    game_id: 'lock-game-2', name: 'Lock Game'
+  }), /REPOSITORY_DUPLICATE/);
+  assert.equal(lockMetrics.waitCalls, 2);
+  assert.equal(lockMetrics.releaseCalls, 2, 'lock must be released when repository validation throws');
+  assert.equal(spreadsheet.getSheetByName('games').getLastRow(), 2);
+});
+
+test('repository write fails closed when script lock acquisition times out', () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const { context, lockMetrics } = loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  const games = spreadsheet.getSheetByName('games');
+  const before = games.rows.map(row => row.slice());
+  lockMetrics.failWait = true;
+
+  assert.throws(() => context.__repoInsert('games', {
+    game_id: 'lock-timeout-game', name: 'Must Not Write'
+  }), /LOCK_TIMEOUT/);
+  assert.equal(lockMetrics.waitCalls, 1);
+  assert.equal(lockMetrics.lastTimeoutMs, 15000);
+  assert.equal(lockMetrics.releaseCalls, 0, 'release is not called when lock acquisition itself fails');
+  assert.deepEqual(games.rows, before, 'no sheet mutation is allowed after lock timeout');
 });
