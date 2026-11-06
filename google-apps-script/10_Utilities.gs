@@ -55,13 +55,12 @@ function clean_(record) {
 function appendAdminAuditLogLocked_(record) {
   repositoryInsertLocked_('admin_audit_logs', record);
   const cutoff = Date.now() - NOBI.LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-  const sheet = repositorySheet_('admin_audit_logs');
-  const values = sheet.getDataRange().getValues();
-  const createdIndex = NOBI.SHEETS.admin_audit_logs.indexOf('created_at');
-  for (let row = values.length - 1; row >= 1; row--) {
-    const created = Date.parse(String(values[row][createdIndex] || ''));
-    if (Number.isFinite(created) && created < cutoff) sheet.deleteRow(row + 1);
-  }
+  repositoryRows_('admin_audit_logs').filter(function(log) {
+    const created = Date.parse(String(log.created_at || ''));
+    return Number.isFinite(created) && created < cutoff;
+  }).forEach(function(log) {
+    repositoryDeleteLocked_('admin_audit_logs', log.audit_id);
+  });
 }
 
 
