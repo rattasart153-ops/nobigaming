@@ -54,6 +54,7 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - [x] Add offline regression tests that assert one table-body read per Insert/Update, one header validation read and exactly one successful write; duplicate writes perform no write.
 - [x] Add offline lock-lifecycle regression tests: repository writes request the 15-second ScriptLock wait, release after success and validation failure, and fail closed without writing when lock acquisition times out.
 - [x] Add offline synthetic media-upload regressions: reject mismatched image signatures and decoded payloads above 3 MiB before any Drive file is created; existing coverage also checks private ACL enforcement and cleanup after audit failure.
+- Latest offline regression CI: [run 42201245595](https://github.com/rattasart153-ops/nobigaming/actions/runs/42201245595) passed **132/132** tests on commit `763ff1d22336d4cb6a34b79ba78d1b3937803ca4`.
 - [x] Retain the PBKDF2-SHA256 reference-vector test to verify the 120,000-iteration implementation has not been weakened or changed.
 - [ ] Benchmark PBKDF2 latency on the actual Apps Script V8 runtime; Node/VM timings are not a substitute.
 - [ ] Measure real Sheets read/write latency and LockService contention under concurrent synthetic requests.
