@@ -297,6 +297,6 @@ The browser facade must expose named, typed operations rather than accepting arb
 ### Validation status and limits
 
 - Source and test changes are isolated to vercel-drive-setup.
-- The workflow .github/workflows/api-tests.yml is configured to run npm test on pushes to this branch. A passing run for this pair must be confirmed before marking the pair fully validated.
+- GitHub Actions run 42148644591 on commit e566919bcdc854578fc116cd07f95abbc011025c completed successfully: npm test reported 94 tests passed, 0 failed. This is the consolidated pair-4 run after the PromptPay TLV ordering, zero-rounded amount validation and test assertion fixes.
 - Node VM mocks cannot prove the behavior of real Google Drive inherited permissions, actual file/folder ACLs, or Apps Script execution. Those checks still require a separately authorized synthetic Google test environment; no Google resource or deployment was created here.
 - P0-12 trusted Member IP provenance remains unresolved. P0 is still blocked; do not start P1 or change the approved IP-history / Zero Cost requirements.
