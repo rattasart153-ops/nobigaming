@@ -22,9 +22,9 @@ function dispatchGatewayAction_(action, args) {
     case 'paymentInfo': return paymentInfo_(args.amount);
     case 'createOrder': return createOrder(args);
     case 'submitOrderSlip': return submitOrderSlip(args);
-    case 'adminLogin': return adminLogin(args.username, args.password, args.ipAddress);
-    case 'memberRegister': return memberRegister(args.fullName, args.loginId, args.password, args.ipAddress);
-    case 'memberLogin': return memberLogin(args.loginId, args.password, args.ipAddress, args.userAgent);
+    case 'adminLogin': return adminLogin(args.username, args.password);
+    case 'memberRegister': return memberRegister(args.fullName, args.loginId, args.password);
+    case 'memberLogin': return memberLogin(args.loginId, args.password, args.userAgent);
     case 'memberMe':
       try { return memberMe(args.token); }
       catch (error) {
@@ -35,7 +35,7 @@ function dispatchGatewayAction_(action, args) {
       }
     case 'memberLogout': return memberLogout(args.token);
     case 'memberChangePassword': return memberChangePassword(args.token, args.currentPassword, args.newPassword);
-    case 'adminChangePassword': return adminChangePassword(args.token, args.currentPassword, args.newPassword, args.ipAddress);
+    case 'adminChangePassword': return adminChangePassword(args.token, args.currentPassword, args.newPassword);
     case 'adminMe':
       try { requireAdmin_(args.token); return {authenticated:true}; }
       catch (error) {
