@@ -91,7 +91,7 @@ test('private Drive file validator fails closed for missing folder, shared folde
   );
   assert.throws(
     () => context.assertDriveFileInPrivateFolder_({}, 'private-folder'),
-    /DRIVE_FOLDER_INVALID/
+    /DRIVE_ACL_UNVERIFIABLE/
   );
   assert.throws(
     () => context.assertDriveFileInPrivateFolder_(driveFile(['shared-folder']), 'shared-folder'),
@@ -104,7 +104,7 @@ test('private Drive file validator fails closed when file sharing metadata is un
   const unsupported = {getParents: () => ({hasNext: () => false, next: () => null})};
   assert.throws(
     () => context.assertDriveFileInPrivateFolder_(unsupported, 'private-folder'),
-    /DRIVE_FOLDER_INVALID/
+    /DRIVE_ACL_UNVERIFIABLE/
   );
 });
 
