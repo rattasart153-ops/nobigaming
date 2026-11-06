@@ -320,3 +320,29 @@ The browser facade must expose named, typed operations rather than accepting arb
 - Focused validation completed: all changed Apps Script files and Node test files pass JavaScript syntax compilation; the Admin inline script parses; source assertions confirm no IP arguments reach Apps Script handlers or Member responses; an in-memory retention execution clears legacy IP fields while retaining recent non-IP security events. The dedicated regression tests were added to the repository.
 - Full `npm test` / GitHub Actions result is **not yet confirmed** for the latest commit: the GitHub status query returned no check statuses. Do not treat focused checks as a passing full CI run.
 - These in-memory checks do not prove live Apps Script, Google Sheets LockService contention, Drive ACLs, or production runtime/quota behavior. No deployment, live Google resource, billing, paid service, production payment, or real customer data was used. Work remains isolated to `vercel-drive-setup`; `main` was not modified.
+
+
+## 13. P0-R11/R12 — HtmlService router and typed browser facade — 2026-11-06
+
+### P0-R11 — HtmlService entry point and templates
+
+- Replaced the JSON-only doGet() in google-apps-script/Code.gs with an explicit page router: default storefront and ?page=admin for the Admin template.
+- Added Storefront.html and Admin.html as copies of the existing public HTML, preserving the existing UI and adding only the top-level navigation base plus a migration note.
+- Rendering does not initialize Sheets, create Drive folders, bootstrap Admin, or write Script Properties.
+- Unknown page values fall back to the storefront; page selection cannot become an arbitrary template filename.
+
+### P0-R12 — named, typed, allowlisted google.script.run facade
+
+- Added BrowserFacade.gs with named functions for catalog/promotions, coupon validation/suggestions, payment info, create order/slip, Member registration/login/session/password, Admin login/session/password/dashboard/orders/slips/CRUD/member administration/media, and referenced public media.
+- Internal payload validation and dispatcher helpers end in underscore and are not callable through google.script.run. No generic browser-supplied action name or table operation is exposed.
+- Each public wrapper accepts a narrow set of named fields, rejects unknown fields (including browser-supplied IP), validates nested media/slip keys and bounds base64 payload length, then calls a fixed existing business action.
+- Existing GAS business handlers remain responsible for authentication, authorization, record allowlists, order/coupon invariants, and private Drive checks.
+
+### Validation boundary
+
+- Added test/apps-script-web-entry-facade.test.js and test/apps-script-browser-facade.test.js for route selection, template parity, exposed function inventory, action mapping, strict argument allowlists, no-IP enforcement, and bounded file payloads.
+- Focused in-tool checks passed: changed GAS and test sources compile; both template inline scripts parse; router selection and safe fallback work in a mock HtmlService harness; typed facade mappings work and reject injected IP fields; template copies match their public source plus the intended base tag.
+- The latest GitHub commit-status query returned no check records. Full GitHub Actions npm test is therefore NOT CONFIRMED; do not report the full suite as passing until a completed workflow result is visible.
+- P0-02 remains open: the copied HTML still calls legacy REST routes. The P2 frontend adapter has not yet been implemented, so these templates and facade are not an end-to-end working storefront/Admin yet.
+- P0-06 remains open: the frontend token lifecycle and XSS/session transport must be designed before the browser adapter is accepted. Tokens must not be stored in localStorage or sessionStorage.
+- No Google resources, Script Properties, Admin bootstrap, deployment, billing, paid service, real customer data, or real payment were used. Work remains on vercel-drive-setup; main is unchanged.
