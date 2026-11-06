@@ -21,14 +21,33 @@ function runNobiRetentionCleanupLocked_(nowMs) {
   const result = {
     ok:true,
     cutoff_at:new Date(cutoffMs).toISOString(),
-    member_registered_ips_cleared:clearMemberIpFieldByDate_('registered_ip', 'created_at', cutoffMs),
-    member_last_login_ips_cleared:clearMemberIpFieldByDate_('last_login_ip', 'last_login_at', cutoffMs),
-    member_session_ips_cleared:clearSessionIpFieldByDate_('member_sessions', cutoffMs),
-    admin_session_ips_cleared:clearSessionIpFieldByDate_('admin_sessions', cutoffMs),
+    member_fields_cleared:clearTableField_('members', 'registered_ip') + clearTableField_('members', 'last_login_ip'),
+    member_session_fields_cleared:clearTableField_('member_sessions', 'created_ip'),
+    member_login_ip_fields_cleared:clearTableField_('member_login_logs', 'ip_address') + clearTableField_('member_login_logs', 'is_new_ip'),
+    admin_session_ip_fields_cleared:clearTableField_('admin_sessions', 'created_ip'),
+    admin_audit_ip_fields_cleared:clearTableField_('admin_audit_logs', 'ip_address'),
     member_login_logs_deleted:deleteExpiredRetentionRows_('member_login_logs', cutoffMs),
     admin_audit_logs_deleted:deleteExpiredRetentionRows_('admin_audit_logs', cutoffMs)
   };
   return result;
+}
+
+/** Clear a legacy IP-related field immediately while preserving non-IP security events. */
+function clearTableField_(tableName, fieldName) {
+  const sheet = repositorySheet_(tableName);
+  const values = sheet.getDataRange().getValues();
+  const headers = NOBI.SHEETS[tableName];
+  const fieldIndex = headers.indexOf(fieldName);
+  if (fieldIndex < 0) throw new Error('RETENTION_SCHEMA_INVALID: ' + tableName + '.' + fieldName);
+  let cleared = 0;
+  const output = values.slice(1).map(function(row) {
+    const value = row[fieldIndex];
+    const replacement = fieldName === 'is_new_ip' ? false : '';
+    if (value !== '' && value !== false && value !== null && value !== undefined) cleared++;
+    return [replacement];
+  });
+  if (cleared) sheet.getRange(2, fieldIndex + 1, output.length, 1).setValues(output);
+  return cleared;
 }
 
 function clearMemberIpFieldByDate_(ipField, timestampField, cutoffMs) {
