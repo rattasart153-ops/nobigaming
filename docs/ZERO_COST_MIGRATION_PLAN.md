@@ -53,13 +53,15 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - [x] Reuse one table snapshot for primary-key and unique-key checks during repository Insert/Update; preserve ScriptLock, schema validation, uniqueness rules and fail-closed behavior.
 - [x] Add offline regression tests that assert one table-body read per Insert/Update, one header validation read and exactly one successful write; duplicate writes perform no write.
 - [x] Add offline lock-lifecycle regression tests: repository writes request the 15-second ScriptLock wait, release after success and validation failure, and fail closed without writing when lock acquisition times out.
-- [x] Add offline synthetic media-upload regressions: reject mismatched image signatures and decoded payloads above 3 MiB before any Drive file is created; existing coverage also checks private ACL enforcement and cleanup after audit failure.
-- Latest offline regression CI: [run 42201245595](https://github.com/rattasart153-ops/nobigaming/actions/runs/42201245595) passed **132/132** tests on commit `763ff1d22336d4cb6a34b79ba78d1b3937803ca4`.
+- [x] Add offline synthetic media-upload regressions: reject mismatched image signatures, truncated images and decoded payloads above 3 MiB before any Drive file is created; verify private ACL enforcement and cleanup after audit failure.
+- [x] Strengthen server-side image-container checks: PNG chunk boundaries and CRC-32, JPEG marker/segment bounds and terminal EOI, and WebP RIFF/chunk lengths; use a valid PNG fixture and reject truncated/corrupted payloads.
+- Latest offline regression CI: [run 42201935731](https://github.com/rattasart-ops/nobigaming/actions/runs/42201935731) passed **135/135** tests on commit `6ae8bb9f361dae438be2dd1a426143ce31822c7f`.
 - [x] Retain the PBKDF2-SHA256 reference-vector test to verify the 120,000-iteration implementation has not been weakened or changed.
 - [ ] Benchmark PBKDF2 latency on the actual Apps Script V8 runtime; Node/VM timings are not a substitute.
 - [ ] Measure real Sheets read/write latency and LockService contention under concurrent synthetic requests.
 - [ ] Measure Base64 upload/download throughput, Drive operations and end-to-end Apps Script execution time with synthetic files.
 - [ ] Confirm actual Apps Script quotas, concurrent execution limits and available private Drive capacity against the intended synthetic test volume.
+- [ ] Full image decode/re-encode remains unverified: the offline Apps Script validator checks container structure but is not a pixel decoder. Do not treat this as equivalent to a trusted image-processing pipeline; verify it in an approved runtime before production.
 - Offline P3 regression CI: [run 42178679222](https://github.com/rattasart153-ops/nobigaming/actions/runs/42178679222) passed **128/128** tests on commit `603ee4a6557ac11960dabececfad8e23c81f9583`.
 - Runtime measurements and Google resource checks remain unavailable until Google sign-in is restored; no Apps Script project, spreadsheet, Drive folder or deployment has been created. User elected to continue offline-safe P3 work in the meantime.
 
