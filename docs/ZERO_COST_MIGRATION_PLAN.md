@@ -74,6 +74,10 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - [x] Run and inspect the complete P4 regression CI: [run 42203721676](https://github.com/rattasart153-ops/nobigaming/actions/runs/42203721676) passed **153/153** tests, 0 failed, on `vercel-drive-setup`.
 - [x] Mocked race tests verify stale password-change snapshots are rejected and an Admin session revoked while Drive is being read cannot receive the slip response; the final check and audit run under ScriptLock.
 - [x] Mocked ScriptLock timeout at the final slip authorization boundary fails closed and does not return bytes or write a view audit.
+- [x] Add offline runtime-probe tests for Sheets read/append/update quota failures, ScriptLock acquisition timeout, overlapping repository inserts, and Drive create/permission failures. All probes use injected synthetic failures; they do not consume real Google quotas.
+- [x] Strengthen Drive ACL checks to reject explicit file/folder editors and viewers even when the broad sharing mode reports PRIVATE; fail closed when ACL metadata cannot be inspected. New tests cover explicit viewer/editor shares, missing ACL metadata, and cleanup of an unreferenced file after a Drive permission failure.
+- [x] Add a deterministic overlapping-request harness: a competing insert cannot enter while the first request holds the simulated ScriptLock, and a later retry detects the committed duplicate.
+- These are offline fault-injection and lock-model tests, not proof of Google's actual scheduler, quota counters, or Drive permission inheritance.
 - Runtime-only follow-up (outside the approved P4 mock acceptance): real Google Apps Script quota enforcement, simultaneous execution scheduling, and actual Drive ACL enforcement must be checked if/when a synthetic Google runtime is later authorized. Mock tests do not prove Google service behavior.
 
 ### P5 — Browser/device tests
