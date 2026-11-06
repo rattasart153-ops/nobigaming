@@ -35,9 +35,15 @@ function createOrder(payload) {
     pruneExpiredIdempotencyLocked_(Date.now());
     let existingKey = repositoryFindByField_('idempotency_records', 'request_key', key)
       .find(function(item) { return item.scope === 'create_order'; });
-    if (existingKey && Date.parse(existingKey.expires_at) <= Date.now()) {
-      repositoryDeleteLocked_('idempotency_records', existingKey.idempotency_id);
-      existingKey = null;
+    if (existingKey) {
+      const idempotencyExpiry = Date.parse(existingKey.expires_at || '');
+      if (!Number.isFinite(idempotencyExpiry)) {
+        throw new Error('IDEMPOTENCY_RECORD_INVALID: expiry timestamp is missing or invalid');
+      }
+      if (idempotencyExpiry <= Date.now()) {
+        repositoryDeleteLocked_('idempotency_records', existingKey.idempotency_id);
+        existingKey = null;
+      }
     }
     if (existingKey) {
       if (String(existingKey.payload_hash) !== payloadHash) {
@@ -245,8 +251,9 @@ function expirePendingOrdersLocked_(nowMs) {
   recoverPendingOrderJournalsLocked_();
   const now = new Date(nowMs).toISOString();
   repositoryRows_('orders').filter(function(order) {
+    const deadline = Date.parse(order.payment_expires_at || '');
     return order.status === 'Pending' && !order.slip_submitted_at &&
-      Date.parse(order.payment_expires_at) <= nowMs;
+      (!Number.isFinite(deadline) || deadline <= nowMs);
   }).forEach(function(order) {
     expireOrderLocked_(order, now);
   });
