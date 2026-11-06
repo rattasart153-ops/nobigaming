@@ -67,8 +67,8 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 
 ### P4 — Security and business rules
 - [x] Add offline session regressions for Admin/Member absolute expiry, the 30-minute idle boundary, malformed timestamps, auth-version invalidation, logout revocation, password-change revocation of all sessions, stale credential/KDF race rejection and no last-seen refresh after rejection.
-- [x] Add offline Admin slip-access regressions proving authentication precedes Drive reads, files/folders must remain private, failed audit writes do not return slip bytes, and revocation during a Drive read is rechecked under ScriptLock before any slip response is returned.
-- [x] Add offline repository quota-exhaustion regressions for Sheets read and append failures; verify no business row is written and ScriptLock is released. Existing lock-timeout tests verify writes fail closed when ScriptLock cannot be acquired.
+- [x] Add offline Admin slip-access regressions proving authentication precedes Drive reads, files/folders must remain private with no explicit editors/viewers, failed audit writes do not return slip bytes, and revocation during a Drive read is rechecked under ScriptLock before any slip response is returned.
+- [x] Add offline repository quota-exhaustion regressions for Sheets read, append and update failures; verify no unintended business write is reported and ScriptLock is released. Existing lock-timeout tests verify writes fail closed when ScriptLock cannot be acquired.
 - [x] Existing order workflow regressions cover coupon reservation/release/consume, Bangkok expiry deadlines, one-time slip submission, idempotency payload conflicts, recovery replay and lock-protected writes.
 - [x] Existing retention regressions cover immediate legacy IP clearing, 90-day non-IP security event retention, Bangkok daily trigger idempotency and retry after partial cleanup failure.
 - [x] Run and inspect the complete P4 regression CI: [run 42203721676](https://github.com/rattasart153-ops/nobigaming/actions/runs/42203721676) passed **153/153** tests, 0 failed, on `vercel-drive-setup`.
