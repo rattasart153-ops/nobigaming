@@ -66,13 +66,15 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - Runtime measurements and Google resource checks remain unavailable until Google sign-in is restored; no Apps Script project, spreadsheet, Drive folder or deployment has been created. User elected to continue offline-safe P3 work in the meantime.
 
 ### P4 — Security and business rules
-- [x] Add offline session regressions for Admin/Member absolute expiry, the 30-minute idle boundary, malformed timestamps, auth-version invalidation, logout revocation and no last-seen refresh after rejection.
-- [x] Add offline Admin slip-access regressions proving authentication precedes Drive reads, files/folders must remain private, and failed audit writes do not return slip bytes.
-- [x] Add offline repository quota-exhaustion regressions for Sheets read and append failures; verify no business row is written and ScriptLock is released.
+- [x] Add offline session regressions for Admin/Member absolute expiry, the 30-minute idle boundary, malformed timestamps, auth-version invalidation, logout revocation, password-change revocation of all sessions, stale credential/KDF race rejection and no last-seen refresh after rejection.
+- [x] Add offline Admin slip-access regressions proving authentication precedes Drive reads, files/folders must remain private, failed audit writes do not return slip bytes, and revocation during a Drive read is rechecked under ScriptLock before any slip response is returned.
+- [x] Add offline repository quota-exhaustion regressions for Sheets read and append failures; verify no business row is written and ScriptLock is released. Existing lock-timeout tests verify writes fail closed when ScriptLock cannot be acquired.
 - [x] Existing order workflow regressions cover coupon reservation/release/consume, Bangkok expiry deadlines, one-time slip submission, idempotency payload conflicts, recovery replay and lock-protected writes.
 - [x] Existing retention regressions cover immediate legacy IP clearing, 90-day non-IP security event retention, Bangkok daily trigger idempotency and retry after partial cleanup failure.
-- [x] Run and inspect the complete P4 regression CI: [run 42202817942](https://github.com/rattasart153-ops/nobigaming/actions/runs/42202817942) passed **149/149** tests, 0 failed, on `vercel-drive-setup`.
-- [ ] Verify real Apps Script quota exhaustion, concurrent session revocation/slip access, actual Drive ACLs and ScriptLock contention in an explicitly authorized synthetic Google runtime. Offline mocks cannot establish these runtime properties.
+- [x] Run and inspect the complete P4 regression CI: [run 42203721676](https://github.com/rattasart153-ops/nobigaming/actions/runs/42203721676) passed **153/153** tests, 0 failed, on `vercel-drive-setup`.
+- [x] Mocked race tests verify stale password-change snapshots are rejected and an Admin session revoked while Drive is being read cannot receive the slip response; the final check and audit run under ScriptLock.
+- [x] Mocked ScriptLock timeout at the final slip authorization boundary fails closed and does not return bytes or write a view audit.
+- [ ] Real Google Apps Script quota enforcement, real simultaneous execution scheduling, and actual Drive ACL enforcement remain integration verification items; mock tests cannot prove Google service behavior.
 
 ### P5 — Browser/device tests
 - Guest, Member, Admin, coupon, checkout, slip, order status and Admin CRUD on synthetic data only.
@@ -102,3 +104,12 @@ Guest checkout; ASCII Member Login ID 4–30; public/member-only/member-game-spe
 - Remaining: real Apps Script runtime/quotas, Sheets/LockService concurrency, PBKDF2 latency, Drive ACLs, browser/device E2E and actual QR scanning. These require a separately authorized synthetic test environment. No Google resources or deployment are authorized by this status update.
 \n\n## P4 offline implementation status — 2026-11-06\n\n- P4 source-level regression coverage has been expanded on `vercel-drive-setup` for Admin/Member absolute and idle session expiry, logout, auth-version invalidation, password-change revocation of all sessions, Admin-only private slip delivery, audit-gated slip responses and fail-closed Sheets quota exceptions.
 - The complete offline CI run [42202817942](https://github.com/rattasart153-ops/nobigaming/actions/runs/42202817942) passed **149/149** tests with 0 failures. The earlier initial test failures were test-harness cross-realm assertion issues; those assertions were corrected and the final run passed.\n- Coupon/order/recovery and retention behaviors continue to be covered by the existing offline regression suites; no business-rule or architecture change was introduced by this test-only P4 increment.\n- The offline/source-only P4 regression increment is passing. This does not close P4 runtime acceptance: real Apps Script quota behavior, concurrent revocation/slip access, actual Drive ACLs and ScriptLock contention remain unverified until a separately authorized synthetic Google runtime is available. No Apps Script runtime, Google resources, deployment, real customer data or payment flow was used.\n
+
+## P4 completion record — mock/offline acceptance
+
+- P4 offline/mock acceptance is complete on `vercel-drive-setup`.
+- Final verified test run: [GitHub Actions run 42203721676](https://github.com/rattasart153-ops/nobigaming/actions/runs/42203721676), **153 passed / 0 failed / 0 skipped**.
+- Added an atomic authorization boundary for Admin slip delivery: after the Drive read, the Admin session is revalidated under ScriptLock immediately before the audit write and response construction. If logout, suspension, password change, or another revocation wins during the Drive read, no slip bytes are returned.
+- Added stale-credential race tests for Admin and Member password changes; a request whose credential snapshot changed during the expensive password KDF is rejected without partial session mutation.
+- All mock data is synthetic and isolated. No Google account, Apps Script project, spreadsheet, Drive folder, deployment, real customer data, or payment transaction was used.
+- This completion means P4's source/offline/mock test scope is complete. It does not claim that live Google Apps Script runtime, real Sheets quotas, real Drive permissions, or real cross-execution LockService behavior has been verified.
