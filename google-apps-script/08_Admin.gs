@@ -170,45 +170,53 @@ function adminUpsert(token, tableName, record) {
       Object.prototype.hasOwnProperty.call(record, 'image_file_id')) {
     throw new Error('ห้ามกำหนด image_file_id โดยตรง กรุณาใช้ URL รูปภาพที่อัปโหลดผ่านระบบ');
   }
-  if (tableName === 'packages' || tableName === 'promotions') {
-    const imageUrl = String(safe.image_url || '').trim();
-    const mediaMatch = imageUrl.match(/^\/api\/public\/media\/([A-Za-z0-9_-]{10,100})$/);
-    safe.image_file_id = mediaMatch ? mediaMatch[1] : '';
-    if (/drive\.google\.com|googleusercontent\.com/i.test(imageUrl)) {
-      throw new Error('ห้ามใช้ลิงก์ Google Drive โดยตรง ต้องใช้ URL ผ่านระบบสื่อส่วนตัว');
-    }
-  }
-  validateRecord_(tableName, safe);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    if (tableName === 'packages' && !repositoryGetById_('games', safe.game_id)) {
+    const id = record[primaryKey] ? String(record[primaryKey]) : '';
+    const current = id ? repositoryGetById_(tableName, id) : null;
+    if (id && !current) throw new Error('ไม่พบรายการ');
+    const candidate = Object.assign({}, current || {}, safe);
+
+    if ((tableName === 'packages' || tableName === 'promotions') &&
+        Object.prototype.hasOwnProperty.call(record, 'image_url')) {
+      const imageUrl = String(safe.image_url || '').trim();
+      const mediaMatch = imageUrl.match(/^\/api\/public\/media\/([A-Za-z0-9_-]{10,100})$/);
+      candidate.image_file_id = mediaMatch ? mediaMatch[1] : '';
+      safe.image_file_id = candidate.image_file_id;
+    }
+    if ((tableName === 'packages' || tableName === 'promotions') &&
+        /drive\.google\.com|googleusercontent\.com/i.test(String(candidate.image_url || ''))) {
+      throw new Error('ห้ามใช้ลิงก์ Google Drive โดยตรง ต้องใช้ URL ผ่านระบบสื่อส่วนตัว');
+    }
+
+    // Validate the complete post-update record so partial edits preserve required fields.
+    validateRecord_(tableName, candidate);
+    if (tableName === 'packages' && !repositoryGetById_('games', candidate.game_id)) {
       throw new Error('ไม่พบเกมที่เลือกสำหรับแพ็กเกจ');
     }
     if (tableName === 'coupons') {
-      if (safe.game_id && !repositoryGetById_('games', safe.game_id)) {
+      if (candidate.game_id && !repositoryGetById_('games', candidate.game_id)) {
         throw new Error('ไม่พบเกมที่เลือกสำหรับคูปอง');
       }
-      if (safe.member_spend_game_id && !repositoryGetById_('games', safe.member_spend_game_id)) {
+      if (candidate.member_spend_game_id && !repositoryGetById_('games', candidate.member_spend_game_id)) {
         throw new Error('ไม่พบเกมที่ใช้คำนวณยอดเติมสะสมสมาชิก');
       }
     }
-    if ((tableName === 'packages' || tableName === 'promotions') && safe.image_file_id) {
+    if ((tableName === 'packages' || tableName === 'promotions') && candidate.image_file_id) {
       const mediaFolderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_MEDIA_FOLDER_ID') || '').trim();
       if (!mediaFolderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์รูปภาพส่วนตัว');
-      const mediaFile = DriveApp.getFileById(String(safe.image_file_id));
+      const mediaFile = DriveApp.getFileById(String(candidate.image_file_id));
       assertDriveFileInPrivateFolder_(mediaFile, mediaFolderId);
     }
     const now = new Date().toISOString();
-    let id;
-    if (record[primaryKey]) {
-      id = String(record[primaryKey]);
+    if (id) {
       safe.updated_at = now;
       repositoryUpdateLocked_(tableName, id, safe);
     } else {
-      id = Utilities.getUuid();
-      safe[primaryKey] = id;
+      const newId = Utilities.getUuid();
+      safe[primaryKey] = newId;
       safe.created_at = now;
       safe.updated_at = now;
       repositoryInsertLocked_(tableName, safe);
@@ -247,22 +255,15 @@ function adminDelete(token, tableName, id) {
       throw new Error('ลบคูปองไม่ได้ เนื่องจากมีประวัติการใช้คูปอง');
     }
 
-    const sheet = repositorySheet_(tableName);
-    const values = sheet.getDataRange().getValues();
-    const index = NOBI.SHEETS[tableName].indexOf(primaryKey);
-    for (let row = 1; row < values.length; row++) {
-      if (String(values[row][index]) !== String(id)) continue;
-      sheet.deleteRow(row + 1);
-      const now = new Date().toISOString();
-      appendAdminAuditLogLocked_({
-        audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
-        action: 'DELETE_' + tableName.toUpperCase(), target_type: tableName,
-        target_id: String(id), request_id: '', ip_address: '',
-        details_json: '{}', created_at: now
-      });
-      return {ok:true};
-    }
-    throw new Error('ไม่พบรายการ');
+    if (!repositoryDeleteLocked_(tableName, id)) throw new Error('ไม่พบรายการ');
+    const now = new Date().toISOString();
+    appendAdminAuditLogLocked_({
+      audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
+      action: 'DELETE_' + tableName.toUpperCase(), target_type: tableName,
+      target_id: String(id), request_id: '', ip_address: '',
+      details_json: '{}', created_at: now
+    });
+    return {ok:true};
   } finally {
     lock.releaseLock();
   }
