@@ -6,7 +6,7 @@ function gatewayOptionalMemberId_(token) {
     return String(member.member_id || '');
   } catch (error) {
     const message = String(error && error.message || '');
-    if (/セッション|ログイン|アカウント|ถูกระงับ|เพิกถอน|ไม่มีการใช้งาน/.test(message)) return '';
+    if (/セッション|ログイン|アカウント|เซสชันสมาชิก|กรุณาเข้าสู่ระบบสมาชิก|บัญชีสมาชิกถูกระงับ|ถูกระงับ|เพิกถอน|ไม่มีการใช้งาน/.test(message)) return '';
     throw error;
   }
 }
