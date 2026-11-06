@@ -68,6 +68,9 @@ test('HtmlService storefront and Admin use named google.script.run facade with m
   assert.equal(storefront.includes('nobiMemberToken'),false);
   assert.equal(storefront.includes('nobiCheckoutToken'),false);
   assert.ok(storefront.includes('new QRCode(qrHost'));
+  assert.ok(storefront.includes('nobiGetPublicMedia'));
+  assert.ok(storefront.includes('mediaRpcQueue'));
+  assert.ok(storefront.includes('resolveMediaUrl(imageUrl)'));
   assert.ok(storefront.includes("!href.startsWith('//')"),'protocol-relative promotion links must be rejected');
   assert.equal(storefront.includes('nobi_active_checkout'),false);
   assert.ok(storefront.includes('nobi_order_attempt'));
