@@ -93,7 +93,7 @@ function nobiCreateOrder(input) {
 function nobiSubmitOrderSlip(input) {
   var p = nobiFacadePayload_(input, ['orderId','checkoutToken','slip'], ['orderId','checkoutToken','slip']);
   var slip = nobiFacadePayload_(p.slip, ['name','mimeType','base64'], ['mimeType','base64']);
-  if (typeof slip.base64 !== 'string' || slip.base64.length > 4200000) {
+  if (typeof slip.base64 !== 'string' || slip.base64.length > 4194304) {
     throw new Error('ไฟล์สลิปมีขนาดเกินกำหนด');
   }
   return nobiFacadeCall_('submitOrderSlip', {
@@ -220,7 +220,7 @@ function nobiSetAdminMemberStatus(input) {
 function nobiUploadAdminMedia(input) {
   var p = nobiFacadePayload_(input, ['token','media'], ['token','media']);
   var media = nobiFacadePayload_(p.media, ['name','mimeType','base64'], ['mimeType','base64']);
-  if (typeof media.base64 !== 'string' || media.base64.length > 4200000) {
+  if (typeof media.base64 !== 'string' || media.base64.length > 4194304) {
     throw new Error('ไฟล์ภาพมีขนาดเกินกำหนด');
   }
   return nobiFacadeCall_('adminStoreMedia', {
