@@ -1,7 +1,7 @@
 /**
- * Browser-callable HtmlService facade.
+ * Browser-callable typed facade.
  *
- * Only the named functions below are exposed to google.script.run.
+ * Only the named functions below are callable by the HTML client.
  * The generic dispatcher and validation helpers end in "_" and are private
  * to the Apps Script runtime. Never add a browser-supplied IP field here.
  */
@@ -25,7 +25,7 @@ function nobiFacadePayload_(value, allowedKeys, requiredKeys) {
   var keys = Object.keys(value);
   if (keys.length > allowedKeys.length) throw new Error('ข้อมูลคำขอมีฟิลด์ที่ไม่อนุญาต');
   keys.forEach(function(key) {
-    if (allowedKeys.indexOf(key) === -1) throw new Error('ไม่อนุญาตให้ส่งฟิลด์: ' + key);
+    if (allowedKeys.indexOf(key) === -1) throw new Error('ฟิลด์ที่ไม่อนุญาต: ' + key);
   });
   (requiredKeys || []).forEach(function(key) {
     if (!Object.prototype.hasOwnProperty.call(value, key) || value[key] == null || value[key] === '') {
