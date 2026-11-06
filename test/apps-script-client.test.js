@@ -86,7 +86,7 @@ test('Apps Script client does not retry a failed mutation implicitly', async () 
   assert.equal(calls, 1);
 });
 
-test('GAS gateway allowlist matches the focused HTTP action dispatcher', () => {
+test('GAS gateway allowlist matches the dispatcher and HtmlService router is isolated', () => {
   const gasDir = path.join(__dirname, '..', 'google-apps-script');
   const gateway = fs.readFileSync(path.join(gasDir, '13_HttpGateway.gs'), 'utf8');
   const entry = fs.readFileSync(path.join(gasDir, 'Code.gs'), 'utf8');
@@ -98,9 +98,9 @@ test('GAS gateway allowlist matches the focused HTTP action dispatcher', () => {
   assert.deepEqual(allowed, dispatched, 'every gateway action must have one explicit dispatcher case');
   assert.ok(gateway.includes('function doPost(e)'), 'GAS HTTP POST entry point must exist');
   assert.ok(gateway.includes('dispatchGatewayAction_('), 'signed requests must use the HTTP dispatcher');
-  assert.ok(entry.includes('function doGet()'), 'minimal JSON health endpoint must exist');
-  assert.equal(entry.includes('HtmlService'), false, 'GAS project must not depend on HtmlService');
-  assert.equal(entry.includes('rpc('), false, 'minimal entry point must not expose legacy RPC');
+  assert.ok(entry.includes('function doGet(e)'), 'HtmlService web entry point must exist');
+  assert.ok(entry.includes('HtmlService.createTemplateFromFile(templateName)'), 'doGet must route through the fixed template allowlist');
+  assert.equal(entry.includes('rpc('), false, 'entry point must not expose a generic RPC dispatcher');
   assert.ok(gateway.includes('Utilities.computeHmacSha256Signature'), 'gateway must verify HMAC-SHA256');
   assert.ok(gateway.includes('LockService.getScriptLock'), 'nonce claims must be serialized');
   const config = fs.readFileSync(path.join(gasDir, '00_Config.gs'), 'utf8');
