@@ -34,7 +34,7 @@ function adminLogin(username, password, ipAddress) {
   const normalized = user.toLowerCase();
   const pass = String(password || '');
   if (!user || !pass) throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
-  consumeAuthIpAttempt_(ipAddress);
+  consumeLoginAttempt_('MEMBER_LOGIN_ATTEMPT', normalized, 10);
   assertAccountNotBlocked_('ADMIN_ACCOUNT', normalized);
 
   // Password KDF is intentionally outside ScriptLock so a slow login cannot
@@ -77,7 +77,7 @@ function adminLogin(username, password, ipAddress) {
       expires_at:expiresAt,
       last_seen_at:createdAt,
       revoked_at:'',
-      created_ip:String(ipAddress || '').slice(0, 100)
+      created_ip:''
     });
     repositoryUpdateLocked_('admins', currentAdmin.admin_id, {
       last_login_at:createdAt,
@@ -90,7 +90,7 @@ function adminLogin(username, password, ipAddress) {
       target_type:'admin',
       target_id:currentAdmin.admin_id,
       request_id:'',
-      ip_address:String(ipAddress || '').slice(0, 100),
+      ip_address:'',
       details_json:'{}',
       created_at:createdAt
     });
@@ -155,7 +155,7 @@ function memberRegister(fullName, loginId, password, ipAddress) {
   if (!name || name.length > 100 || !/^[A-Za-z0-9]{4,30}$/.test(login) || pass.length < 10 || pass.length > 200) {
     throw new Error('กรุณากรอกชื่อ Login ID (ภาษาอังกฤษ/ตัวเลข 4-30 ตัว) และรหัสผ่านอย่างน้อย 10 ตัวอักษร');
   }
-  consumeRegistrationIpAttempt_(ipAddress);
+  consumeRegistrationAttempt_(normalized);
 
   // Compute the password KDF before acquiring the global write lock.
   const salt = Utilities.getUuid() + Utilities.getUuid();
@@ -177,7 +177,7 @@ function memberRegister(fullName, loginId, password, ipAddress) {
       password_algorithm:'PBKDF2-SHA256-120000',
       status:'Active',
       auth_version:1,
-      registered_ip:String(ipAddress || '').slice(0, 100),
+      registered_ip:'',
       last_login_ip:'',
       created_at:now,
       updated_at:now,
@@ -194,8 +194,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
   const login = String(loginId || '').trim();
   const normalized = login.toLowerCase();
   const pass = String(password || '');
-  const ip = String(ipAddress || '').slice(0, 100);
-  const agent = String(userAgent || '').slice(0, 300);
+    const agent = String(userAgent || '').slice(0, 300);
   if (!login || !pass) throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
   consumeAuthIpAttempt_(ipAddress);
   try {
@@ -204,7 +203,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
     const lock = LockService.getScriptLock();
     lock.waitLock(15000);
     try {
-      appendMemberLoginLogLocked_('', normalized, ip, false, 'Failure', 'RATE_LIMITED', agent, new Date().toISOString());
+      appendMemberLoginLogLocked_('', normalized, '', false, 'Failure', 'RATE_LIMITED', agent, new Date().toISOString());
     } finally { lock.releaseLock(); }
     throw error;
   }
@@ -218,7 +217,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
     lock.waitLock(15000);
     try {
       incrementAccountFailureLocked_('MEMBER_ACCOUNT', normalized, Date.now());
-      appendMemberLoginLogLocked_(member ? member.member_id : '', normalized, ip, false, 'Failure', 'INVALID_CREDENTIALS', agent, new Date().toISOString());
+      appendMemberLoginLogLocked_(member ? member.member_id : '', normalized, '', false, 'Failure', 'INVALID_CREDENTIALS', agent, new Date().toISOString());
     } finally { lock.releaseLock(); }
     throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
   }
@@ -232,15 +231,14 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
     if (!currentMember || currentMember.status !== 'Active' ||
         String(currentMember.password_hash) !== String(member.password_hash) ||
         Number(currentMember.auth_version) !== Number(member.auth_version)) {
-      appendMemberLoginLogLocked_(member.member_id, normalized, ip, false, 'Failure', 'CREDENTIALS_CHANGED', agent, new Date().toISOString());
+      appendMemberLoginLogLocked_(member.member_id, normalized, '', false, 'Failure', 'CREDENTIALS_CHANGED', agent, new Date().toISOString());
       throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
     }
 
     resetAccountFailureLocked_('MEMBER_ACCOUNT', normalized);
     const now = new Date();
     const nowIso = now.toISOString();
-    const isNewIp = !currentMember.last_login_ip || String(currentMember.last_login_ip) !== ip;
-    const rawToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
+        const rawToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
     const expiresAt = new Date(now.getTime() + NOBI.SESSION_MAX_LIFETIME_MS).toISOString();
     repositoryInsertLocked_('member_sessions', {
       session_id:Utilities.getUuid(),
@@ -251,14 +249,14 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
       expires_at:expiresAt,
       last_seen_at:nowIso,
       revoked_at:'',
-      created_ip:ip
+      created_ip:''
     });
     repositoryUpdateLocked_('members', currentMember.member_id, {
-      last_login_ip:ip,
+      last_login_ip:'',
       last_login_at:nowIso,
       updated_at:nowIso
     });
-    appendMemberLoginLogLocked_(currentMember.member_id, normalized, ip, isNewIp, 'Success', '', agent, nowIso);
+    appendMemberLoginLogLocked_(currentMember.member_id, normalized, '', false, 'Success', '', agent, nowIso);
     return {
       ok:true,
       token:rawToken,
@@ -330,8 +328,8 @@ function appendMemberLoginLogLocked_(memberId, loginId, ip, isNewIp, result, rea
     log_id:Utilities.getUuid(),
     member_id:memberId,
     login_id_normalized:loginId,
-    ip_address:ip,
-    is_new_ip:Boolean(isNewIp),
+    ip_address:'',
+    is_new_ip:false,
     login_result:result,
     failure_reason_code:reason,
     user_agent:userAgent,
@@ -430,7 +428,7 @@ function adminChangePassword(token, currentPassword, newPassword, ipAddress) {
     appendAdminAuditLogLocked_({
       audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
       action:'ADMIN_PASSWORD_CHANGED', target_type:'admin',
-      target_id:admin.admin_id, request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
+      target_id:admin.admin_id, request_id:'', ip_address:'',
       details_json:'{}', created_at:now
     });
     return {ok:true, message:'เปลี่ยนรหัสผ่านแล้ว กรุณาเข้าสู่ระบบใหม่'};
