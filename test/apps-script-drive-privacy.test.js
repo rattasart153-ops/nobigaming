@@ -192,3 +192,22 @@ test('private Drive file validator fails closed when folder sharing metadata is 
     context.DriveApp.getFolderById = original;
   }
 });
+
+test('Admin media upload rejects invalid Base64 image signatures before creating a Drive file',()=>{
+  const {context,state}=makeAdminMediaHarness();
+  const jpegBytes=Buffer.from([0xff,0xd8,0xff,0x00,0x01]);
+  assert.throws(()=>context.adminStoreMedia('admin-token',{
+    mimeType:'image/png',base64:jpegBytes.toString('base64')
+  }),/ไฟล์ภาพไม่ถูกต้องหรือมีขนาดเกิน 3 MB/);
+  assert.equal(state.files.length,0,'invalid image bytes must never reach Drive');
+});
+
+test('Admin media upload rejects decoded payloads larger than 3 MiB before creating a Drive file',()=>{
+  const {context,state}=makeAdminMediaHarness();
+  const pngHeader=Buffer.from([137,80,78,71,13,10,26,10]);
+  const oversized=Buffer.concat([pngHeader,Buffer.alloc(3*1024*1024)]);
+  assert.throws(()=>context.adminStoreMedia('admin-token',{
+    mimeType:'image/png',base64:oversized.toString('base64')
+  }),/ไฟล์ภาพไม่ถูกต้องหรือมีขนาดเกิน 3 MB/);
+  assert.equal(state.files.length,0,'oversized decoded bytes must never reach Drive');
+});
