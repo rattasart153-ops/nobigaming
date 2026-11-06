@@ -28,11 +28,17 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - Review HtmlService constraints and secure session/file-transfer patterns.
 - Produce a file-by-file port matrix. No business-logic changes.
 
-### P1 — Apps Script web facade
-- [x] Add doGet routing and HtmlService templates for storefront/Admin (P0-R11 source implementation).
-- [x] Add explicit allowlisted server functions; no generic browser action/table dispatcher (P0-R12 source implementation).
-- Use success/failure handlers and validate/authorize every call server-side.
-- Keep secrets in Script Properties.
+### P1 — Apps Script facade, Schema and Repository migration
+- [x] Add doGet routing and HtmlService templates for storefront/Admin (P0-R11).
+- [x] Add explicit allowlisted server functions; no generic browser action/table dispatcher (P0-R12).
+- [x] Align business logic with the current versioned Sheets schema (current schema version: 3; do not downgrade to v1).
+- [x] Migrate Catalog/Packages, Admin CRUD, Coupon, Order, Authentication and Session reads/writes to schema-aware repository functions.
+- [x] Validate partial Admin updates against the merged record; preserve existing private media references when image_url is omitted.
+- [x] Route Admin delete and 90-day authentication/audit log pruning through repository delete functions.
+- [x] Fail closed on malformed coupon spend thresholds/history, invalid payment deadlines and invalid idempotency expiry metadata.
+- [x] Add regression coverage for Catalog, Admin CRUD, coupon/order edge cases, authentication retention and repository-only writes.
+- [x] Validate and authorize browser calls server-side; secrets remain in Script Properties.
+- [ ] Verify real Sheets behavior, quotas and LockService concurrency after separate P6 authorization.
 
 ### P2 — Frontend adapter
 - [x] Replace HtmlService Storefront/Admin REST transport with named google.script.run facade calls (P0-R13).
@@ -63,9 +69,9 @@ Guest checkout; ASCII Member Login ID 4–30; public/member-only/member-game-spe
 
 ## Current facts
 
-- GAS source includes Schema v1 setup/repository primitives, business handlers, auth/session logic, coupon/order workflows, private Drive helpers and signed HTTP gateway.
+- GAS source includes versioned Schema v3 setup/repository primitives, migrated business handlers, auth/session logic, coupon/order workflows, private Drive helpers and the legacy signed HTTP gateway.
 - Signed gateway remains for legacy characterization only; `BrowserFacade.gs` exposes named typed `google.script.run` functions.
-- HtmlService router, templates, typed facade adapters, memory-only session lifecycle, bounded file transfer and local QR rendering are implemented at source level. CI passed 116/116 on final run 42165709874 (commit 1df56ef3a1fd25133eea69be5056b9c8f3791a73). This does not prove live GAS/Sheets/Drive or browser/device behavior.
+- HtmlService router, templates, typed facade adapters, memory-only session lifecycle, bounded file transfer and local QR rendering are implemented at source level. After P1 source migration, CI run 42169477217 (commit 1162c96c0df44558df83e5ff2c92482c10493d5c) passed 126/126 tests. This does not prove live GAS/Sheets/Drive or browser/device behavior.
 - Apps Script runtime, quotas, concurrency and Drive ACLs are unverified.
 - No live Google resources have been initialized; no web app deployed.
 
@@ -74,5 +80,6 @@ Guest checkout; ASCII Member Login ID 4–30; public/member-only/member-game-spe
 
 - P0-R11/R12: HtmlService router and typed browser facade implemented.
 - P0-R13: Storefront/Admin frontend adapter, memory-only tokens encapsulated in adapter closures, refresh-to-login behavior, Base64 file transfer and local PromptPay QR renderer implemented.
-- CI: GitHub Actions run 42166229765 passed **116/116** tests on vercel-drive-setup (final commit 0bbd5a333bdab94a8da915cb5624ada0608d4dcf).
+- P1 / Phase 2.1: Schema v3 and repository migration completed for Catalog/Packages, Admin CRUD, Coupons, Orders, Authentication and Session. Admin partial updates preserve omitted fields/media; log retention deletes use repositories; malformed spend/deadline/idempotency data fails closed.
+- CI: GitHub Actions run 42169477217 passed **126/126** tests on vercel-drive-setup (commit 1162c96c0df44558df83e5ff2c92482c10493d5c).
 - Remaining: real Apps Script runtime/quotas, Sheets/LockService concurrency, PBKDF2 latency, Drive ACLs, browser/device E2E and actual QR scanning. These require a separately authorized synthetic test environment. No Google resources or deployment are authorized by this status update.
