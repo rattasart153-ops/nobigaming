@@ -10,7 +10,7 @@ const headers = {
   members:['member_id','registered_ip','last_login_ip','created_at','last_login_at'],
   member_sessions:['session_id','created_ip','created_at'],
   admin_sessions:['session_id','created_ip','created_at'],
-  member_login_logs:['log_id','ip_address','created_at'],
+  member_login_logs:['log_id','ip_address','is_new_ip','created_at'],
   admin_audit_logs:['audit_id','ip_address','created_at']
 };
 
@@ -54,12 +54,12 @@ function makeRetentionHarness() {
       {session_id:'admin-session-new',created_ip:'198.51.100.5',created_at:'2026-11-01T00:00:00.000Z'}
     ]),
     member_login_logs:new FakeSheet('member_login_logs',[
-      {log_id:'member-log-old',ip_address:'192.0.2.1',created_at:'2026-08-01T00:00:00.000Z'},
-      {log_id:'member-log-new-a',ip_address:'192.0.2.2',created_at:'2026-11-01T00:00:00.000Z'},
-      {log_id:'member-log-boundary',ip_address:'192.0.2.3',created_at:cutoff},
-      {log_id:'member-log-new-b',ip_address:'192.0.2.4',created_at:'2026-11-02T00:00:00.000Z'},
-      {log_id:'member-log-invalid',ip_address:'192.0.2.5',created_at:'invalid'},
-      {log_id:'member-log-new-c',ip_address:'192.0.2.6',created_at:'2026-11-03T00:00:00.000Z'}
+      {log_id:'member-log-old',ip_address:'192.0.2.1',is_new_ip:true,created_at:'2026-08-01T00:00:00.000Z'},
+      {log_id:'member-log-new-a',ip_address:'192.0.2.2',is_new_ip:true,created_at:'2026-11-01T00:00:00.000Z'},
+      {log_id:'member-log-boundary',ip_address:'192.0.2.3',is_new_ip:true,created_at:cutoff},
+      {log_id:'member-log-new-b',ip_address:'192.0.2.4',is_new_ip:true,created_at:'2026-11-02T00:00:00.000Z'},
+      {log_id:'member-log-invalid',ip_address:'192.0.2.5',is_new_ip:true,created_at:'invalid'},
+      {log_id:'member-log-new-c',ip_address:'192.0.2.6',is_new_ip:true,created_at:'2026-11-03T00:00:00.000Z'}
     ]),
     admin_audit_logs:new FakeSheet('admin_audit_logs',[
       {audit_id:'admin-log-old',ip_address:'192.0.2.5',created_at:'2026-08-01T00:00:00.000Z'},
@@ -76,7 +76,7 @@ function makeRetentionHarness() {
       members:['member_id','registered_ip','last_login_ip','created_at','last_login_at'],
       member_sessions:['session_id','created_ip','created_at'],
       admin_sessions:['session_id','created_ip','created_at'],
-      member_login_logs:['log_id','ip_address','created_at'],
+      member_login_logs:['log_id','ip_address','is_new_ip','created_at'],
       admin_audit_logs:['audit_id','ip_address','created_at']
     }},
     LockService:{getScriptLock:()=>({waitLock(){lockAcquisitions++;},releaseLock(){lockReleases++;}})},
@@ -102,29 +102,24 @@ function makeRetentionHarness() {
   return {context,sheets,triggers,get triggerCreates(){return triggerCreates;},get lockAcquisitions(){return lockAcquisitions;},get lockReleases(){return lockReleases;},now,cutoff};
 }
 
-test('90-day cleanup clears aged member and session IP fields and removes expired IP-history rows',()=>{
+test('retention immediately clears all legacy Member IP fields while preserving 90-day security events',()=>{
   const {context,sheets,now,cutoff}=makeRetentionHarness();
   const result=context.runNobiRetentionCleanupLocked_(now);
   assert.equal(result.cutoff_at,cutoff);
-  const members=sheets.members.records();
-  assert.equal(members.find(x=>x.member_id==='member-old').registered_ip,'');
-  assert.equal(members.find(x=>x.member_id==='member-old').last_login_ip,'');
-  assert.equal(members.find(x=>x.member_id==='member-boundary').registered_ip,'');
-  assert.equal(members.find(x=>x.member_id==='member-boundary').last_login_ip,'');
-  assert.equal(members.find(x=>x.member_id==='member-recent').last_login_ip,'203.0.113.6');
-  assert.equal(members.find(x=>x.member_id==='member-invalid').registered_ip,'');
-  assert.equal(members.find(x=>x.member_id==='member-invalid').last_login_ip,'');
-
-  const memberSessions=sheets.member_sessions.records();
-  assert.equal(memberSessions.find(x=>x.session_id==='member-session-old').created_ip,'');
-  assert.equal(memberSessions.find(x=>x.session_id==='member-session-invalid').created_ip,'');
-  assert.equal(memberSessions.find(x=>x.session_id==='member-session-new').created_ip,'198.51.100.2');
-  assert.equal(sheets.admin_sessions.records().find(x=>x.session_id==='admin-session-old').created_ip,'');
-
+  assert.ok(sheets.members.records().every(x=>!x.registered_ip&&!x.last_login_ip));
+  assert.ok(sheets.member_sessions.records().every(x=>!x.created_ip));
+  assert.ok(sheets.admin_sessions.records().every(x=>!x.created_ip));
+  assert.ok(sheets.member_login_logs.records().every(x=>!x.ip_address&&x.is_new_ip===false));
+  assert.ok(sheets.admin_audit_logs.records().every(x=>!x.ip_address));
   assert.deepEqual(sheets.member_login_logs.records().map(x=>x.log_id),['member-log-new-a','member-log-new-b','member-log-new-c']);
   assert.deepEqual(sheets.admin_audit_logs.records().map(x=>x.audit_id),[]);
   assert.equal(result.member_login_logs_deleted,3);
   assert.equal(result.admin_audit_logs_deleted,2);
+  assert.equal(result.member_fields_cleared,8);
+  assert.equal(result.member_session_fields_cleared,3);
+  assert.equal(result.member_login_ip_fields_cleared,12);
+  assert.equal(result.admin_session_ip_fields_cleared,2);
+  assert.equal(result.admin_audit_ip_fields_cleared,2);
 });
 
 test('retention cleanup acquires the shared ScriptLock before touching IP-bearing sheets',()=>{
