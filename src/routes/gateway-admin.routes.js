@@ -196,7 +196,9 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     }));
     router.put('/api/admin/' + table + '/:id', requireAdmin, asyncRoute(async (req, res) => {
       const record = toSchemaRecord(table, req.body || {}, String(req.params.id));
-      const result = await client.call('adminUpsert', {token:req.adminToken, tableName:table, record});
+      const result = await client.call('adminUpsert', {
+        token:req.adminToken, tableName:table, record, ipAddress:String(req.ip || '')
+      });
       return res.json(result);
     }));
     router.delete('/api/admin/' + table + '/:id', requireAdmin, asyncRoute(async (req, res) => {
