@@ -22,7 +22,7 @@ Vercel, Neon, PostgreSQL hosting and Vercel Blob are not part of this architectu
 
 ## Verification status and limitations
 
-- Latest documented source CI: GitHub Actions run [42169638381](https://github.com/rattasart-ops/nobigaming/actions/runs/42169638381) completed successfully with 126/126 tests on the documentation commit. The P2 frontend adapter test run [42166229765](https://github.com/rattasart-ops/nobigaming/actions/runs/42166229765) completed successfully with 116/116 tests.
+- Latest documented source CI: GitHub Actions run [42169638381](https://github.com/rattasart153-ops/nobigaming/actions/runs/42169638381) completed successfully with 126/126 tests on the documentation commit. The P2 frontend adapter test run [42166229765](https://github.com/rattasart-ops/nobigaming/actions/runs/42166229765) completed successfully with 116/116 tests.
 - These are Node/VM and static contract tests. They do not prove real Apps Script execution, actual Sheets/LockService behavior, Drive ACL enforcement, real QR scanning, or browser/device end-to-end behavior.
 - No Apps Script project, spreadsheet or Drive folders have been created or initialized for this migration. No deployment, Admin bootstrap, live payment or production order has been performed.
 
