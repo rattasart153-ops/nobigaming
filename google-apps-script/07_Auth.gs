@@ -194,7 +194,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
   const login = String(loginId || '').trim();
   const normalized = login.toLowerCase();
   const pass = String(password || '');
-    const agent = String(userAgent || '').slice(0, 300);
+  const agent = String(userAgent || '').slice(0, 300);
   if (!login || !pass) throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
   consumeLoginAttempt_('MEMBER_LOGIN_ATTEMPT', normalized, 10);
   try {
@@ -238,7 +238,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
     resetAccountFailureLocked_('MEMBER_ACCOUNT', normalized);
     const now = new Date();
     const nowIso = now.toISOString();
-        const rawToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
+    const rawToken = Utilities.getUuid() + '.' + Utilities.getUuid() + '.' + Utilities.getUuid();
     const expiresAt = new Date(now.getTime() + NOBI.SESSION_MAX_LIFETIME_MS).toISOString();
     repositoryInsertLocked_('member_sessions', {
       session_id:Utilities.getUuid(),
