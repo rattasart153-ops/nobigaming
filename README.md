@@ -36,7 +36,7 @@ Source มี GAS Schema v1, repositories, business handlers, private Drive help
 - ออเดอร์ปกติหรือคูปองไม่มีวันหมดอายุ: 15 นาที; คูปองมีวันหมดอายุ: ถึงสิ้นวันหมดอายุ Asia/Bangkok
 - Server คำนวณราคา ส่วนลด ยอดชำระ และ deadline; สลิปที่ส่งทันเวลาตรวจภายหลังได้
 - Sessions สูงสุด 8 ชั่วโมง, idle timeout 30 นาที; revoke เมื่อ logout/password change/suspension
-- Admin-only IP history; retention 90 วันแล้วลบหรือ anonymize
+- ไม่มีการเก็บหรือแสดง Member IP history ตามการตัดสินใจ B; เก็บประวัติ Login/Security ที่ไม่รวม IP เป็นเวลา 90 วัน
 - สลิปและรูปภาพเป็น Private; สลิปอ่านได้เฉพาะ Admin; ตรวจสลิปด้วยคน
 
 ## ข้อจำกัด
