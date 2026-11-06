@@ -359,7 +359,7 @@ The browser facade must expose named, typed operations rather than accepting arb
 
 ### Session and file-transfer behavior
 
-- Member and Admin opaque session tokens are held only in page JavaScript memory. No authentication token is written to localStorage or sessionStorage; after refresh the page starts unauthenticated and the user must log in again. The server continues to enforce 8-hour maximum lifetime, 30-minute idle timeout, revocation and account status.
+- Member and Admin opaque session tokens are held only in private adapter closures in page JavaScript memory, not exposed as global token identifiers. No authentication token is written to localStorage or sessionStorage; after refresh the page starts unauthenticated and the user must log in again. The server continues to enforce 8-hour maximum lifetime, 30-minute idle timeout, revocation and account status.
 - The order-scoped checkout upload capability is also memory-only. The non-secret order idempotency key/fingerprint may remain in sessionStorage to support retry; the checkout token itself is never persisted. After refresh, the same order attempt must be recreated with the same details (and re-login if it belonged to a Member) to recover the server-issued upload capability.
 - Storefront slip upload, Admin media upload and Admin slip retrieval use bounded Base64 payloads through named facade methods. PNG/JPEG/WebP and the existing 3 MiB file limit are preserved. Drive access validation remains in Apps Script and no Drive URL is exposed as a public file link.
 - Catalog/promotion images are delivered only when referenced by an active package/promotion and pass the existing private Drive checks; the HtmlService client receives a data URL rather than a Drive sharing URL.
@@ -372,6 +372,6 @@ The browser facade must expose named, typed operations rather than accepting arb
 
 ### Validation and remaining gates
 
-- GitHub Actions run 42165167680 on commit 23ec0cf0b36cbec819cf75314409d8aba09ceca9 completed successfully: **116 tests passed, 0 failed**. This includes inline-script parsing, named-facade transport assertions, memory-only token checks, HtmlService routing/template checks and local QR asset syntax/license checks.
+- GitHub Actions run 42165709874 on final adapter-closure commit 1df56ef3a1fd25133eea69be5056b9c8f3791a73 completed successfully: **116 tests passed, 0 failed**. This includes inline-script parsing, named-facade transport assertions, memory-only token checks, HtmlService routing/template checks and local QR asset syntax/license checks.
 - This is Node/VM CI, not a live browser or real Google runtime test. P3/P4/P5 still require a separately authorized synthetic Apps Script/Sheets/Drive environment for LockService/Sheets concurrency, PBKDF2 execution time, real Drive ACLs, upload/download quotas, real QR scanning, and browser/device workflows.
 - No Google resources, Script Properties, Admin bootstrap, deployment, billing, paid service, production data or live payment was used. Only vercel-drive-setup was modified; main remains unchanged.
