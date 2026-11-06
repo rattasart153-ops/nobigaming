@@ -20,9 +20,10 @@ vm.runInContext(
   { filename: '08_Admin.gs' }
 );
 
-function driveFile(parentIds) {
+function driveFile(parentIds, sharingAccess = 'PRIVATE') {
   let index = 0;
   return {
+    getSharingAccess: () => sharingAccess,
     getParents() {
       return {
         hasNext: () => index < parentIds.length,
@@ -56,5 +57,25 @@ test('private Drive file validator fails closed for missing folder, shared folde
   assert.throws(
     () => context.assertDriveFileInPrivateFolder_(driveFile(['shared-folder']), 'shared-folder'),
     /DRIVE_FOLDER_NOT_PRIVATE/
+  );
+});
+
+
+test('private Drive file validator fails closed when file sharing metadata is unavailable', () => {
+  const unsupported = {getParents: () => ({hasNext: () => false, next: () => null})};
+  assert.throws(
+    () => context.assertDriveFileInPrivateFolder_(unsupported, 'private-folder'),
+    /DRIVE_FOLDER_INVALID/
+  );
+});
+
+test('private Drive file validator rejects files shared beyond private access', () => {
+  assert.throws(
+    () => context.assertDriveFileInPrivateFolder_(driveFile(['private-folder'], 'ANYONE'), 'private-folder'),
+    /DRIVE_FILE_NOT_PRIVATE/
+  );
+  assert.throws(
+    () => context.assertDriveFileInPrivateFolder_(driveFile(['private-folder'], 'DOMAIN'), 'private-folder'),
+    /DRIVE_FILE_NOT_PRIVATE/
   );
 });
