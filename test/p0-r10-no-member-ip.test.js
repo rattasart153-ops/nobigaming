@@ -53,9 +53,13 @@ test('Admin member APIs never return Member IP fields or IP history', () => {
   assert.doesNotMatch(logs, /ip_address|is_new_ip|\.map\(clean_\)/);
 });
 
-test('Admin UI removes IP history navigation and columns', () => {
-  assert.doesNotMatch(ui, /data-tab="member-logs"|ประวัติ IP|IP สมัคร|IP ล่าสุด|IP Address|IP ใหม่|member-login-logs/);
-  assert.match(ui, /function renderMembers\(\)/);
+test('Admin UI preserves login history without exposing IP history', () => {
+  assert.match(ui, /data-tab="member-logs">🛡️ ประวัติล็อกอิน/);
+  assert.match(ui, /member-login-logs\?limit=500/);
+  assert.match(ui, /function renderMemberLogs\(\)/);
+  assert.doesNotMatch(ui, /ประวัติ IP|IP สมัคร|IP ล่าสุด|IP Address|IP ใหม่/);
+  const logRenderer = section(ui, 'function renderMemberLogs()', 'function renderOrders()');
+  assert.doesNotMatch(logRenderer, /ip_address|is_new_ip/);
 });
 
 test('Rate limiting uses account-scoped HMAC buckets, not claimed source IP', () => {
