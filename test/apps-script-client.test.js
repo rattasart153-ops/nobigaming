@@ -115,7 +115,8 @@ test('all Apps Script modules parse and define unique top-level functions', () =
   for (const file of files) {
     const source = fs.readFileSync(path.join(gasDir, file), 'utf8');
     assert.doesNotThrow(() => new vm.Script(source, { filename: file }), file + ' must parse as JavaScript');
-    assert.equal(/\bHtmlService\b|google\.script\.run/.test(source), false, file + ' must not contain browser HtmlService/RPC dependencies');
+    assert.equal(/\bHtmlService\b/.test(source), file === 'Code.gs', file + ' may use HtmlService only in Code.gs');
+    assert.equal(/google\.script\.run/.test(source), false, file + ' must not contain client RPC code');
     assert.equal(/\bfunction\s+rpc\s*\(/.test(source), false, file + ' must not define legacy rpc()');
     for (const match of source.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/g)) {
       const name = match[1];
