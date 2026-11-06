@@ -173,7 +173,7 @@ test('slip upload checks the server deadline and prevents a second upload', () =
     request_key:'request-key-00000005',game_id:'game-1',package_id:'pack-1',
     player_id:'uid-123',server_id:'',coupon_code:''
   });
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   const submitted=context.submitOrderSlip({
     order_id:order.order.order_id,
     checkout_token:order.checkout_token,
@@ -198,7 +198,7 @@ test('slip upload preserves the Drive file when the order write committed but it
     request_key:'request-key-slip-commit-loss-0001',game_id:'game-1',package_id:'pack-1',
     player_id:'uid-slip-commit-loss',server_id:'',coupon_code:''
   });
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   const payload={
     order_id:created.order.order_id,
     checkout_token:created.checkout_token,
@@ -336,7 +336,7 @@ test('slip upload fails closed when the configured Drive folder is shared',()=>{
     player_id:'uid-123',server_id:'',coupon_code:''
   });
   setFolderAccess('ANYONE');
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   assert.throws(()=>context.submitOrderSlip({
     order_id:order.order.order_id,
     checkout_token:order.checkout_token,
@@ -355,7 +355,7 @@ test('slip upload fails closed and trashes a file whose sharing access is not pr
     player_id:'uid-123',server_id:'',coupon_code:''
   });
   setFileAccess('ANYONE');
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   assert.throws(()=>context.submitOrderSlip({
     order_id:order.order.order_id,
     checkout_token:order.checkout_token,
@@ -374,7 +374,7 @@ test('slip upload fails closed when Drive cannot verify file sharing metadata',(
     player_id:'uid-123',server_id:'',coupon_code:''
   });
   setFileMetadataAvailable(false);
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   assert.throws(()=>context.submitOrderSlip({
     order_id:order.order.order_id,
     checkout_token:order.checkout_token,
@@ -392,7 +392,7 @@ test('slip upload rejects a file stored outside the configured private folder',(
     player_id:'uid-123',server_id:'',coupon_code:''
   });
   setFileParent('unexpected-folder');
-  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
   assert.throws(()=>context.submitOrderSlip({
     order_id:order.order.order_id,
     checkout_token:order.checkout_token,
