@@ -55,7 +55,7 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - [x] Add offline lock-lifecycle regression tests: repository writes request the 15-second ScriptLock wait, release after success and validation failure, and fail closed without writing when lock acquisition times out.
 - [x] Add offline synthetic media-upload regressions: reject mismatched image signatures, truncated images and decoded payloads above 3 MiB before any Drive file is created; verify private ACL enforcement and cleanup after audit failure.
 - [x] Strengthen server-side image-container checks: PNG chunk boundaries and CRC-32, JPEG marker/segment bounds and terminal EOI, and WebP RIFF/chunk lengths; use a valid PNG fixture and reject truncated/corrupted payloads.
-- Latest offline regression CI: [run 42201935731](https://github.com/rattasart153-ops/nobigaming/actions/runs/42201935731) passed **135/135** tests on commit `6ae8bb9f361dae438be2dd1a426143ce31822c7f`.
+- Latest P3 offline regression CI before P4 changes: [run 42202070008](https://github.com/rattasart153-ops/nobigaming/actions/runs/42202070008) passed **135/135** tests on commit `8df69f67da31dbcdf63e7dd484a44602fa3d49d9`.
 - [x] Retain the PBKDF2-SHA256 reference-vector test to verify the 120,000-iteration implementation has not been weakened or changed.
 - [ ] Benchmark PBKDF2 latency on the actual Apps Script V8 runtime; Node/VM timings are not a substitute.
 - [ ] Measure real Sheets read/write latency and LockService contention under concurrent synthetic requests.
@@ -66,8 +66,13 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - Runtime measurements and Google resource checks remain unavailable until Google sign-in is restored; no Apps Script project, spreadsheet, Drive folder or deployment has been created. User elected to continue offline-safe P3 work in the meantime.
 
 ### P4 — Security and business rules
-- Verify session expiry/revocation, Admin-only slip access, no Member IP collection, audit retention, coupon reservations, deadlines, idempotency and recovery.
-- Test quota exhaustion and lock timeout fail-closed behavior.
+- [x] Add offline session regressions for Admin/Member absolute expiry, the 30-minute idle boundary, malformed timestamps, auth-version invalidation, logout revocation and no last-seen refresh after rejection.
+- [x] Add offline Admin slip-access regressions proving authentication precedes Drive reads, files/folders must remain private, and failed audit writes do not return slip bytes.
+- [x] Add offline repository quota-exhaustion regressions for Sheets read and append failures; verify no business row is written and ScriptLock is released.
+- [x] Existing order workflow regressions cover coupon reservation/release/consume, Bangkok expiry deadlines, one-time slip submission, idempotency payload conflicts, recovery replay and lock-protected writes.
+- [x] Existing retention regressions cover immediate legacy IP clearing, 90-day non-IP security event retention, Bangkok daily trigger idempotency and retry after partial cleanup failure.
+- [ ] Run and inspect the complete P4 regression CI after these additions; do not mark P4 complete until it passes.
+- [ ] Verify real Apps Script quota exhaustion, concurrent session revocation/slip access, actual Drive ACLs and ScriptLock contention in an explicitly authorized synthetic Google runtime. Offline mocks cannot establish these runtime properties.
 
 ### P5 — Browser/device tests
 - Guest, Member, Admin, coupon, checkout, slip, order status and Admin CRUD on synthetic data only.
@@ -95,3 +100,4 @@ Guest checkout; ASCII Member Login ID 4–30; public/member-only/member-game-spe
 - P1 / Phase 2.1: Schema v3 and repository migration completed for Catalog/Packages, Admin CRUD, Coupons, Orders, Authentication and Session. Admin partial updates preserve omitted fields/media; log retention deletes use repositories; malformed spend/deadline/idempotency data fails closed.
 - CI: GitHub Actions run 42169477217 passed **126/126** tests on vercel-drive-setup (commit 1162c96c0df44558df83e5ff2c92482c10493d5c).
 - Remaining: real Apps Script runtime/quotas, Sheets/LockService concurrency, PBKDF2 latency, Drive ACLs, browser/device E2E and actual QR scanning. These require a separately authorized synthetic test environment. No Google resources or deployment are authorized by this status update.
+\n\n## P4 offline implementation status — 2026-11-06\n\n- P4 source-level regression coverage has been expanded on `vercel-drive-setup` for session lifetime/revocation, Admin-only private slip delivery, audit-gated slip responses and fail-closed Sheets quota exceptions.\n- Coupon/order/recovery and retention behaviors continue to be covered by the existing offline regression suites; no business-rule or architecture change was introduced by this test-only P4 increment.\n- The new P4 tests are pending a complete GitHub Actions run. No Apps Script runtime, Google resources, deployment, real customer data or payment flow was used.\n
