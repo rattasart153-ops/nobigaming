@@ -87,9 +87,31 @@ test('slip and media facade enforce bounded image payloads and strict nested fie
     slip: { mimeType: 'image/png', base64: 'x', ipAddress: 'forged' }
   }), /ฟิลด์ที่ไม่อนุญาต/);
   assert.throws(() => context.nobiUploadAdminMedia({
-    token: 'admin-token', media: { mimeType: 'image/png', base64: 'x'.repeat(4200001) }
+    token: 'admin-token', media: { mimeType: 'image/png', base64: 'x'.repeat(4194305) }
   }), /ขนาดเกินกำหนด/);
   assert.equal(calls.length, 1, 'invalid image payloads must not reach business handlers');
+});
+
+test('slip and media payloads enforce the exact 3 MiB base64 boundary', () => {
+  const { context, calls } = loadFacade();
+  const maxBase64Length = 4194304;
+  const atLimit = 'x'.repeat(maxBase64Length);
+  context.nobiSubmitOrderSlip({
+    orderId: 'order-limit', checkoutToken: 'checkout-token',
+    slip: { mimeType: 'image/png', base64: atLimit }
+  });
+  context.nobiUploadAdminMedia({
+    token: 'admin-token', media: { mimeType: 'image/png', base64: atLimit }
+  });
+  assert.equal(calls.length, 2, 'exact 3 MiB encoded boundary must be accepted');
+  assert.throws(() => context.nobiSubmitOrderSlip({
+    orderId: 'order-over', checkoutToken: 'checkout-token',
+    slip: { mimeType: 'image/png', base64: atLimit + 'x' }
+  }), /ขนาดเกินกำหนด/);
+  assert.throws(() => context.nobiUploadAdminMedia({
+    token: 'admin-token', media: { mimeType: 'image/png', base64: atLimit + 'x' }
+  }), /ขนาดเกินกำหนด/);
+  assert.equal(calls.length, 2, 'over-limit payloads must not reach business handlers');
 });
 
 test('Admin facade accepts no browser-supplied IP and keeps CRUD table names explicit', () => {
