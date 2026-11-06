@@ -39,7 +39,8 @@ Vercel, Neon, PostgreSQL hosting and Vercel Blob are not part of this architectu
 
 ## Privacy requirements
 
-- Drive folders and files must remain Restricted / Private.
+- Drive folders and files must remain Restricted / Private, with no explicit non-owner editors or viewers.
+- Verify both broad sharing mode and explicit `getEditors()` / `getViewers()` lists; fail closed if ACL metadata cannot be inspected.
 - Never share slips or media as Anyone / Anyone with link.
 - Slips are readable only by an authenticated Admin.
 - Storefront media must be delivered only after checking a valid active catalog/promotion reference.
