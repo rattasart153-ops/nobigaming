@@ -10,7 +10,9 @@ const context = vm.createContext({
   DriveApp: {
     Access: { PRIVATE: 'PRIVATE' },
     getFolderById: id => ({
-      getSharingAccess: () => id === 'shared-folder' ? 'ANYONE' : 'PRIVATE'
+      getSharingAccess: () => id === 'shared-folder' ? 'ANYONE' : 'PRIVATE',
+      getEditors: () => [],
+      getViewers: () => []
     })
   }
 });
@@ -20,10 +22,12 @@ vm.runInContext(
   { filename: '08_Admin.gs' }
 );
 
-function driveFile(parentIds, sharingAccess = 'PRIVATE') {
+function driveFile(parentIds, sharingAccess = 'PRIVATE', shares = {}) {
   let index = 0;
   return {
     getSharingAccess: () => sharingAccess,
+    getEditors: () => shares.editors || [],
+    getViewers: () => shares.viewers || [],
     getParents() {
       return {
         hasNext: () => index < parentIds.length,
@@ -42,6 +46,41 @@ test('private Drive file validator accepts files only in the configured folder',
   assert.throws(
     () => context.assertDriveFileInPrivateFolder_(driveFile([]), 'private-folder'),
     /DRIVE_FILE_OUTSIDE_PRIVATE_FOLDER/
+  );
+});
+
+test('private Drive validator rejects explicit file viewers and editors even when sharing access is PRIVATE', () => {
+  assert.throws(
+    () => context.assertDriveFileInPrivateFolder_(driveFile(['private-folder'], 'PRIVATE', {viewers:[{email:'viewer@example.test'}]}), 'private-folder'),
+    /DRIVE_RESOURCE_HAS_EXPLICIT_SHARES/
+  );
+  assert.throws(
+    () => context.assertDriveFileInPrivateFolder_(driveFile(['private-folder'], 'PRIVATE', {editors:[{email:'editor@example.test'}]}), 'private-folder'),
+    /DRIVE_RESOURCE_HAS_EXPLICIT_SHARES/
+  );
+});
+
+test('private Drive validator rejects explicit folder shares and unverifiable ACL metadata', () => {
+  const sharedFolder = context.DriveApp.getFolderById;
+  context.DriveApp.getFolderById = () => ({
+    getSharingAccess:()=> 'PRIVATE',
+    getEditors:()=>[],
+    getViewers:()=>[{email:'viewer@example.test'}]
+  });
+  try {
+    assert.throws(
+      () => context.assertDriveFileInPrivateFolder_(driveFile(['private-folder']), 'private-folder'),
+      /DRIVE_RESOURCE_HAS_EXPLICIT_SHARES/
+    );
+  } finally {
+    context.DriveApp.getFolderById = sharedFolder;
+  }
+  assert.throws(
+    () => context.assertDriveFileInPrivateFolder_({
+      getSharingAccess:()=> 'PRIVATE',
+      getParents:()=>({hasNext:()=>false,next:()=>null})
+    }, 'private-folder'),
+    /DRIVE_ACL_UNVERIFIABLE/
   );
 });
 
@@ -85,6 +124,10 @@ function makeAdminMediaHarness(options = {}) {
   const state = {
     folderAccess:options.folderAccess || 'PRIVATE',
     fileAccess:options.fileAccess || 'PRIVATE',
+    folderEditors:options.folderEditors || [],
+    folderViewers:options.folderViewers || [],
+    fileEditors:options.fileEditors || [],
+    fileViewers:options.fileViewers || [],
     parentId:options.parentId || 'media-folder',
     auditFailure:Boolean(options.auditFailure),
     files:[]
@@ -96,6 +139,8 @@ function makeAdminMediaHarness(options = {}) {
       Permission:{VIEW:'VIEW'},
       getFolderById:()=>({
         getSharingAccess:()=>state.folderAccess,
+        getEditors:()=>state.folderEditors,
+        getViewers:()=>state.folderViewers,
         createFile:blob=>{
           const file={
             id:'media-file-'+(state.files.length+1),
@@ -103,6 +148,8 @@ function makeAdminMediaHarness(options = {}) {
             trashed:false,
             getId(){return this.id;},
             getSharingAccess:()=>state.fileAccess,
+            getEditors:()=>state.fileEditors,
+            getViewers:()=>state.fileViewers,
             getParents(){
               let consumed=false;
               return {hasNext:()=>!consumed,next:()=>{consumed=true;return {getId:()=>state.parentId};}};
@@ -264,7 +311,11 @@ function makeAdminSlipHarness(options = {}) {
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='NOBI_PRIVATE_DRIVE_FOLDER_ID'?'private-slip-folder':''})},
     DriveApp:{
       Access:{PRIVATE:'PRIVATE'},
-      getFolderById:()=>({getSharingAccess:()=>options.folderAccess || 'PRIVATE'}),
+      getFolderById:()=>({
+        getSharingAccess:()=>options.folderAccess || 'PRIVATE',
+        getEditors:()=>options.folderEditors || [],
+        getViewers:()=>options.folderViewers || []
+      }),
       getFileById:()=>{state.driveReads++;return file;}
     },
     LockService:{getScriptLock:()=>({waitLock(){state.lockWaits++;if(options.lockTimeout)throw new Error('LOCK_TIMEOUT');assert.equal(state.lockHeld,false);state.lockHeld=true;},releaseLock(){assert.equal(state.lockHeld,true);state.lockHeld=false;state.lockReleases++;}})},
