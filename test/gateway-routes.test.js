@@ -215,6 +215,7 @@ test('slip upload keeps a short receipt cookie for safe retry and clears it afte
 
 test('Admin CRUD updates forward the server-derived request IP for audit logging', async () => {
   const calls = [];
+  const root = fs.mkdtempSync(path.join(os.tmpdir(),'nobi-admin-ip-'));
   const client = {
     async call(action, args = {}) {
       calls.push({action, args});
@@ -230,7 +231,7 @@ test('Admin CRUD updates forward the server-derived request IP for audit logging
   const app = express();
   app.use(express.json({limit:'1mb'}));
   const gatewaySession = createGatewaySession(client);
-  const upload = createUpload(fs.mkdtempSync(path.join(os.tmpdir(),'nobi-admin-ip-')));
+  const upload = createUpload(root);
   app.use(createGatewayAdminRouter({
     client, requireAdmin:gatewaySession.requireAdmin,
     loginLimiter:(req,res,next)=>next(), upload, gatewaySession
@@ -260,8 +261,9 @@ test('Admin CRUD updates forward the server-derived request IP for audit logging
     assert.equal(upsert.args.token,'admin-secret-token');
     assert.equal(upsert.args.tableName,'games');
     assert.equal(upsert.args.record.game_id,'game-1');
-    assert.equal(upsert.args.ipAddress,'127.0.0.1');
+    assert.match(upsert.args.ipAddress,/^(?:127\\.0\\.0\\.1|::ffff:127\\.0\\.0\\.1)$/);
   } finally {
     await new Promise(resolve=>server.close(resolve));
+    fs.rmSync(root,{recursive:true,force:true});
   }
 });
