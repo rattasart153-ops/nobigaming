@@ -375,3 +375,31 @@ The browser facade must expose named, typed operations rather than accepting arb
 - GitHub Actions run 42166229765 on final frontend/media/security-test commit 0bbd5a333bdab94a8da915cb5624ada0608d4dcf completed successfully: **116 tests passed, 0 failed**. This includes inline-script parsing, named-facade transport assertions, memory-only token checks, HtmlService routing/template checks and local QR asset syntax/license checks.
 - This is Node/VM CI, not a live browser or real Google runtime test. P3/P4/P5 still require a separately authorized synthetic Apps Script/Sheets/Drive environment for LockService/Sheets concurrency, PBKDF2 execution time, real Drive ACLs, upload/download quotas, real QR scanning, and browser/device workflows.
 - No Google resources, Script Properties, Admin bootstrap, deployment, billing, paid service, production data or live payment was used. Only vercel-drive-setup was modified; main remains unchanged.
+
+
+## 15. P1 / Phase 2.1 — Schema and Repository migration — 2026-11-06
+
+### Scope and result
+
+Completed source-level migration on `vercel-drive-setup` using the existing versioned Sheets schema (current `NOBI.SCHEMA_VERSION = 3`). The earlier planning reference to Schema V1 means the original data model baseline; the implementation remains at v3 and must not be downgraded.
+
+- **Catalog / Packages:** public catalog and promotion reads use schema-aware repositories; active-game/package filtering, sort order, satang-to-baht conversion and private media proxy references are regression-tested.
+- **Admin CRUD:** all managed table operations use repository methods. Partial updates validate the merged post-update record, do not erase omitted fields, and preserve an existing private image reference when `image_url` is omitted. Admin delete delegates to `repositoryDeleteLocked_` rather than deleting a Sheet row directly.
+- **Coupons:** fixed discounts must be integer satang. Member-game-spend thresholds and qualifying Completed post-discount spend must be valid safe integers. UID cumulative spend remains scoped to game + player UID and includes Guest and Member Completed orders; malformed completed-spend values fail closed.
+- **Orders:** invalid Pending payment deadlines expire the order and release a Reserved coupon redemption. Existing idempotency records with invalid expiry metadata fail closed instead of being replayed indefinitely. Existing 15-minute normal-order and Bangkok end-of-expiry-day coupon deadlines remain unchanged.
+- **Authentication / Session:** Member login-log and Admin audit-log retention deletes now use repository delete methods. Session maximum lifetime, idle timeout, revocation, and no-Member-IP behavior remain unchanged.
+- **Repository regression guard:** schema tests now assert that Catalog, Coupons, Orders, Auth, Admin and shared Utilities do not mutate Sheets directly outside the repository layer.
+
+### Regression tests
+
+- Added `test/apps-script-catalog-admin.test.js` for Catalog filtering/mapping, promotion windows, partial Admin update/media preservation, create IDs and repository-backed deletion.
+- Expanded `test/apps-script-order-workflow.test.js` for malformed coupon thresholds/spend values, mixed Guest/Member UID cumulative spend, invalid Pending deadlines and invalid idempotency expiry.
+- Added `test/apps-script-auth-repository.test.js` for repository-only Member login-log and Admin audit-log retention.
+- Expanded `test/apps-script-schema.test.js` with a repository-only write guard.
+
+### CI and limits
+
+- GitHub Actions run **42169477217** on commit `1162c96c0df44558df83e5ff2c92482c10493d5c` completed successfully: **126 tests passed, 0 failed**.
+- This is Node/VM CI. It does not verify actual Google Sheets atomicity, Apps Script LockService contention, Apps Script quotas, PBKDF2 runtime or real Drive ACLs.
+- `02_Database.gs` schema initialization, `11_Repositories.gs` repository implementation and `14_Retention.gs` batched legacy-field cleanup retain their intentional direct Sheet operations. The legacy signed nonce gateway in `13_HttpGateway.gs` also retains its bounded optimized nonce-ledger path; it is not the HtmlService browser transport.
+- No Google resources, Script Properties, Admin bootstrap, deployment, billing, paid service, production data or live payment was used. `main` was not modified.
