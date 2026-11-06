@@ -107,7 +107,7 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 
 > **Coupon-rule clarification from prior approved decisions:** UID cumulative spend is based on Completed orders matching the same game and player UID, including Guest orders. The separate Member-game-spend threshold counts only Completed orders for that authenticated Member. Do not add a `member_id` requirement to UID spend; that would change the approved legacy UID rule. Existing test `UID cumulative spend coupon is enforced per game using Completed orders only` intentionally uses a Guest order.
 
-| P0-12 | Critical | Pure HtmlService + `google.script.run` does not expose a trusted client remote IP to the server-side function. The documented Web App event object exposes request parameters/body metadata, not a remote-IP field; `google.script.run` invokes named server functions asynchronously without forwarding a trusted network address. | Hard compatibility blocker: preserve the approved Admin-only Member IP-history requirement. Do not substitute a client-supplied IP and call it verified. A trusted IP-observing server/proxy would be needed, which may conflict with strict Zero Cost and the approved no-new-service boundary. Stop before P1 until a compliant method is approved. |
+| P0-12 | Critical | HtmlService + `google.script.run` does not expose a trusted visitor remote IP to Apps Script. | **Resolved by explicit user decision B:** remove the Admin-only Member IP-history requirement while keeping HtmlService + GAS-only and Zero Cost. Do not collect caller-supplied IPs or present them as verified. Code, Admin UI, retention and tests must enforce no Member IP collection; account-scoped abuse controls remain. |
 
 ## 5. Business invariants that must not change
 
@@ -120,7 +120,7 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 - Orders using coupons with an expiry date: deadline through the end of the expiry date in Asia/Bangkok, without an additional 15 minutes.
 - Server-side calculation of price, discount, total and deadline; a slip submitted before deadline can be reviewed later.
 - Sessions: 8-hour maximum lifetime, 30-minute idle timeout; revoke on logout, password change and suspension.
-- Admin-only member IP history; retain 90 days then delete or irreversibly anonymize.
+- Member IP history is not collected or displayed under approved decision B; Member login/security events (without IP) remain Admin-only and are retained for 90 days.
 - Slips and media remain Private; slips are Admin-only; manual slip review only.
 - No live payment credentials, real customer data or real orders in development tests.
 
@@ -137,25 +137,19 @@ Static source review confirms:
 - `google.script.run` is asynchronous, has legal-type restrictions for parameters/returns, and allows at most 10 concurrent calls. The frontend adapter must serialize dependent mutations, use success/failure handlers, and never rely on call execution order. See [Google's google.script.run reference](https://developers.google.com/apps-script/guides/html/reference/run) and [server communication guide](https://developers.google.com/apps-script/guides/html/communication).
 - Apps Script Web App `doGet(e)` event documentation lists query parameters, path information and POST metadata; it does not document a remote client IP field. See [Google's Web Apps request event documentation](https://developers.google.com/apps-script/guides/web#request_parameters).
 
-### IP-history feasibility blocker
+### Trusted IP collection decision — approved B (2026-11-06)
 
+The platform limitation remains true: HtmlService + `google.script.run` does not expose a trusted visitor remote-IP value. The user explicitly selected option B, authorizing the project to retain the HtmlService + Apps Script-only / Zero Cost architecture and remove the Member IP-history requirement.
 
-### Zero-cost Google-only feasibility check (2026-11-05)
+The source must therefore:
+- Ignore caller-supplied IP arguments in Member registration/login and Member security events.
+- Keep legacy schema columns only for compatibility, writing empty values and excluding them from Admin responses.
+- Preserve Member login/security events without IP (timestamp, outcome, failure reason and user-agent metadata) for 90 days.
+- Remove Member IP-history navigation and columns from the Admin UI.
+- Immediately clear legacy Member IP data, Member session IP data, Member login-log IP data, and untrusted Admin session/audit IP values through the retention cleanup.
+- Replace Apps Script IP-based login/registration buckets with HMAC-keyed account-scoped rate limits. This does not provide per-network rate limiting; do not describe it as such.
 
-The follow-up check examined whether existing Apps Script or Google logging facilities can replace the missing trusted request IP without adding a server/proxy or incurring charges.
-
-1. **Apps Script Web App request event (`doGet(e)` / `doPost(e)`) — not viable.** Google's documented event fields include query parameters, path information, content length, and POST body metadata. There is no documented remote address or trusted client-IP field. A value added to query/body by the browser remains client-controlled. See [Web Apps request parameters](https://developers.google.com/apps-script/guides/web#request_parameters).
-2. **HtmlService `google.script.run` — not viable for trusted IP.** It invokes a named server-side Apps Script function from the HTML page; it does not expose the browser's network peer address to that function. The client cannot turn a browser-supplied IP into trusted server metadata. See [google.script.run reference](https://developers.google.com/apps-script/guides/html/reference/run).
-3. **Apps Script execution logs / Cloud Logging — not a substitute.** Google's Apps Script logging documentation describes execution logs, Cloud Logging, Error Reporting, and temporary active-user keys. The documented user key is a rotating pseudonymous identifier, not a network IP. It cannot satisfy the required IP-history field. See [Apps Script logging](https://developers.google.com/apps-script/guides/logging).
-4. **Cloud Audit Logs — not an acceptable workaround.** Cloud Audit Logs can include a caller IP for supported Google Cloud resource API audit events, but this is not a documented per-visitor IP feed for Apps Script HtmlService executions. Google also states that resources accessible without signing in to Google Cloud/Workspace/Cloud Identity/Drive Enterprise do not generate Data Access audit logs. Data Access logs are disabled by default, and enabling them may incur additional charges. Therefore this path is neither a proven source for public storefront visitor IPs nor compatible with the strict no-cost rule. See [Cloud Audit Logs](https://docs.cloud.google.com/logging/docs/audit).
-5. **UrlFetchApp / public IP echo services — not viable.** UrlFetch requests originate from Google's outbound network IP ranges, so the result identifies Google's egress, not the original browser visitor. Asking the browser to call an IP echo service and submit the result to Apps Script would still be client-controlled and spoofable. See [UrlFetch Service](https://developers.google.com/apps-script/reference/url-fetch).
-
-**Finding:** No supported Google-only, zero-additional-cost mechanism was identified that supplies a trusted visitor IP to the approved HtmlService + `google.script.run` application. This is a platform boundary, not a code defect. Do not implement a browser-reported IP, Google outbound IP, rotating user key, or audit-log guess as if it were a verified Member IP address. Do not enable any audit logging or Cloud feature that could create charges as part of this investigation.
-
-**Decision:** P0-12 remains a hard blocker. Keep the original Admin-only Member IP-history requirement unchanged. Keep the zero-cost constraint unchanged. Do not start P1, deploy, provision a proxy/server, or alter the requirement unless the user explicitly approves a compliant change. No source code or Google resources were changed during this feasibility check.
-
-
-The approved policy requires Admin to view Member IP history. The former Express gateway obtained the address from the server request and forwarded it to GAS. In a direct HtmlService + `google.script.run` deployment, the GAS function does not receive the original browser network connection metadata. A value fetched or submitted by browser JavaScript is client-controlled and must not be treated as verified IP history. No code change can safely preserve this requirement without an IP-observing server/proxy. Because adding a service or a potentially billable intermediary is outside the approved Zero Cost boundary, P1 must not proceed by silently weakening or relabelling this requirement.
+P0-12 is resolved as a requirements decision, not because a trusted IP source was discovered. No proxy, external service, new account, billing, paid tier, or deployment is authorized or needed for this decision.
 
 ## 6. File-by-file port matrix
 
@@ -227,9 +221,9 @@ The browser facade must expose named, typed operations rather than accepting arb
 - [x] Check trusted IP-history feasibility against official Apps Script request/API documentation.
 - [x] Complete detailed field-by-field response/payload mapping for every Admin CRUD and checkout action — see [P0_ADMIN_CHECKOUT_FIELD_MAPPING.md](./P0_ADMIN_CHECKOUT_FIELD_MAPPING.md) (P0-R9).
 - [x] Complete source-level HTML/session/storage and HtmlService call-constraint review.
-- [ ] Resolve P0-12 trusted Member IP-history compatibility without changing approved requirements or Zero Cost constraints.
+- [x] Resolve P0-12 by implementing the user's explicit decision B: no Member IP history; preserve login/security events without IP.
 
-**P0 status: BLOCKED pending user-approved resolution of P0-12.** Source inventory, payload matrix, static security review, file matrix and CI checks are complete. Do not start P1 until trusted Member IP history can be preserved within the approved constraints.
+**P0-12 status: RESOLVED BY USER DECISION B.** Do not reintroduce IP collection. Other Phase 0 items and their release gates remain independently applicable.
 
 ## 8. Safety gates
 
@@ -263,7 +257,7 @@ The browser facade must expose named, typed operations rather than accepting arb
 - P0-R5 workflow run `42129198977`: **77 tests passed, 0 failed**.
 - P0-R6 workflow run `42129480514`: **79 tests passed, 0 failed**.
 - Both runs executed on `vercel-drive-setup`. No live Apps Script, Sheets, Drive, deployment, or production transaction was used.
-- P0 remains blocked by the unresolved trusted Member IP-history compatibility issue documented under P0-12. Do not start P1 or change the approved IP-history / Zero Cost requirements without a separate user decision.
+- At the time of this historical R5/R6 run, P0-12 had not yet been resolved. The later explicit decision B and implementation are recorded in Pair 5 below.
 
 ## 10. P0-R1 through P0-R6 consolidated revalidation — 2026-11-06
 
@@ -306,19 +300,22 @@ The browser facade must expose named, typed operations rather than accepting arb
 
 ### P0-R9 — Admin CRUD and checkout contract mapping
 
-- Added [P0_ADMIN_CHECKOUT_FIELD_MAPPING.md](./P0_ADMIN_CHECKOUT_FIELD_MAPPING.md) with field-by-field browser request, GAS action arguments, response shape, record conversions, authentication requirements and business invariants for Admin sessions, dashboard/orders, all four CRUD tables, member administration, media upload, coupon validation and the two-step checkout/slip workflow.
+- Added [P0_ADMIN_CHECKOUT_FIELD_MAPPING.md](./P0_ADMIN_CHECKOUT_FIELD_MAPPING.md) with field-by-field browser request, GAS action arguments, response shape, record conversions, authentication requirements and business invariants for Admin sessions, dashboard/orders, all four CRUD tables, member administration, media upload, coupon validation and checkout/slip workflow.
 - Reconciled stale PromptPay stub descriptions in this audit with P0-R7's implemented EMVCo payload builder.
-- Found and fixed a source defect: Admin CRUD PUT previously omitted the server-derived `ipAddress` when calling `adminUpsert`. GAS consequently wrote an empty IP for update audit events. The route now passes `String(req.ip || '')`; the value is not accepted from browser input.
-- Added a route-level regression test proving the Admin update passes the request-derived IP to the GAS client.
+- Found and fixed the Admin CRUD PUT route defect: it previously omitted the request-derived IP argument when calling the legacy GAS gateway. The route-level regression test verifies the legacy adapter forwards the server-observed request address, not a browser body value. Under approved HtmlService target decision B, the Apps Script business layer now discards IP arguments and does not persist them.
+- Added a dedicated regression test for no Member IP collection, no IP fields in Admin member responses, no IP history UI, account-scoped rate limiting and immediate legacy-IP cleanup.
 
-### P0-R10 — Trusted IP-history feasibility
+### P0-R10 — Trusted IP decision B and implementation
 
-- Revalidated the HtmlService + `google.script.run` boundary: it provides no trusted client remote-IP field to the server function. Browser-supplied values or browser-discovered addresses are not trusted substitutes.
-- No compliant trusted-IP observer exists within the currently approved Apps Script-only execution boundary. Adding a proxy or another server/service would change the approved architecture/cost boundary; changing or dropping verified Member IP history would change an approved business/security requirement.
-- **P0-12 remains unresolved and Phase 0 remains BLOCKED.** No spoofable IP fallback or silent downgrade was introduced. A separate user decision is required before changing either constraint.
+- The user explicitly selected B: keep HtmlService + Apps Script-only and Zero Cost; remove the Admin Member IP-history requirement. This supersedes earlier documentation that treated Member IP history as immutable.
+- Member registration/login no longer consume caller-supplied IP values or write Member IP fields. Member sessions and login logs store no IP; `is_new_ip` is always false.
+- Admin member listing and Member login/security history APIs omit IP fields. The Admin UI no longer offers IP history or displays IP columns.
+- Apps Script rate limits are now HMAC-keyed and account-scoped (10 Admin login attempts per normalized username, 10 Member login attempts per normalized Login ID, 5 registrations per normalized Login ID per 15 minutes); existing five-failure account lockout remains.
+- Retention immediately clears legacy Member, Member-session, Member-login-log and untrusted Admin-session/Admin-audit IP fields, while retaining non-IP login/audit events for 90 days.
+- No trusted IP capability is claimed. This is a requirements decision, not a technical workaround.
 
 ### Validation boundary
 
-- Source change is limited to the Admin update route's audit-IP propagation and its regression test; the mapping and P0-12 analysis are documentation.
-- GitHub Actions on `vercel-drive-setup` is the required automated regression gate. This test harness does not prove live Apps Script, Google Sheets, Drive ACL, or remote-IP provenance in a deployed environment.
-- No deployment, live Google resource, billing, paid service, production payment, or real customer data was used.
+- R9 source, mapping documentation and regression test are retained. R10 implementation updates `07_Auth.gs`, `08_Admin.gs`, `10_Utilities.gs`, `14_Retention.gs`, `public/admin.html`, and the relevant tests/docs.
+- GitHub Actions on `vercel-drive-setup` is the required automated regression gate. Tests use local Node/VM mocks and do not prove live Apps Script, Google Sheets LockService contention, Drive ACLs, or production runtime/quota behavior.
+- No deployment, live Google resource, billing, paid service, production payment, or real customer data was used. Work remains isolated to `vercel-drive-setup`; `main` was not modified.
