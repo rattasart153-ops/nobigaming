@@ -45,7 +45,8 @@ function adminOrders(token) {
 }
 
 function adminSlipData(token, orderId) {
-  const admin = requireAdmin_(token);
+  // Fail before touching Drive for unauthenticated callers.
+  requireAdmin_(token);
   const order = repositoryGetById_('orders', orderId);
   if (!order || !order.slip_file_id) throw new Error('ไม่พบสลิป');
   const slipFolderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_DRIVE_FOLDER_ID') || '').trim();
@@ -53,21 +54,24 @@ function adminSlipData(token, orderId) {
   const file = DriveApp.getFileById(String(order.slip_file_id));
   assertDriveFileInPrivateFolder_(file, slipFolderId);
   const blob = file.getBlob();
+  const name = file.getName();
+  const mimeType = blob.getContentType();
+  const base64 = Utilities.base64Encode(blob.getBytes());
+
+  // Revalidate at the response boundary. A logout, suspension, or password change
+  // during the Drive read must win; the slip bytes are never returned for a revoked session.
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
+    const admin = requireAdminLocked_(token, Date.now());
     appendAdminAuditLogLocked_({
       audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
       action:'VIEW_ORDER_SLIP', target_type:'order', target_id:order.order_id,
       request_id:'', ip_address:'',
       details_json:'{}', created_at:new Date().toISOString()
     });
+    return {name:name,mimeType:mimeType,base64:base64};
   } finally { lock.releaseLock(); }
-  return {
-    name: file.getName(),
-    mimeType: blob.getContentType(),
-    base64: Utilities.base64Encode(blob.getBytes())
-  };
 }
 
 function adminSetOrderStatus(token, orderId, status) {
