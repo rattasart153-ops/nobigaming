@@ -269,7 +269,7 @@ test('Schema v3 business modules no longer call legacy field-based Sheets helper
 });
 
 
-test('shared Sheets rate limits use keyed IP hashes and enforce fixed-window thresholds', () => {
+test('shared Sheets rate limits use keyed account HMACs and enforce fixed-window thresholds', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '..', 'google-apps-script', '10_Utilities.gs'), 'utf8'
   );
@@ -292,23 +292,34 @@ test('shared Sheets rate limits use keyed IP hashes and enforce fixed-window thr
     repositoryRows_:()=>rows,
     repositorySheet_:()=>({getLastRow:()=>rows.length+1})
   };
-  vm.runInNewContext(source + '\nglobalThis.__consumeAuthIpAttempt = consumeAuthIpAttempt_; globalThis.__consumeRegistrationIpAttempt = consumeRegistrationIpAttempt_; globalThis.__rateLimitHash = rateLimitBucketHash_;',context);
+  vm.runInNewContext(
+    source + '\\nglobalThis.__consumeLoginAttempt = consumeLoginAttempt_; globalThis.__consumeRegistrationAttempt = consumeRegistrationAttempt_; globalThis.__rateLimitHash = rateLimitBucketHash_;',
+    context
+  );
 
-  const ip = '203.0.113.44';
-  const expected = crypto.createHmac('sha256',secret).update('AUTH_IP:' + ip).digest('hex');
-  assert.equal(context.__rateLimitHash('AUTH_IP',ip),expected);
-  for(let i=0;i<10;i++) context.__consumeAuthIpAttempt(ip);
-  assert.throws(()=>context.__consumeAuthIpAttempt(ip),/RATE_LIMITED/);
-  assert.equal(rows[0].attempt_count,10);
-  assert.equal(rows[0].bucket_key_hash,expected);
-  assert.equal(JSON.stringify(rows).includes(ip),false);
-  assert.ok(lockCalls>=11);
+  const loginId = 'Member.One';
+  const normalizedLogin = 'member.one';
+  const expectedLoginHash = crypto.createHmac('sha256',secret)
+    .update('MEMBER_LOGIN_ATTEMPT:' + normalizedLogin).digest('hex');
+  assert.equal(context.__rateLimitHash('MEMBER_LOGIN_ATTEMPT',normalizedLogin),expectedLoginHash);
+  for(let i=0;i<10;i++) context.__consumeLoginAttempt('MEMBER_LOGIN_ATTEMPT',loginId,10);
+  assert.throws(()=>context.__consumeLoginAttempt('MEMBER_LOGIN_ATTEMPT',loginId,10),/RATE_LIMITED/);
+  const loginBucket = rows.find(row=>row.bucket_key_hash===expectedLoginHash);
+  assert.equal(loginBucket.attempt_count,10);
+  assert.equal(loginBucket.bucket_key_hash,expectedLoginHash);
 
-  const registerIp='198.51.100.17';
-  for(let i=0;i<5;i++) context.__consumeRegistrationIpAttempt(registerIp);
-  assert.throws(()=>context.__consumeRegistrationIpAttempt(registerIp),/RATE_LIMITED/);
+  const registerId = 'Member.Register';
+  const expectedRegisterHash = crypto.createHmac('sha256',secret)
+    .update('MEMBER_REGISTER_ACCOUNT:member.register').digest('hex');
+  for(let i=0;i<5;i++) context.__consumeRegistrationAttempt(registerId);
+  assert.throws(()=>context.__consumeRegistrationAttempt(registerId),/RATE_LIMITED/);
+  const registerBucket = rows.find(row=>row.bucket_key_hash===expectedRegisterHash);
+  assert.equal(registerBucket.attempt_count,5);
+  assert.equal(registerBucket.bucket_key_hash,expectedRegisterHash);
+  assert.equal(JSON.stringify(rows).includes(loginId),false);
+  assert.equal(JSON.stringify(rows).includes(registerId),false);
+  assert.ok(lockCalls>=17);
 });
-
 
 test('default catalog seed creates the legacy nine games and 54 packages idempotently',()=>{
   const spreadsheet=new FakeSpreadsheet();
