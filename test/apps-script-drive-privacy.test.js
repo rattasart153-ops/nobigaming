@@ -123,7 +123,7 @@ function makeAdminMediaHarness(options = {}) {
       base64Decode:value=>Array.from(Buffer.from(String(value),'base64')).map(x=>x>127?x-256:x),
       newBlob:(bytes,mimeType,name)=>({bytes,mimeType,name})
     },
-    LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
+    LockService:{getScriptLock:()=>({waitLock(){state.lockWaits++;if(options.lockTimeout)throw new Error('LOCK_TIMEOUT');assert.equal(state.lockHeld,false);state.lockHeld=true;},releaseLock(){assert.equal(state.lockHeld,true);state.lockHeld=false;state.lockReleases++;}})},
     requireAdmin_:()=>({admin_id:'admin-1'}),
     appendAdminAuditLogLocked_:()=>{
       if(state.auditFailure) throw new Error('SIMULATED_AUDIT_WRITE_FAILURE');
@@ -246,11 +246,14 @@ test('image container validation rejects a PNG with a corrupted chunk CRC',()=>{
 
 
 function makeAdminSlipHarness(options = {}) {
-  const state = {driveReads:0,audits:[],auditFailure:Boolean(options.auditFailure)};
+  const state = {driveReads:0,audits:[],auditFailure:Boolean(options.auditFailure),sessionRevoked:false,lockHeld:false,lockWaits:0,lockReleases:0};
   const bytes = Buffer.from('synthetic-private-slip');
   const file = {
     getName:()=> 'synthetic-slip.png',
-    getBlob:()=>({getContentType:()=> 'image/png',getBytes:()=>Array.from(bytes)}),
+    getBlob:()=>{
+      if(options.revokeDuringDriveRead) state.sessionRevoked=true;
+      return {getContentType:()=> 'image/png',getBytes:()=>Array.from(bytes)};
+    },
     getSharingAccess:()=> options.fileAccess || 'PRIVATE',
     getParents:()=>{
       let consumed=false;
@@ -270,6 +273,11 @@ function makeAdminSlipHarness(options = {}) {
       ? {order_id:'order-1',slip_file_id:'drive-slip-1'} : null,
     requireAdmin_:()=>{
       if(options.unauthorized) throw new Error('ADMIN_REQUIRED');
+      return {admin_id:'admin-1'};
+    },
+    requireAdminLocked_:()=>{
+      assert.equal(state.lockHeld,true,'final Admin session validation must run under ScriptLock');
+      if(options.unauthorized || state.sessionRevoked) throw new Error('SESSION_REVOKED');
       return {admin_id:'admin-1'};
     },
     appendAdminAuditLogLocked_:entry=>{
@@ -317,4 +325,23 @@ test('Admin slip bytes are not returned when the required audit write fails',()=
   const {context,state}=makeAdminSlipHarness({auditFailure:true});
   assert.throws(()=>context.adminSlipData('admin-token','order-1'),/SIMULATED_AUDIT_FAILURE/);
   assert.equal(state.audits.length,1);
+});
+
+
+test('Admin slip response is denied if the session is revoked while Drive is being read',()=>{
+  const {context,state}=makeAdminSlipHarness({revokeDuringDriveRead:true});
+  assert.throws(()=>context.adminSlipData('admin-token','order-1'),/SESSION_REVOKED/);
+  assert.equal(state.driveReads,1,'the race is simulated after the Drive read begins');
+  assert.equal(state.audits.length,0,'revoked session must not create a successful view audit');
+  assert.equal(state.lockHeld,false,'ScriptLock must be released after rejection');
+  assert.equal(state.lockWaits,1);
+  assert.equal(state.lockReleases,1);
+});
+
+test('Admin slip response fails closed when final authorization lock cannot be acquired',()=>{
+  const {context,state}=makeAdminSlipHarness({lockTimeout:true});
+  assert.throws(()=>context.adminSlipData('admin-token','order-1'),/LOCK_TIMEOUT/);
+  assert.equal(state.driveReads,1);
+  assert.equal(state.audits.length,0);
+  assert.equal(state.lockReleases,0,'a lock that was not acquired must not be released');
 });
