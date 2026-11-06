@@ -1653,79 +1653,83 @@ body {
 
 <?!= include('QrCode'); ?>
 <script>
-let nobiMemberToken = '';
-let nobiCheckoutToken = '';
-function nobiRpc(name, argument) {
-  return new Promise((resolve, reject) => {
-    if (!window.google || !google.script || !google.script.run) {
-      reject(new Error('ไม่พบการเชื่อมต่อ Apps Script กรุณาเปิดหน้านี้จาก Web App')); return;
-    }
-    const runner = google.script.run.withSuccessHandler(resolve)
-      .withFailureHandler(error => reject(new Error(error && error.message ? error.message : 'Apps Script request failed')));
-    if (argument === undefined) runner[name](); else runner[name](argument);
-  });
-}
-async function nobiFilePayload(file) {
-  if (!(file instanceof Blob) || !file.size || file.size > 3 * 1024 * 1024) throw Error('ไฟล์ต้องมีขนาดไม่เกิน 3 MB');
-  if (!['image/png','image/jpeg','image/webp'].includes(file.type)) throw Error('รองรับเฉพาะ PNG/JPG/WebP');
-  const bytes = new Uint8Array(await file.arrayBuffer()); let binary = '';
-  for (let i=0;i<bytes.length;i+=0x8000) binary += String.fromCharCode.apply(null,bytes.subarray(i,Math.min(i+0x8000,bytes.length)));
-  return {name:file.name||'upload',mimeType:file.type,base64:btoa(binary)};
-}
-function nobiJsonBody(options) {
-  if (!options || !options.body || typeof options.body !== 'string') return {};
-  try { return JSON.parse(options.body); } catch (_) { throw Error('ข้อมูลคำขอไม่ถูกต้อง'); }
-}
-async function apiRequest(url, options = {}) {
-  const method=String(options.method||'GET').toUpperCase(), parsed=new URL(url,window.location.href);
-  const path=parsed.pathname, body=options.body instanceof FormData?options.body:null, json=nobiJsonBody(options);
-  if(path==='/api/public/catalog') return nobiRpc('nobiGetCatalog');
-  if(path==='/api/public/promotions') return nobiRpc('nobiGetPromotions');
-  if(path==='/api/public/coupons/validate') {
-    const r=await nobiRpc('nobiValidateCoupon',{code:String(json.code||''),gameId:String(json.gameId||''),subtotal:Number(json.subtotal),playerId:String(json.playerId||''),memberToken:nobiMemberToken});
-    return {ok:!!r.valid,discount:Number(r.discount||0),message:r.error||r.message||(r.valid?'ใช้โค้ดได้':'ใช้โค้ดไม่ได้')};
-  }
-  if(path==='/api/public/coupons/suggestions') return nobiRpc('nobiGetCouponSuggestions',{
-    gameId:String(parsed.searchParams.get('gameId')||''),subtotal:Number(parsed.searchParams.get('subtotal')||0),
-    playerId:String(parsed.searchParams.get('playerId')||''),memberToken:nobiMemberToken
-  });
-  if(path==='/api/public/payment-info') return nobiRpc('nobiGetPaymentInfo',{amount:Number(parsed.searchParams.get('amount')||0)});
-  if(path==='/api/public/orders'&&method==='POST') {
-    if(!body)throw Error('ข้อมูลออเดอร์ไม่ถูกต้อง');
-    const headers=options.headers||{},key=headers['Idempotency-Key']||headers['idempotency-key'];
-    const r=await nobiRpc('nobiCreateOrder',{
-      requestKey:String(key||''),gameId:String(body.get('gameId')||''),packageId:String(body.get('packageId')||''),
-      playerId:String(body.get('playerId')||''),serverId:String(body.get('serverId')||''),
-      couponCode:String(body.get('couponCode')||''),memberToken:nobiMemberToken
+const apiRequest = (() => {
+  let memberToken = '';
+    let checkoutToken = '';
+  function nobiRpc(name, argument) {
+    return new Promise((resolve, reject) => {
+      if (!window.google || !google.script || !google.script.run) {
+        reject(new Error('ไม่พบการเชื่อมต่อ Apps Script กรุณาเปิดหน้านี้จาก Web App')); return;
+      }
+      const runner = google.script.run.withSuccessHandler(resolve)
+        .withFailureHandler(error => reject(new Error(error && error.message ? error.message : 'Apps Script request failed')));
+      if (argument === undefined) runner[name](); else runner[name](argument);
     });
-    nobiCheckoutToken=r.checkout_token||'';
-    return {order:r.order,duplicate:!!r.duplicate};
   }
-  const slip=path.match(/^\/api\/public\/orders\/([^/]+)\/slip$/);
-  if(slip&&method==='POST') {
-    if(!nobiCheckoutToken)throw Error('สิทธิ์อัปโหลดสลิปอยู่ในหน่วยความจำของหน้านี้เท่านั้น กรุณาสร้างออเดอร์เดิมซ้ำด้วยข้อมูลเดิมก่อนส่งสลิป');
-    const file=body&&body.get('slip'),payload=await nobiFilePayload(file);
-    const r=await nobiRpc('nobiSubmitOrderSlip',{orderId:decodeURIComponent(slip[1]),checkoutToken:nobiCheckoutToken,slip:payload});
-    return {ok:!!r.ok,reason:r.already_submitted?'already_submitted':undefined};
+  async function nobiFilePayload(file) {
+    if (!(file instanceof Blob) || !file.size || file.size > 3 * 1024 * 1024) throw Error('ไฟล์ต้องมีขนาดไม่เกิน 3 MB');
+    if (!['image/png','image/jpeg','image/webp'].includes(file.type)) throw Error('รองรับเฉพาะ PNG/JPG/WebP');
+    const bytes = new Uint8Array(await file.arrayBuffer()); let binary = '';
+    for (let i=0;i<bytes.length;i+=0x8000) binary += String.fromCharCode.apply(null,bytes.subarray(i,Math.min(i+0x8000,bytes.length)));
+    return {name:file.name||'upload',mimeType:file.type,base64:btoa(binary)};
   }
-  if(path==='/api/member/register'&&method==='POST')return nobiRpc('nobiRegisterMember',{fullName:String(json.fullName||''),loginId:String(json.loginId||''),password:String(json.password||'')});
-  if(path==='/api/member/login'&&method==='POST') {
-    const r=await nobiRpc('nobiLoginMember',{loginId:String(json.loginId||''),password:String(json.password||''),userAgent:String(navigator.userAgent||'').slice(0,300)});
-    nobiMemberToken=r.token||'';return r;
+  function nobiJsonBody(options) {
+    if (!options || !options.body || typeof options.body !== 'string') return {};
+    try { return JSON.parse(options.body); } catch (_) { throw Error('ข้อมูลคำขอไม่ถูกต้อง'); }
   }
-  if(path==='/api/member/me') {
-    if(!nobiMemberToken)return {authenticated:false};
-    const r=await nobiRpc('nobiGetMemberSession',nobiMemberToken);if(!r.authenticated)nobiMemberToken='';return r;
+  async function apiRequest(url, options = {}) {
+    const method=String(options.method||'GET').toUpperCase(), parsed=new URL(url,window.location.href);
+    const path=parsed.pathname, body=options.body instanceof FormData?options.body:null, json=nobiJsonBody(options);
+    if(path==='/api/public/catalog') return nobiRpc('nobiGetCatalog');
+    if(path==='/api/public/promotions') return nobiRpc('nobiGetPromotions');
+    if(path==='/api/public/coupons/validate') {
+      const r=await nobiRpc('nobiValidateCoupon',{code:String(json.code||''),gameId:String(json.gameId||''),subtotal:Number(json.subtotal),playerId:String(json.playerId||''),memberToken:memberToken});
+      return {ok:!!r.valid,discount:Number(r.discount||0),message:r.error||r.message||(r.valid?'ใช้โค้ดได้':'ใช้โค้ดไม่ได้')};
+    }
+    if(path==='/api/public/coupons/suggestions') return nobiRpc('nobiGetCouponSuggestions',{
+      gameId:String(parsed.searchParams.get('gameId')||''),subtotal:Number(parsed.searchParams.get('subtotal')||0),
+      playerId:String(parsed.searchParams.get('playerId')||''),memberToken:memberToken
+    });
+    if(path==='/api/public/payment-info') return nobiRpc('nobiGetPaymentInfo',{amount:Number(parsed.searchParams.get('amount')||0)});
+    if(path==='/api/public/orders'&&method==='POST') {
+      if(!body)throw Error('ข้อมูลออเดอร์ไม่ถูกต้อง');
+      const headers=options.headers||{},key=headers['Idempotency-Key']||headers['idempotency-key'];
+      const r=await nobiRpc('nobiCreateOrder',{
+        requestKey:String(key||''),gameId:String(body.get('gameId')||''),packageId:String(body.get('packageId')||''),
+        playerId:String(body.get('playerId')||''),serverId:String(body.get('serverId')||''),
+        couponCode:String(body.get('couponCode')||''),memberToken:memberToken
+      });
+      checkoutToken=r.checkout_token||'';
+      return {order:r.order,duplicate:!!r.duplicate};
+    }
+    const slip=path.match(/^\/api\/public\/orders\/([^/]+)\/slip$/);
+    if(slip&&method==='POST') {
+      if(!checkoutToken)throw Error('สิทธิ์อัปโหลดสลิปอยู่ในหน่วยความจำของหน้านี้เท่านั้น กรุณาสร้างออเดอร์เดิมซ้ำด้วยข้อมูลเดิมก่อนส่งสลิป');
+      const file=body&&body.get('slip'),payload=await nobiFilePayload(file);
+      const r=await nobiRpc('nobiSubmitOrderSlip',{orderId:decodeURIComponent(slip[1]),checkoutToken:checkoutToken,slip:payload});
+      checkoutToken='';
+      return {ok:!!r.ok,reason:r.already_submitted?'already_submitted':undefined};
+    }
+    if(path==='/api/member/register'&&method==='POST')return nobiRpc('nobiRegisterMember',{fullName:String(json.fullName||''),loginId:String(json.loginId||''),password:String(json.password||'')});
+    if(path==='/api/member/login'&&method==='POST') {
+      const r=await nobiRpc('nobiLoginMember',{loginId:String(json.loginId||''),password:String(json.password||''),userAgent:String(navigator.userAgent||'').slice(0,300)});
+      memberToken=r.token||'';return r;
+    }
+    if(path==='/api/member/me') {
+      if(!memberToken)return {authenticated:false};
+      const r=await nobiRpc('nobiGetMemberSession',memberToken);if(!r.authenticated)memberToken='';return r;
+    }
+    if(path==='/api/member/logout'&&method==='POST') {
+      const token=memberToken;memberToken='';return token?nobiRpc('nobiLogoutMember',token):{ok:true};
+    }
+    if(path==='/api/member/password'&&method==='POST') {
+      const r=await nobiRpc('nobiChangeMemberPassword',{token:memberToken,currentPassword:String(json.currentPassword||''),newPassword:String(json.newPassword||'')});
+      memberToken='';return r;
+    }
+    throw Error('ไม่รองรับคำขอในหน้านี้');
   }
-  if(path==='/api/member/logout'&&method==='POST') {
-    const token=nobiMemberToken;nobiMemberToken='';return token?nobiRpc('nobiLogoutMember',token):{ok:true};
-  }
-  if(path==='/api/member/password'&&method==='POST') {
-    const r=await nobiRpc('nobiChangeMemberPassword',{token:nobiMemberToken,currentPassword:String(json.currentPassword||''),newPassword:String(json.newPassword||'')});
-    nobiMemberToken='';return r;
-  }
-  throw Error('ไม่รองรับคำขอในหน้านี้');
-}
+  return apiRequest;
+})();
 
 /* =========================================================
    Nobi Topup — interactions
@@ -2021,7 +2025,7 @@ async function apiRequest(url, options = {}) {
     selected = null;
     activeCheckout = null; slipSubmitted = false; checkoutNotice.textContent = '';
     activeCheckout = null;
-    nobiCheckoutToken = '';
+
     confirmBtn.textContent = 'สร้างออเดอร์และดำเนินการชำระเงิน';
     confirmBtn.disabled = false;
     $('.pack',packGrid).forEach(el=>el.disabled=false);
@@ -2183,11 +2187,11 @@ async function apiRequest(url, options = {}) {
       await apiRequest('/api/public/orders/'+encodeURIComponent(activeCheckout.id)+'/slip',{method:'POST',body:upload});
       slipSubmitted=true;checkoutNotice.textContent='ส่งสลิปของออเดอร์ '+activeCheckout.id+' เรียบร้อยแล้ว รอแอดมินตรวจสอบ';
       showToast('ส่งสลิปเรียบร้อย · '+activeCheckout.id);
-      nobiCheckoutToken = '';
+
       closeModal();playerId.value='';activeCheckout=null;slipSubmitted=false;
     }catch(e){
       if(e.reason==='already_submitted'){
-        nobiCheckoutToken = '';
+
         showToast('ออเดอร์นี้ส่งสลิปแล้ว ระบบได้รับรายการเรียบร้อย');
         slipSubmitted=true;activeCheckout=null;closeModal();
       }else{
