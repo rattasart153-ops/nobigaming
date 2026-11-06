@@ -130,7 +130,9 @@ function makeAdminMediaHarness(options = {}) {
     fileViewers:options.fileViewers || [],
     parentId:options.parentId || 'media-folder',
     auditFailure:Boolean(options.auditFailure),
-    files:[]
+    files:[],
+    createFailure:Boolean(options.createFailure),
+    setSharingFailure:Boolean(options.setSharingFailure)
   };
   const context = vm.createContext({
     NOBI:{MAX_SLIP_BYTES:3*1024*1024},
@@ -142,6 +144,7 @@ function makeAdminMediaHarness(options = {}) {
         getEditors:()=>state.folderEditors,
         getViewers:()=>state.folderViewers,
         createFile:blob=>{
+          if(state.createFailure) throw new Error('SIMULATED_DRIVE_QUOTA');
           const file={
             id:'media-file-'+(state.files.length+1),
             blob,
@@ -154,7 +157,7 @@ function makeAdminMediaHarness(options = {}) {
               let consumed=false;
               return {hasNext:()=>!consumed,next:()=>{consumed=true;return {getId:()=>state.parentId};}};
             },
-            setSharing(){},
+            setSharing(){if(state.setSharingFailure) throw new Error('SIMULATED_DRIVE_PERMISSION_QUOTA');},
             setTrashed(value){this.trashed=value;}
           };
           state.files.push(file);
@@ -227,13 +230,32 @@ test('Admin media upload rejects a shared folder before creating a file',()=>{
   assert.equal(state.files.length,0);
 });
 
+test('Drive create quota failure fails closed without returning a media reference',()=>{
+  const {context,state}=makeAdminMediaHarness({createFailure:true});
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
+  assert.throws(()=>context.adminStoreMedia('admin-token',{
+    mimeType:'image/png',base64:png.toString('base64')
+  }),/SIMULATED_DRIVE_QUOTA/);
+  assert.equal(state.files.length,0);
+});
+
+test('Drive permission failure trashes the newly created unreferenced media file',()=>{
+  const {context,state}=makeAdminMediaHarness({setSharingFailure:true});
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
+  assert.throws(()=>context.adminStoreMedia('admin-token',{
+    mimeType:'image/png',base64:png.toString('base64')
+  }),/SIMULATED_DRIVE_PERMISSION_QUOTA/);
+  assert.equal(state.files.length,1);
+  assert.equal(state.files[0].trashed,true);
+});
+
 test('private Drive file validator fails closed when folder sharing metadata is unavailable',()=>{
   const original = context.DriveApp.getFolderById;
   context.DriveApp.getFolderById = () => ({});
   try {
     assert.throws(
       () => context.assertDriveFileInPrivateFolder_(driveFile(['private-folder']), 'private-folder'),
-      /DRIVE_FOLDER_INVALID/
+      /DRIVE_ACL_UNVERIFIABLE/
     );
   } finally {
     context.DriveApp.getFolderById = original;
