@@ -1,4 +1,4 @@
-# P0-R9/R10 — Admin CRUD, Checkout Contract Mapping and Trusted IP Gate
+# P0-R9/R10 — Admin CRUD, Checkout Contract Mapping and IP-Collection Decision
 
 Date: 2026-11-06  
 Branch: `vercel-drive-setup`  
