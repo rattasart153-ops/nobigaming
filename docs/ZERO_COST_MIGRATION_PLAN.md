@@ -74,7 +74,7 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - [x] Run and inspect the complete P4 regression CI: [run 42203721676](https://github.com/rattasart153-ops/nobigaming/actions/runs/42203721676) passed **153/153** tests, 0 failed, on `vercel-drive-setup`.
 - [x] Mocked race tests verify stale password-change snapshots are rejected and an Admin session revoked while Drive is being read cannot receive the slip response; the final check and audit run under ScriptLock.
 - [x] Mocked ScriptLock timeout at the final slip authorization boundary fails closed and does not return bytes or write a view audit.
-- [ ] Real Google Apps Script quota enforcement, real simultaneous execution scheduling, and actual Drive ACL enforcement remain integration verification items; mock tests cannot prove Google service behavior.
+- Runtime-only follow-up (outside the approved P4 mock acceptance): real Google Apps Script quota enforcement, simultaneous execution scheduling, and actual Drive ACL enforcement must be checked if/when a synthetic Google runtime is later authorized. Mock tests do not prove Google service behavior.
 
 ### P5 — Browser/device tests
 - Guest, Member, Admin, coupon, checkout, slip, order status and Admin CRUD on synthetic data only.
