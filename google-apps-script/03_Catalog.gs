@@ -72,7 +72,7 @@ function publicPromotions() {
 
 function catalogImageUrl_(fileId, fallbackUrl) {
   const id = String(fileId || '').trim();
-  if (!id) return String(fallbackUrl || '');
-  const media = publicMediaData(id);
-  return 'data:' + media.mimeType + ';base64,' + media.base64;
+  if (id) return '/api/public/media/' + encodeURIComponent(id);
+  const fallback = String(fallbackUrl || '').trim();
+  return /^https:\/\//i.test(fallback) || /^\/(?!\/)/.test(fallback) ? fallback : '';
 }
