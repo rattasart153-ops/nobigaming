@@ -57,6 +57,7 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - [ ] Measure real Sheets read/write latency and LockService contention under concurrent synthetic requests.
 - [ ] Measure Base64 upload/download throughput, Drive operations and end-to-end Apps Script execution time with synthetic files.
 - [ ] Confirm actual Apps Script quotas, concurrent execution limits and available private Drive capacity against the intended synthetic test volume.
+- Offline P3 regression CI: [run 42178679222](https://github.com/rattasart153-ops/nobigaming/actions/runs/42178679222) passed **128/128** tests on commit `603ee4a6557ac11960dabececfad8e23c81f9583`.
 - Runtime measurements and Google resource checks remain gated by separate explicit approval; no Apps Script project, spreadsheet, Drive folder or deployment has been created.
 
 ### P4 — Security and business rules
