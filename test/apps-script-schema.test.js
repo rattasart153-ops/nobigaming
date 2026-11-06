@@ -480,3 +480,37 @@ test('repository write fails closed when script lock acquisition times out', () 
   assert.equal(lockMetrics.releaseCalls, 0, 'release is not called when lock acquisition itself fails');
   assert.deepEqual(games.rows, before, 'no sheet mutation is allowed after lock timeout');
 });
+
+
+test('repository reads fail closed on Sheets quota exhaustion without mutation and always release ScriptLock',()=>{
+  const spreadsheet=new FakeSpreadsheet();
+  const {context,lockMetrics}=loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  context.__repoInsert('games',{game_id:'quota-existing',name:'Quota Existing'});
+  const games=spreadsheet.getSheetByName('games');
+  const before=games.rows.map(row=>row.slice());
+  lockMetrics.waitCalls=0;
+  lockMetrics.releaseCalls=0;
+  const originalGetDataRange=games.getDataRange.bind(games);
+  games.getDataRange=()=>({getValues(){throw new Error('Service invoked too many times: SpreadsheetApp');}});
+
+  assert.throws(()=>context.__repoInsert('games',{
+    game_id:'quota-insert',name:'Must Not Persist'
+  }),/Service invoked too many times/);
+  assert.deepEqual(games.rows,before);
+  assert.equal(lockMetrics.waitCalls,1);
+  assert.equal(lockMetrics.releaseCalls,1);
+
+  games.getDataRange=originalGetDataRange;
+  lockMetrics.waitCalls=0;
+  lockMetrics.releaseCalls=0;
+  const originalAppend=games.appendRow.bind(games);
+  games.appendRow=()=>{throw new Error('Service invoked too many times: SpreadsheetApp');};
+  assert.throws(()=>context.__repoInsert('games',{
+    game_id:'quota-write',name:'Must Not Persist'
+  }),/Service invoked too many times/);
+  assert.deepEqual(games.rows,before);
+  assert.equal(lockMetrics.waitCalls,1);
+  assert.equal(lockMetrics.releaseCalls,1);
+  games.appendRow=originalAppend;
+});
