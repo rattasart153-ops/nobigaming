@@ -65,7 +65,7 @@ test('unknown page values fail safely to the storefront template', () => {
   assert.deepEqual(calls, ['Storefront']);
 });
 
-test('HtmlService templates preserve the existing public HTML and add top-level navigation base', () => {
+test('Migrated HtmlService templates retain the public structure and use the browser facade', () => {
   const sourceStorefront = fs.readFileSync(path.join(__dirname, '..', 'public', 'nobitopup.html'), 'utf8');
   const sourceAdmin = fs.readFileSync(path.join(__dirname, '..', 'public', 'admin.html'), 'utf8');
   const templateStorefront = fs.readFileSync(path.join(gasDir, 'Storefront.html'), 'utf8');
