@@ -7,6 +7,17 @@ const requireSameOrigin = require('../middleware/require-same-origin');
 const asyncRoute = require('../utils/async-route');
 const {readCookie, ADMIN_COOKIE} = require('../middleware/gateway-session');
 
+
+// Defense in depth: Member IP history is not part of the approved data contract.
+function withoutMemberIpFields(value) {
+  const blocked = new Set(['ip_address', 'is_new_ip', 'registered_ip', 'last_login_ip', 'created_ip']);
+  if (Array.isArray(value)) return value.map(withoutMemberIpFields);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !blocked.has(key))
+    .map(([key, item]) => [key, withoutMemberIpFields(item)]));
+}
+
 function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, gatewaySession}) {
   const router = express.Router();
   router.use(requireSameOrigin);
@@ -114,7 +125,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
   router.post('/api/admin/login', loginLimiter, asyncRoute(async (req, res) => {
     const {username, password} = req.body || {};
     const result = await client.call('adminLogin', {
-      username, password, ipAddress:String(req.ip || '')
+      username, password
     });
     gatewaySession.setAdminCookie(req, res, result.token, result.expires_at);
     return res.json({ok:true, username:result.username});
@@ -135,8 +146,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     const result = await client.call('adminChangePassword', {
       token:req.adminToken,
       currentPassword:String((req.body || {}).currentPassword || ''),
-      newPassword:String((req.body || {}).newPassword || ''),
-      ipAddress:String(req.ip || '')
+      newPassword:String((req.body || {}).newPassword || '')
     });
     gatewaySession.clearAdminCookie(res);
     return res.json(result);
@@ -149,7 +159,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     res.json(await client.call('adminOrders', {token:req.adminToken}));
   }));
   router.get('/api/admin/orders/:id/slip', requireAdmin, asyncRoute(async (req, res) => {
-    const result = await client.call('adminSlipData', {token:req.adminToken, orderId:String(req.params.id), ipAddress:String(req.ip || '')});
+    const result = await client.call('adminSlipData', {token:req.adminToken, orderId:String(req.params.id)});
     const bytes = Buffer.from(String(result.base64 || ''), 'base64');
     if (!bytes.length) return res.status(404).json({error:'ไม่พบสลิป'});
     res.set({
@@ -165,7 +175,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     const status = String((req.body || {}).status || '');
     if (!['Completed','Rejected'].includes(status)) return res.status(400).json({error:'สถานะไม่ถูกต้อง'});
     const result = await client.call('adminSetOrderStatus', {
-      token:req.adminToken, orderId:String(req.params.id), status, ipAddress:String(req.ip || '')
+      token:req.adminToken, orderId:String(req.params.id), status
     });
     if (result && result.reason === 'expired') return res.status(409).json({error:'ออเดอร์หมดเวลาแล้วและคืนสิทธิ์คูปองแล้ว'});
     return res.json(result || {ok:true});
@@ -191,19 +201,19 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
     }));
     router.post('/api/admin/' + table, requireAdmin, asyncRoute(async (req, res) => {
       const record = toSchemaRecord(table, req.body || '');
-      const result = await client.call('adminUpsert', {token:req.adminToken, tableName:table, record, ipAddress:String(req.ip || '')});
+      const result = await client.call('adminUpsert', {token:req.adminToken, tableName:table, record});
       return res.status(201).json(result);
     }));
     router.put('/api/admin/' + table + '/:id', requireAdmin, asyncRoute(async (req, res) => {
       const record = toSchemaRecord(table, req.body || {}, String(req.params.id));
       const result = await client.call('adminUpsert', {
-        token:req.adminToken, tableName:table, record, ipAddress:String(req.ip || '')
+        token:req.adminToken, tableName:table, record
       });
       return res.json(result);
     }));
     router.delete('/api/admin/' + table + '/:id', requireAdmin, asyncRoute(async (req, res) => {
       const id = String(req.params.id);
-      const result = await client.call('adminDelete', {token:req.adminToken, tableName:table, id, ipAddress:String(req.ip || '')});
+      const result = await client.call('adminDelete', {token:req.adminToken, tableName:table, id});
       return res.json(result || {ok:true});
     }));
   }
@@ -214,14 +224,13 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
       search:String(req.query.search || ''),
       limit:Number(req.query.limit || 200)
     });
-    return res.json(result);
+    return res.json(withoutMemberIpFields(result));
   }));
   router.patch('/api/admin/members/:id/status', requireAdmin, asyncRoute(async (req, res) => {
     const result = await client.call('adminSetMemberStatus', {
       token:req.adminToken,
       memberId:String(req.params.id),
-      status:String((req.body || {}).status || ''),
-      ipAddress:String(req.ip || '')
+      status:String((req.body || {}).status || '')
     });
     return res.json(result);
   }));
@@ -232,7 +241,7 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
       memberId:String(req.query.memberId || ''),
       limit:Number(req.query.limit || 100)
     });
-    return res.json(result);
+    return res.json(withoutMemberIpFields(result));
   }));
 
   router.post('/api/admin/upload', requireAdmin, upload.single('image'), validateImageFile, asyncRoute(async (req, res) => {
@@ -242,7 +251,6 @@ function createGatewayAdminRouter({client, requireAdmin, loginLimiter, upload, g
       const result = await client.call('adminStoreMedia', {
         token:req.adminToken,
         media:{name:req.file.originalname, mimeType:req.file.mimetype, base64:bytes.toString('base64')},
-        ipAddress:String(req.ip || '')
       });
       return res.status(201).json({url:result.url});
     } finally {
