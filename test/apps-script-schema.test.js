@@ -258,6 +258,15 @@ test('Schema v3 business modules no longer call legacy field-based Sheets helper
     assert.doesNotMatch(source, /\brows_\s*\(/, file + ' must read through the schema-aware repository');
     assert.doesNotMatch(source, /\bappend_\s*\(|\bupdateById_\s*\(/, file + ' must write through the schema-aware repository');
   }
+  const repositoryOnlyWriters = ['03_Catalog.gs','04_Coupons.gs','06_Orders.gs','07_Auth.gs','08_Admin.gs','10_Utilities.gs'];
+  for (const file of repositoryOnlyWriters) {
+    const source = fs.readFileSync(path.join(gasDir, file), 'utf8');
+    assert.doesNotMatch(
+      source,
+      /\.(?:appendRow|setValues|setValue|deleteRow|deleteRows)\s*\(/,
+      file + ' must not mutate Sheets outside the repository layer'
+    );
+  }
   const auth = fs.readFileSync(path.join(gasDir, '07_Auth.gs'), 'utf8');
   assert.match(auth, /admin_sessions/);
   assert.match(auth, /SESSION_IDLE_TIMEOUT_MS/);
