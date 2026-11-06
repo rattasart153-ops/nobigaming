@@ -246,10 +246,65 @@ test('member-game coupon requires an authenticated member with completed spend i
 });
 
 
+test('coupon eligibility fails closed on malformed thresholds and Completed spend values',()=>{
+  const {context,data,fixedNow}=makeOrderHarness();
+  data.members.push({member_id:'member-1',status:'Active'});
+  const memberCoupon={
+    coupon_id:'member-coupon',code_normalized:'MEMBER',code_display:'MEMBER',
+    discount_type:'fixed',discount_value:1000,access_type:'member_game_spend',
+    member_spend_game_id:'game-1',member_min_game_spend_satang:'not-a-number',
+    active:true,expires_at:'',min_order_satang:0,usage_limit:''
+  };
+  assert.equal(context.couponEligibility_(memberCoupon,'game-1',10000,'uid-123','member-1',fixedNow).valid,false);
+  memberCoupon.member_min_game_spend_satang=1000;
+  data.orders.push({order_id:'corrupt-member-spend',member_id:'member-1',game_id:'game-1',status:'Completed',total_satang:'corrupt'});
+  assert.equal(context.couponEligibility_(memberCoupon,'game-1',10000,'uid-123','member-1',fixedNow).valid,false);
+
+  const uidCoupon={
+    coupon_id:'uid-coupon',code_normalized:'UID',code_display:'UID',
+    discount_type:'fixed',discount_value:1000,access_type:'public',
+    game_id:'game-1',min_player_spend_satang:1000,
+    active:true,expires_at:'',min_order_satang:0,usage_limit:''
+  };
+  data.orders.push({order_id:'corrupt-uid-spend',member_id:'',player_id:'uid-123',game_id:'game-1',status:'Completed',total_satang:'bad'});
+  assert.equal(context.couponEligibility_(uidCoupon,'game-1',10000,'uid-123','',fixedNow).valid,false);
+  uidCoupon.discount_value=10.5;
+  assert.equal(context.couponEligibility_(uidCoupon,'game-1',10000,'uid-123','',fixedNow).valid,false);
+});
+
+
+test('invalid Pending payment deadline expires the order and releases its coupon reservation',()=>{
+  const {context,data,fixedNow}=makeOrderHarness();
+  data.coupons.push({
+    coupon_id:'coupon-invalid-deadline',code_normalized:'SAVE',code_display:'SAVE',
+    discount_type:'fixed',discount_value:1000,access_type:'public',active:true,
+    expires_at:'',min_order_satang:0,usage_limit:1,game_id:''
+  });
+  context.createOrder({
+    request_key:'request-key-invalid-deadline',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-123',server_id:'',coupon_code:'SAVE'
+  });
+  data.orders[0].payment_expires_at='not-a-date';
+  context.expirePendingOrdersLocked_(fixedNow+16*60*1000);
+  assert.equal(data.orders[0].status,'Expired');
+  assert.equal(data.coupon_redemptions[0].state,'Released');
+});
+
+
+test('checkout rejects an existing idempotency record with an invalid expiry timestamp',()=>{
+  const {context,data}=makeOrderHarness();
+  const payload={request_key:'request-key-invalid-idem',game_id:'game-1',package_id:'pack-1',player_id:'uid-123',server_id:'',coupon_code:''};
+  context.createOrder(payload);
+  data.idempotency_records[0].expires_at='invalid';
+  assert.throws(()=>context.createOrder(payload),/IDEMPOTENCY_RECORD_INVALID/);
+});
+
+
 test('UID cumulative spend coupon is enforced per game using Completed orders only',()=>{
   const {context,data,fixedNow}=makeOrderHarness();
   data.orders.push(
     {order_id:'uid-completed-1',member_id:'',player_id:'uid-123',game_id:'game-1',status:'Completed',total_satang:30000},
+    {order_id:'uid-member-completed',member_id:'member-2',player_id:'uid-123',game_id:'game-1',status:'Completed',total_satang:10000},
     {order_id:'uid-pending',member_id:'',player_id:'uid-123',game_id:'game-1',status:'Pending',total_satang:50000},
     {order_id:'uid-other-game',member_id:'',player_id:'uid-123',game_id:'game-2',status:'Completed',total_satang:50000}
   );
@@ -261,7 +316,7 @@ test('UID cumulative spend coupon is enforced per game using Completed orders on
   };
   const eligible=context.couponEligibility_(coupon,'game-1',10000,'uid-123','',fixedNow);
   assert.equal(eligible.valid,true);
-  coupon.min_player_spend_satang=40000;
+  coupon.min_player_spend_satang=50000;
   const insufficient=context.couponEligibility_(coupon,'game-1',10000,'uid-123','',fixedNow);
   assert.equal(insufficient.valid,false);
   assert.match(insufficient.error,/ยอดเติมสะสม/);
