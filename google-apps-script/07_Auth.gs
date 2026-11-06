@@ -147,7 +147,7 @@ function requireAdmin_(token) {
     lock.releaseLock();
   }
 }
-function memberRegister(fullName, loginId, password, ipAddress) {
+function memberRegister(fullName, loginId, password) {
   const name = String(fullName || '').trim();
   const login = String(loginId || '').trim();
   const normalized = login.toLowerCase();
@@ -190,7 +190,7 @@ function memberRegister(fullName, loginId, password, ipAddress) {
   }
 }
 
-function memberLogin(loginId, password, ipAddress, userAgent) {
+function memberLogin(loginId, password, userAgent) {
   const login = String(loginId || '').trim();
   const normalized = login.toLowerCase();
   const pass = String(password || '');
@@ -203,7 +203,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
     const lock = LockService.getScriptLock();
     lock.waitLock(15000);
     try {
-      appendMemberLoginLogLocked_('', normalized, '', false, 'Failure', 'RATE_LIMITED', agent, new Date().toISOString());
+      appendMemberLoginLogLocked_('', normalized, 'Failure', 'RATE_LIMITED', agent, new Date().toISOString());
     } finally { lock.releaseLock(); }
     throw error;
   }
@@ -217,7 +217,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
     lock.waitLock(15000);
     try {
       incrementAccountFailureLocked_('MEMBER_ACCOUNT', normalized, Date.now());
-      appendMemberLoginLogLocked_(member ? member.member_id : '', normalized, '', false, 'Failure', 'INVALID_CREDENTIALS', agent, new Date().toISOString());
+      appendMemberLoginLogLocked_(member ? member.member_id : '', normalized, 'Failure', 'INVALID_CREDENTIALS', agent, new Date().toISOString());
     } finally { lock.releaseLock(); }
     throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
   }
@@ -231,7 +231,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
     if (!currentMember || currentMember.status !== 'Active' ||
         String(currentMember.password_hash) !== String(member.password_hash) ||
         Number(currentMember.auth_version) !== Number(member.auth_version)) {
-      appendMemberLoginLogLocked_(member.member_id, normalized, '', false, 'Failure', 'CREDENTIALS_CHANGED', agent, new Date().toISOString());
+      appendMemberLoginLogLocked_(member.member_id, normalized, 'Failure', 'CREDENTIALS_CHANGED', agent, new Date().toISOString());
       throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
     }
 
@@ -256,7 +256,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
       last_login_at:nowIso,
       updated_at:nowIso
     });
-    appendMemberLoginLogLocked_(currentMember.member_id, normalized, '', false, 'Success', '', agent, nowIso);
+    appendMemberLoginLogLocked_(currentMember.member_id, normalized, 'Success', '', agent, nowIso);
     return {
       ok:true,
       token:rawToken,
@@ -323,7 +323,7 @@ function memberMe(token) {
   };
 }
 
-function appendMemberLoginLogLocked_(memberId, loginId, ip, isNewIp, result, reason, userAgent, createdAt) {
+function appendMemberLoginLogLocked_(memberId, loginId, result, reason, userAgent, createdAt) {
   repositoryInsertLocked_('member_login_logs', {
     log_id:Utilities.getUuid(),
     member_id:memberId,
