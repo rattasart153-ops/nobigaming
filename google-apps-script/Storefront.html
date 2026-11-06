@@ -2284,7 +2284,7 @@ async function apiRequest(url, options = {}) {
     } catch(e) {}
   }
   async function loadPromotions() {
-    const box=$("#dynamicPromotions"); try{const items=await apiRequest('/api/public/promotions');if(!Array.isArray(items)||!items.length){box.hidden=true;return;}box.innerHTML=items.map(p=>{const href=String(p.link_url||'#games');const safeHref=/^(#|\/|https:\/\/)/i.test(href)?href:'#games';return `<a class="promo-dynamic" href="${escapeHtml(safeHref)}" ${p.image_url?`style="background-image:linear-gradient(90deg,rgba(11,16,32,.92),rgba(11,16,32,.35)),url('${String(p.image_url).replace(/'/g,'%27')}')"`:''}><strong>${escapeHtml(p.title)}</strong><p>${escapeHtml(p.subtitle||'')}</p></a>`}).join('');box.hidden=false;}catch(e){box.hidden=true;}
+    const box=$("#dynamicPromotions"); try{const items=await apiRequest('/api/public/promotions');if(!Array.isArray(items)||!items.length){box.hidden=true;return;}box.innerHTML=items.map(p=>{const href=String(p.link_url||'#games');const safeHref=href.startsWith('#')||(href.startsWith('/')&&!href.startsWith('//'))||/^https:\/\//i.test(href)?href:'#games';return `<a class="promo-dynamic" href="${escapeHtml(safeHref)}" ${p.image_url?`style="background-image:linear-gradient(90deg,rgba(11,16,32,.92),rgba(11,16,32,.35)),url('${String(p.image_url).replace(/'/g,'%27')}')"`:''}><strong>${escapeHtml(p.title)}</strong><p>${escapeHtml(p.subtitle||'')}</p></a>`}).join('');box.hidden=false;}catch(e){box.hidden=true;}
   }
   loadLiveCatalog(); loadPromotions();
 

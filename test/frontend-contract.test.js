@@ -64,6 +64,7 @@ test('HtmlService storefront and Admin use named google.script.run facade with m
   assert.ok(storefront.includes("let nobiMemberToken = ''"));
   assert.ok(storefront.includes("let nobiCheckoutToken = ''"));
   assert.ok(storefront.includes('new QRCode(qrHost'));
+  assert.ok(storefront.includes("!href.startsWith('//')"),'protocol-relative promotion links must be rejected');
   assert.equal(storefront.includes('nobi_active_checkout'),false);
   assert.ok(storefront.includes('nobi_order_attempt'));
   assert.ok(admin.includes("let nobiAdminToken=''"));

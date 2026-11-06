@@ -94,11 +94,11 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 | ID | Severity | Finding | Required action |
 |---|---|---|---|
 | P0-01 | Critical | GAS `doGet()` previously returned JSON with no HtmlService renderer | **P0-R11 source implemented:** `Code.gs` routes to Storefront/Admin templates; no resource initialization occurs during rendering. Runtime verification remains gated. |
-| P0-02 | Critical | Current HTML pages still call Express REST, not `google.script.run`; template copies are not end-to-end functional yet | **Still open:** implement and test the P2 frontend adapter before accepting the HtmlService app as functional. |
+| P0-02 | Critical | HtmlService pages needed a REST-to-RPC browser adapter | **Source implemented in P0-R13:** Storefront and Admin now use only named google.script.run facade methods; CI validates no fetch() calls in either HtmlService page. Real GAS runtime and browser/device integration remain gated. |
 | P0-03 | Critical | `01_HttpEntry.gs` dispatcher was only reachable through signed `doPost()` | **P0-R12 source implemented:** `BrowserFacade.gs` exposes named typed functions, strict argument allowlists and no generic browser action dispatcher. Runtime verification remains gated. |
-| P0-04 | High | PromptPay payload generation was previously a stub | P0-R7 now returns a validated EMVCo payload without a paid service; HtmlService must render it with a local QR encoder and complete runtime verification before real payment |
-| P0-05 | High | Existing Admin slip and media paths transfer base64 data through Apps Script actions | P1/P3: design bounded upload/download and memory-safe limits; preserve 3 MB upload cap and private Drive access |
-| P0-06 | High | Current frontend/Admin session model assumes Express same-origin cookie sessions; GAS business handlers issue opaque tokens | P1/P2: define secure HtmlService session transport, token lifecycle and XSS protections before switching |
+| P0-04 | High | PromptPay QR rendering | **Source implemented in P0-R13:** HtmlService uses a locally bundled MIT-licensed QRCode.js encoder to render the EMVCo payload; no external QR endpoint or paid service. Real QR scan/payment validation remains gated. |
+| P0-05 | High | Admin slip and media transfer needed an HtmlService RPC path | **Source implemented in P0-R13:** slip upload, Admin media upload and slip retrieval use bounded Base64 RPC payloads with the existing 3 MiB file cap; Drive ACL checks remain server-side. Real Drive transfer/ACL validation remains gated. |
+| P0-06 | High | HtmlService needs a browser-compatible session lifecycle | **Source implemented in P0-R13:** Member/Admin session tokens and checkout upload capability stay in JavaScript memory only; no auth token is written to localStorage/sessionStorage; refreshing requires login again. Dynamic server text is escaped and promo links are protocol-allowlisted. XSS review and HtmlService runtime security validation remain P4 gates; memory-only storage is not XSS-proof. |
 | P0-07 | High | Sheets has no relational transaction; order + coupon redemption + idempotency rows require recovery after partial writes | P0-R1/R2 write-ahead journal and P0-R3 fault-injection coverage implemented. Recovery preflights full CREATE order/redemption/idempotency records before writes, validates legal transition states and patches, and rejects cross-order linkage; actual Apps Script concurrency/runtime verification remains open |
 | P0-08 | High | PBKDF2-SHA256 120,000 iteration implementation has only reference/unit coverage; runtime cost unknown | P3: benchmark login latency and execution quotas; do not weaken to SHA-256-only |
 | P0-09 | High | Private Drive access checks and folder boundaries are not verified against real Drive ACLs | P3/P4: test owner, parent-folder sharing, file sharing, cross-folder IDs and authenticated reads |
@@ -129,11 +129,11 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 
 Static source review confirms:
 
-- Neither frontend currently calls `google.script.run`; both use `fetch()`. Their existing REST cookie/session behavior cannot be copied unchanged into HtmlService.
+- Historical baseline: both copied pages initially used fetch() and Express cookie sessions. P0-R13 replaced the HtmlService templates' transport with named google.script.run calls; legacy public/ pages remain the Express characterization baseline.
 - Storefront `sessionStorage` currently holds checkout retry/idempotency state, not Admin or Member authentication tokens.
-- Admin relies on same-origin HttpOnly cookie sessions and does not persist an Admin bearer token in browser storage.
-- Both HTML pages contain inline scripts/styles and dynamic `innerHTML` rendering. Existing escaping and server-side validation must be re-reviewed after migration; CSP enforcement and HtmlService sandbox compatibility remain open.
-- The storefront submits slips and Admin media through multipart REST endpoints today. The GAS gateway converts file bytes to base64; the new RPC path must have explicit size limits and sequential/bounded calls.
+- Current HtmlService Admin keeps its opaque Admin token in JavaScript memory only and starts unauthenticated after every page refresh; it does not use cookie sessions or browser storage for authentication.
+- Both pages retain inline scripts/styles and some innerHTML rendering. Current templates escape server-controlled promotion, coupon, package and Admin table values and restrict promotion links to safe relative/HTTPS URLs. A full XSS review, CSP strategy and HtmlService sandbox compatibility remain open; this is not claimed to be XSS-proof.
+- Current HtmlService storefront/Admin file flows convert PNG/JPEG/WebP to Base64 and call named facade methods. The 3 MiB file limit and 4,194,304-character encoded boundary are enforced; actual GAS payload/runtime limits still need synthetic verification.
 - `google.script.run` is asynchronous, has legal-type restrictions for parameters/returns, and allows at most 10 concurrent calls. The frontend adapter must serialize dependent mutations, use success/failure handlers, and never rely on call execution order. See [Google's google.script.run reference](https://developers.google.com/apps-script/guides/html/reference/run) and [server communication guide](https://developers.google.com/apps-script/guides/html/communication).
 - Apps Script Web App `doGet(e)` event documentation lists query parameters, path information and POST metadata; it does not document a remote client IP field. See [Google's Web Apps request event documentation](https://developers.google.com/apps-script/guides/web#request_parameters).
 
@@ -156,15 +156,15 @@ P0-12 is resolved as a requirements decision, not because a trusted IP source wa
 | File(s) | P1/P2 action | Preserve / verify |
 |---|---|---|
 | `Code.gs` | **Implemented P0-R11:** HtmlService router selects `Storefront` or `Admin` template | No DB initialization or Admin bootstrap in `doGet()` |
-| `Storefront.html`, `Admin.html` | **Implemented P0-R11:** template copies of existing public HTML with top-level navigation base | Preserve Thai copy, layout, responsive UI and accessibility; REST-to-RPC adapter remains P2 |
+| `Storefront.html`, `Admin.html` | **Implemented P0-R11/P0-R13:** HtmlService templates plus named RPC adapters and memory-only session handling | Preserve Thai copy/layout; verify browser/device behavior and XSS controls in P4/P5 |
 | `01_HttpEntry.gs`, `BrowserFacade.gs` | **Implemented P0-R12:** keep dispatcher internal and expose named typed facade functions only | Strict payload allowlists; business handlers enforce authorization and invariants |
 | `13_HttpGateway.gs` | Retain only if needed for internal/diagnostic compatibility; not the browser app transport | Never expose shared HMAC secret to browser |
 | `02_Database.gs`, `11_Repositories.gs` | Keep Sheets repository foundation | Schema checks, lock behavior, recovery, quota handling |
 | `03_Catalog.gs`, `04_Coupons.gs`, `06_Orders.gs`, `08_Admin.gs`, `09_Validation.gs`, `10_Utilities.gs` | Preserve business handlers; adapt facade arguments only | All business invariants, authorization, idempotency and safe failures |
-| `05_Payments.gs` | Implement PromptPay QR generation | No external paid QR service; verify Thai PromptPay payload and exact amount |
+| `05_Payments.gs`, `QrCode.html` | **Implemented:** EMVCo payload plus locally bundled QR renderer | No external paid QR service; real device scan and exact-amount verification remain gated |
 | `07_Auth.gs` | Preserve auth/session core; connect to facade/session transport | PBKDF2 benchmark, token protection, revocation, rate limiting |
-| `public/nobitopup.html` | Move into HtmlService template and replace REST adapter with RPC client | Catalog, coupon, QR, checkout, slip, member flows and retry behavior |
-| `public/admin.html`, `Admin.html` | Template source copied; replace REST adapter with RPC client in P2 | Admin CRUD, member/login history without IP, order review, private slip/media |
+| `Storefront.html` | **Implemented P0-R13:** named RPC adapter for catalog, coupons, QR, checkout/slip and Member flows | Verify on a real HtmlService browser after P6 approval; only idempotency metadata remains in sessionStorage |
+| `Admin.html` | **Implemented P0-R13:** named RPC adapter for Admin login, dashboard, orders, CRUD, member history, slip retrieval and private media upload | Verify all flows in a real HtmlService browser after P6 approval |
 | `src/routes/gateway-*.routes.js`, `src/clients/apps-script.client.js` | Legacy Express gateway; do not use as the final web host | Keep unchanged until P1/P2 replacement is tested; do not silently enable Vercel |
 | `src/db/sqlite.js`, legacy `src/routes/*.routes.js` | Local characterization baseline only | No SQLite fallback for hosted/live use |
 | `test/*.test.js` | Extend static/unit tests for new facade and templates | Keep existing regression tests and add real-runtime checks later |
@@ -344,6 +344,34 @@ The browser facade must expose named, typed operations rather than accepting arb
 - Added test/apps-script-web-entry-facade.test.js and test/apps-script-browser-facade.test.js for route selection, template parity, exposed function inventory, action mapping, strict argument allowlists, no-IP enforcement, and bounded file payloads.
 - Focused in-tool checks passed: changed GAS and test sources compile; both template inline scripts parse; router selection and safe fallback work in a mock HtmlService harness; typed facade mappings work and reject injected IP fields; template copies match their public source plus the intended base tag.
 - After correcting the initial CI failures (stale JSON doGet expectation, obsolete IP-based rate-limit test, cross-VM assertions and no-IP line parsing), GitHub Actions run 42158907908 on source/test commit f3872aab0c39933e31156f862ec7ac3bce238172 completed successfully: **113 tests passed, 0 failed**. The api-smoke job installed dependencies and ran npm test under Node 22.
-- P0-02 remains open: the copied HTML still calls legacy REST routes. The P2 frontend adapter has not yet been implemented, so these templates and facade are not an end-to-end working storefront/Admin yet.
-- P0-06 remains open: the frontend token lifecycle and XSS/session transport must be designed before the browser adapter is accepted. Tokens must not be stored in localStorage or sessionStorage.
+- At the end of P0-R12, P0-02 was still open. It was subsequently implemented in P0-R13; see the current status section below.
+- At the end of P0-R12, P0-06 was still open. P0-R13 implemented memory-only tokens and re-login after refresh; residual XSS/runtime security verification remains open and tokens must never be stored in localStorage/sessionStorage.
 - No Google resources, Script Properties, Admin bootstrap, deployment, billing, paid service, real customer data, or real payment were used. Work remains on vercel-drive-setup; main is unchanged.
+
+
+## 14. P0-R13 — HtmlService frontend adapter, sessions and local QR — 2026-11-06
+
+### Frontend transport
+
+- Replaced the Storefront and Admin HtmlService REST adapters with named google.script.run calls to the fixed functions in BrowserFacade.gs. The HtmlService pages no longer call fetch(); REST-like route strings are only internal compatibility dispatch keys inside the local adapter.
+- Storefront now maps catalog/promotions, coupon validation/suggestions, PromptPay info, create-order/slip, Member register/login/session/logout/password to the typed facade. Admin maps login/session/logout, dashboard/orders/status/slip, members/login history, four CRUD tables and private media upload to the typed facade.
+- Admin records receive UI-only id and game-name mappings from the raw GAS schema fields; write calls restore the correct GAS primary-key field. Member IP fields remain absent.
+
+### Session and file-transfer behavior
+
+- Member and Admin opaque session tokens are held only in page JavaScript memory. No authentication token is written to localStorage or sessionStorage; after refresh the page starts unauthenticated and the user must log in again. The server continues to enforce 8-hour maximum lifetime, 30-minute idle timeout, revocation and account status.
+- The order-scoped checkout upload capability is also memory-only. The non-secret order idempotency key/fingerprint may remain in sessionStorage to support retry; the checkout token itself is never persisted. After refresh, the same order attempt must be recreated with the same details (and re-login if it belonged to a Member) to recover the server-issued upload capability.
+- Storefront slip upload, Admin media upload and Admin slip retrieval use bounded Base64 payloads through named facade methods. PNG/JPEG/WebP and the existing 3 MiB file limit are preserved. Drive access validation remains in Apps Script and no Drive URL is exposed as a public file link.
+- Catalog/promotion images are delivered only when referenced by an active package/promotion and pass the existing private Drive checks; the HtmlService client receives a data URL rather than a Drive sharing URL.
+
+### PromptPay QR and XSS precautions
+
+- Added a locally bundled QRCode.js encoder (google-apps-script/QrCode.html) with its MIT notice. Storefront renders the EMVCo payload returned by paymentInfo_() in the browser; no external QR-image API, paid service or third-party runtime script request is used.
+- Dynamic package/coupon/promotion text is escaped before HTML insertion; promotion destinations are limited to fragment links, same-origin relative paths (not protocol-relative URLs) or HTTPS URLs. Admin table/editor values continue to use HTML escaping and fixed field definitions.
+- Memory-only tokens reduce persistence exposure but do not make an active XSS harmless. Full XSS review, CSP/sandbox compatibility and browser testing remain open; no claim of XSS-proof behavior is made.
+
+### Validation and remaining gates
+
+- GitHub Actions run 42165167680 on commit 23ec0cf0b36cbec819cf75314409d8aba09ceca9 completed successfully: **116 tests passed, 0 failed**. This includes inline-script parsing, named-facade transport assertions, memory-only token checks, HtmlService routing/template checks and local QR asset syntax/license checks.
+- This is Node/VM CI, not a live browser or real Google runtime test. P3/P4/P5 still require a separately authorized synthetic Apps Script/Sheets/Drive environment for LockService/Sheets concurrency, PBKDF2 execution time, real Drive ACLs, upload/download quotas, real QR scanning, and browser/device workflows.
+- No Google resources, Script Properties, Admin bootstrap, deployment, billing, paid service, production data or live payment was used. Only vercel-drive-setup was modified; main remains unchanged.

@@ -1,6 +1,6 @@
 # Nobi Topup — Zero-Cost Migration and Compatibility Plan
 
-Status: approved architecture direction; planning and source audit only. No Google resource creation, initialization, deployment or live operation is authorized.
+Status: approved architecture; P0/P1/P2 source implementation complete on vercel-drive-setup; real Google runtime, browser/device verification and deployment remain unauthorized.
 
 ## Scope and cost boundary
 
@@ -35,9 +35,12 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - Keep secrets in Script Properties.
 
 ### P2 — Frontend adapter
-- Replace Vercel fetch calls with a small `google.script.run` adapter.
-- Preserve UI, Thai text, workflows and business semantics.
-- Implement bounded file transfer without exposing Drive URLs/tokens.
+- [x] Replace HtmlService Storefront/Admin REST transport with named google.script.run facade calls (P0-R13).
+- [x] Preserve UI, Thai text, checkout, Member/Admin workflows and business semantics at source level.
+- [x] Implement bounded Base64 slip/media upload and Admin slip retrieval without exposing Drive sharing URLs.
+- [x] Keep Member/Admin session tokens and checkout upload capability in JavaScript memory only; refresh requires login again. Never store auth tokens in localStorage/sessionStorage.
+- [x] Render PromptPay EMVCo payload with a locally bundled QR encoder.
+- [ ] Complete real HtmlService browser/device verification after separate P6 authorization.
 
 ### P3 — Runtime and performance
 - Static/offline tests, then isolated Apps Script runtime tests after separate approval.
@@ -62,6 +65,14 @@ Guest checkout; ASCII Member Login ID 4–30; public/member-only/member-game-spe
 
 - GAS source includes Schema v1 setup/repository primitives, business handlers, auth/session logic, coupon/order workflows, private Drive helpers and signed HTTP gateway.
 - Signed gateway remains for legacy characterization only; `BrowserFacade.gs` exposes named typed `google.script.run` functions.
-- HtmlService router and template copies now exist. Template JavaScript still calls legacy REST endpoints; P2 frontend transport adapter is not yet implemented, so the web app is not end-to-end functional.
+- HtmlService router, templates, typed facade adapters, memory-only session lifecycle, bounded file transfer and local QR rendering are implemented at source level. CI passed 116/116 on run 42165167680 (commit 23ec0cf0b36cbec819cf75314409d8aba09ceca9). This does not prove live GAS/Sheets/Drive or browser/device behavior.
 - Apps Script runtime, quotas, concurrency and Drive ACLs are unverified.
 - No live Google resources have been initialized; no web app deployed.
+
+
+## Current implementation status — 2026-11-06
+
+- P0-R11/R12: HtmlService router and typed browser facade implemented.
+- P0-R13: Storefront/Admin frontend adapter, memory-only tokens, refresh-to-login behavior, Base64 file transfer and local PromptPay QR renderer implemented.
+- CI: GitHub Actions run 42165167680 passed **116/116** tests on vercel-drive-setup.
+- Remaining: real Apps Script runtime/quotas, Sheets/LockService concurrency, PBKDF2 latency, Drive ACLs, browser/device E2E and actual QR scanning. These require a separately authorized synthetic test environment. No Google resources or deployment are authorized by this status update.
