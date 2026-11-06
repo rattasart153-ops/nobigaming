@@ -31,7 +31,8 @@ function makeAuthContext() {
     },
     repositoryGetById_:(table,id)=>{
       assert.equal(lockHeld,true,'account state must be read while ScriptLock is held');
-      return (data[table]||[]).find(row=>String(row[table==='admins'?'admin_id':'member_id'])===String(id))||null;
+      const row=(data[table]||[]).find(item=>String(item[table==='admins'?'admin_id':'member_id'])===String(id));
+      return row ? {...row} : null;
     },
     repositoryRows_:table=>{
       assert.equal(lockHeld,true,'session lists must be read while ScriptLock is held');
