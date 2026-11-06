@@ -47,15 +47,15 @@ function dispatchGatewayAction_(action, args) {
     case 'adminLogout': return adminLogout(args.token);
     case 'adminDashboard': return adminDashboard(args.token);
     case 'adminOrders': return adminOrders(args.token);
-    case 'adminSlipData': return adminSlipData(args.token, args.orderId, args.ipAddress);
-    case 'adminSetOrderStatus': return adminSetOrderStatus(args.token, args.orderId, args.status, args.ipAddress);
+    case 'adminSlipData': return adminSlipData(args.token, args.orderId);
+    case 'adminSetOrderStatus': return adminSetOrderStatus(args.token, args.orderId, args.status);
     case 'adminList': return adminList(args.token, args.tableName);
-    case 'adminUpsert': return adminUpsert(args.token, args.tableName, args.record, args.ipAddress);
-    case 'adminDelete': return adminDelete(args.token, args.tableName, args.id, args.ipAddress);
+    case 'adminUpsert': return adminUpsert(args.token, args.tableName, args.record);
+    case 'adminDelete': return adminDelete(args.token, args.tableName, args.id);
     case 'adminMemberLoginLogs': return adminMemberLoginLogs(args.token, args.memberId, args.limit);
     case 'adminMembers': return adminMembers(args.token, args.search, args.limit);
-    case 'adminSetMemberStatus': return adminSetMemberStatus(args.token, args.memberId, args.status, args.ipAddress);
-    case 'adminStoreMedia': return adminStoreMedia(args.token, args.media, args.ipAddress);
+    case 'adminSetMemberStatus': return adminSetMemberStatus(args.token, args.memberId, args.status);
+    case 'adminStoreMedia': return adminStoreMedia(args.token, args.media);
     case 'publicMediaData': return publicMediaData(args.fileId);
     default: throw new Error('Action is not allowed');
   }
