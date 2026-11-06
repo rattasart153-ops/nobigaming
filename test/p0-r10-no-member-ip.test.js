@@ -35,6 +35,17 @@ test('Member registration and login never consume or persist a caller-supplied I
   assert.match(logWriter, /is_new_ip:false/);
 });
 
+test('Admin authentication and HtmlService dispatcher do not forward client IP values', () => {
+  const adminLogin = section(auth, 'function adminLogin(', 'function adminLogout(');
+  assert.match(adminLogin, /consumeLoginAttempt_\('ADMIN_LOGIN_ATTEMPT', normalized, 10\)/);
+  assert.match(adminLogin, /created_ip:''/);
+  assert.doesNotMatch(adminLogin, /ipAddress/);
+  const entry = read('google-apps-script/01_HttpEntry.gs');
+  assert.match(entry, /case 'memberRegister': return memberRegister\(args.fullName, args.loginId, args.password\)/);
+  assert.match(entry, /case 'memberLogin': return memberLogin\(args.loginId, args.password, args.userAgent\)/);
+  assert.doesNotMatch(entry, /case 'member(Login|Register)'.*args\.ipAddress/);
+});
+
 test('Admin member APIs never return Member IP fields or IP history', () => {
   const members = section(admin, 'function adminMembers(', 'function adminSetMemberStatus(');
   const logs = section(admin, 'function adminMemberLoginLogs(', 'function adminStoreMedia(');
