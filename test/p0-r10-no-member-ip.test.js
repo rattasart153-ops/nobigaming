@@ -45,7 +45,7 @@ test('Admin authentication and HtmlService dispatcher do not forward client IP v
   assert.match(entry, /case 'memberLogin': return memberLogin\(args.loginId, args.password, args.userAgent\)/);
   assert.doesNotMatch(entry, /args\.ipAddress/);
   assert.doesNotMatch(admin, /function [A-Za-z0-9_]+\([^)]*ipAddress/);
-  assert.doesNotMatch(admin, /ip_address:\s*(?!'')/);
+  assert.ok(admin.split('\\n').filter(line => line.includes('ip_address:')).every(line => /ip_address:\\s*''/.test(line)));
 });
 
 test('Admin member APIs never return Member IP fields or IP history', () => {
