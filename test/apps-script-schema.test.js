@@ -444,6 +444,9 @@ test('repository writes acquire the script lock with a bounded wait and release 
   const spreadsheet = new FakeSpreadsheet();
   const { context, lockMetrics } = loadGasDatabase(spreadsheet);
   context.__setupNobiDatabase();
+  lockMetrics.waitCalls = 0;
+  lockMetrics.releaseCalls = 0;
+  lockMetrics.lastTimeoutMs = null;
 
   context.__repoInsert('games', { game_id: 'lock-game-1', name: 'Lock Game' });
   assert.equal(lockMetrics.waitCalls, 1);
@@ -462,6 +465,9 @@ test('repository write fails closed when script lock acquisition times out', () 
   const spreadsheet = new FakeSpreadsheet();
   const { context, lockMetrics } = loadGasDatabase(spreadsheet);
   context.__setupNobiDatabase();
+  lockMetrics.waitCalls = 0;
+  lockMetrics.releaseCalls = 0;
+  lockMetrics.lastTimeoutMs = null;
   const games = spreadsheet.getSheetByName('games');
   const before = games.rows.map(row => row.slice());
   lockMetrics.failWait = true;
