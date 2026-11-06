@@ -170,21 +170,21 @@ function resetAccountFailureLocked_(scope, identity) {
   repositoryDeleteLocked_('security_rate_limits', hash);
 }
 
-function consumeAuthIpAttempt_(ipAddress) {
-  const ip = String(ipAddress || '').trim();
-  if (!ip) throw new Error('UNTRUSTED_SOURCE_IP');
+function consumeLoginAttempt_(scope, identity, limit) {
+  const value = String(identity || '').trim().toLowerCase();
+  if (!value) throw new Error('LOGIN_ID_REQUIRED');
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
-  try { consumeRateLimitBucketLocked_('AUTH_IP', ip, 10, Date.now()); }
+  try { consumeRateLimitBucketLocked_(scope, value, Number(limit) || 10, Date.now()); }
   finally { lock.releaseLock(); }
 }
 
-function consumeRegistrationIpAttempt_(ipAddress) {
-  const ip = String(ipAddress || '').trim();
-  if (!ip) throw new Error('UNTRUSTED_SOURCE_IP');
+function consumeRegistrationAttempt_(loginId) {
+  const value = String(loginId || '').trim().toLowerCase();
+  if (!value) throw new Error('LOGIN_ID_REQUIRED');
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
-  try { consumeRateLimitBucketLocked_('REGISTER_IP', ip, 5, Date.now()); }
+  try { consumeRateLimitBucketLocked_('MEMBER_REGISTER_ACCOUNT', value, 5, Date.now()); }
   finally { lock.releaseLock(); }
 }
 
