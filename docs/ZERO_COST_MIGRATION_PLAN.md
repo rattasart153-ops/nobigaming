@@ -74,5 +74,5 @@ Guest checkout; ASCII Member Login ID 4–30; public/member-only/member-game-spe
 
 - P0-R11/R12: HtmlService router and typed browser facade implemented.
 - P0-R13: Storefront/Admin frontend adapter, memory-only tokens encapsulated in adapter closures, refresh-to-login behavior, Base64 file transfer and local PromptPay QR renderer implemented.
-- CI: GitHub Actions run 42165167680 passed **116/116** tests on vercel-drive-setup.
+- CI: GitHub Actions run 42166229765 passed **116/116** tests on vercel-drive-setup (final commit 0bbd5a333bdab94a8da915cb5624ada0608d4dcf).
 - Remaining: real Apps Script runtime/quotas, Sheets/LockService concurrency, PBKDF2 latency, Drive ACLs, browser/device E2E and actual QR scanning. These require a separately authorized synthetic test environment. No Google resources or deployment are authorized by this status update.
