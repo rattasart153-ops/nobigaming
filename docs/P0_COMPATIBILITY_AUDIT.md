@@ -336,6 +336,7 @@ The browser facade must expose named, typed operations rather than accepting arb
 - Added BrowserFacade.gs with named functions for catalog/promotions, coupon validation/suggestions, payment info, create order/slip, Member registration/login/session/password, Admin login/session/password/dashboard/orders/slips/CRUD/member administration/media, and referenced public media.
 - Internal payload validation and dispatcher helpers end in underscore and are not callable through google.script.run. No generic browser-supplied action name or table operation is exposed.
 - Each public wrapper accepts a narrow set of named fields, rejects unknown fields (including browser-supplied IP), validates nested media/slip keys and bounds base64 payload length, then calls a fixed existing business action.
+- Follow-up review tightened both slip and Admin media Base64 limits to 4,194,304 characters, the encoded ceiling for the existing 3 MiB file cap; boundary tests accept the exact ceiling and reject one character above it.
 - Existing GAS business handlers remain responsible for authentication, authorization, record allowlists, order/coupon invariants, and private Drive checks.
 
 ### Validation boundary
