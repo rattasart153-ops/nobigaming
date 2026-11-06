@@ -49,9 +49,15 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - [ ] Complete real HtmlService browser/device verification after separate P6 authorization.
 
 ### P3 — Runtime and performance
-- Static/offline tests, then isolated Apps Script runtime tests after separate approval.
-- Benchmark PBKDF2, Sheets reads/writes, LockService contention, uploads/downloads and execution time.
-- Confirm quotas, concurrency and Drive capacity are sufficient for synthetic test volume.
+- [x] Review source-level hot paths in the schema-aware Sheets repository.
+- [x] Reuse one table snapshot for primary-key and unique-key checks during repository Insert/Update; preserve ScriptLock, schema validation, uniqueness rules and fail-closed behavior.
+- [x] Add offline regression tests that assert one table-body read per Insert/Update, one header validation read and exactly one successful write; duplicate writes perform no write.
+- [x] Retain the PBKDF2-SHA256 reference-vector test to verify the 120,000-iteration implementation has not been weakened or changed.
+- [ ] Benchmark PBKDF2 latency on the actual Apps Script V8 runtime; Node/VM timings are not a substitute.
+- [ ] Measure real Sheets read/write latency and LockService contention under concurrent synthetic requests.
+- [ ] Measure Base64 upload/download throughput, Drive operations and end-to-end Apps Script execution time with synthetic files.
+- [ ] Confirm actual Apps Script quotas, concurrent execution limits and available private Drive capacity against the intended synthetic test volume.
+- Runtime measurements and Google resource checks remain gated by separate explicit approval; no Apps Script project, spreadsheet, Drive folder or deployment has been created.
 
 ### P4 — Security and business rules
 - Verify session expiry/revocation, Admin-only slip access, no Member IP collection, audit retention, coupon reservations, deadlines, idempotency and recovery.
