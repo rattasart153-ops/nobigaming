@@ -293,7 +293,7 @@ test('shared Sheets rate limits use keyed account HMACs and enforce fixed-window
     repositorySheet_:()=>({getLastRow:()=>rows.length+1})
   };
   vm.runInNewContext(
-    source + '\\nglobalThis.__consumeLoginAttempt = consumeLoginAttempt_; globalThis.__consumeRegistrationAttempt = consumeRegistrationAttempt_; globalThis.__rateLimitHash = rateLimitBucketHash_;',
+    source + '\nglobalThis.__consumeLoginAttempt = consumeLoginAttempt_; globalThis.__consumeRegistrationAttempt = consumeRegistrationAttempt_; globalThis.__rateLimitHash = rateLimitBucketHash_;',
     context
   );
 
