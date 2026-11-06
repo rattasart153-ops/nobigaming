@@ -81,6 +81,7 @@ test('optional Member identity treats invalid sessions as Guest but propagates i
     'idle-expired Member sessions must fall back to Guest coupon eligibility');
 
   data.member_sessions[0].last_seen_at=new Date().toISOString();
+  data.member_sessions[0].revoked_at='';
   data.members[0].status='Suspended';
   assert.equal(context.gatewayOptionalMemberId_('member-token'),'',
     'suspended Member sessions must fall back to Guest coupon eligibility');
