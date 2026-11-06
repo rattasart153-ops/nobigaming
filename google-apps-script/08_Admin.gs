@@ -333,8 +333,10 @@ function adminStoreMedia(token, media) {
 }
 
 function assertDriveFolderPrivate_(folder) {
-  if (!folder || typeof folder.getSharingAccess !== 'function' ||
-      typeof folder.getEditors !== 'function' || typeof folder.getViewers !== 'function') {
+  if (!folder || typeof folder.getSharingAccess !== 'function') {
+    throw new Error('DRIVE_FOLDER_INVALID');
+  }
+  if (typeof folder.getEditors !== 'function' || typeof folder.getViewers !== 'function') {
     throw new Error('DRIVE_ACL_UNVERIFIABLE');
   }
   if (folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
@@ -354,8 +356,10 @@ function assertDriveFolderPrivate_(folder) {
 function assertDriveFileInPrivateFolder_(file, folderId) {
   const expected = String(folderId || '').trim();
   if (!expected || !file || typeof file.getParents !== 'function' ||
-      typeof file.getSharingAccess !== 'function' ||
-      typeof file.getEditors !== 'function' || typeof file.getViewers !== 'function') {
+      typeof file.getSharingAccess !== 'function') {
+    throw new Error('DRIVE_FOLDER_INVALID');
+  }
+  if (typeof file.getEditors !== 'function' || typeof file.getViewers !== 'function') {
     throw new Error('DRIVE_ACL_UNVERIFIABLE');
   }
   const folder = DriveApp.getFolderById(expected);
