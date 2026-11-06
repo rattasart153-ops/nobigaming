@@ -61,13 +61,18 @@ test('HtmlService storefront and Admin use named google.script.run facade with m
   }
   const storefront=fs.readFileSync(path.join(__dirname,'..','google-apps-script','Storefront.html'),'utf8');
   const admin=fs.readFileSync(path.join(__dirname,'..','google-apps-script','Admin.html'),'utf8');
-  assert.ok(storefront.includes("let nobiMemberToken = ''"));
-  assert.ok(storefront.includes("let nobiCheckoutToken = ''"));
+  assert.ok(storefront.includes('const apiRequest = (() => {'));
+  assert.ok(storefront.includes("let memberToken = ''"));
+  assert.ok(storefront.includes("let checkoutToken = ''"));
+  assert.equal(storefront.includes('nobiMemberToken'),false);
+  assert.equal(storefront.includes('nobiCheckoutToken'),false);
   assert.ok(storefront.includes('new QRCode(qrHost'));
   assert.ok(storefront.includes("!href.startsWith('//')"),'protocol-relative promotion links must be rejected');
   assert.equal(storefront.includes('nobi_active_checkout'),false);
   assert.ok(storefront.includes('nobi_order_attempt'));
-  assert.ok(admin.includes("let nobiAdminToken=''"));
+  assert.ok(admin.includes('const api = (() => {'));
+  assert.ok(admin.includes("let adminToken=''"));
+  assert.equal(admin.includes('nobiAdminToken'),false);
   assert.equal(admin.includes('nobi_admin_token'),false);
   assert.equal(admin.includes('localStorage'),false);
   assert.equal(admin.includes('sessionStorage'),false);
