@@ -1734,20 +1734,38 @@ const apiRequest = (() => {
 })();
 
 let mediaRpcQueue = Promise.resolve();
+const mediaUrlCache = new Map();
 function safeImageUrl(value) {
-  const url=String(value||'').trim();
-  return /^https:\/\//i.test(url)||/^\/(?!\/)/.test(url)?url:'';
+  const raw=String(value||'').trim();
+  if(!raw||raw.startsWith('//'))return '';
+  try {
+    const parsed=new URL(raw,window.location.href);
+    if(parsed.protocol!=='https:')return '';
+    return /^https:\/\//i.test(raw)||parsed.origin===window.location.origin?raw:'';
+  } catch (_) { return ''; }
+}
+function safePromoHref(value) {
+  const raw=String(value||'#games').trim();
+  if(raw.startsWith('//'))return '#games';
+  try {
+    const parsed=new URL(raw,window.location.href);
+    if(parsed.protocol!=='https:')return '#games';
+    return /^https:\/\//i.test(raw)||parsed.origin===window.location.origin?raw:'#games';
+  } catch (_) { return '#games'; }
 }
 function resolveMediaUrl(value) {
   const url=safeImageUrl(value);
   if(!url)return Promise.resolve('');
   const match=url.match(/^\/api\/public\/media\/([A-Za-z0-9_-]{10,100})$/);
   if(!match)return Promise.resolve(url);
+  if(mediaUrlCache.has(url))return mediaUrlCache.get(url);
   const task=mediaRpcQueue.then(async()=>{
     const media=await apiRequest(url);
     return 'data:'+media.mimeType+';base64,'+media.base64;
   });
+  mediaUrlCache.set(url,task);
   mediaRpcQueue=task.catch(()=>undefined);
+  task.catch(()=>mediaUrlCache.delete(url));
   return task;
 }
 
@@ -2318,8 +2336,7 @@ function resolveMediaUrl(value) {
       items.forEach(p=>{
         const anchor=document.createElement('a');
         anchor.className='promo-dynamic';
-        const href=String(p.link_url||'#games');
-        anchor.href=href.startsWith('#')||(href.startsWith('/')&&!href.startsWith('//'))||/^https:\/\//i.test(href)?href:'#games';
+        anchor.href=safePromoHref(p.link_url);
         const title=document.createElement('strong');title.textContent=String(p.title||'');
         const subtitle=document.createElement('p');subtitle.textContent=String(p.subtitle||'');
         anchor.append(title,subtitle);
