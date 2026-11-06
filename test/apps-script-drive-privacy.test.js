@@ -220,3 +220,26 @@ test('Admin media upload rejects a truncated PNG even when its signature is corr
   }),/ไฟล์ภาพไม่ถูกต้องหรือมีขนาดเกิน 3 MB/);
   assert.equal(state.files.length,0,'truncated image data must never reach Drive');
 });
+
+test('image container validation accepts structurally complete PNG, JPEG and WebP files',()=>{
+  const {context}=makeAdminMediaHarness();
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
+  const jpeg=Buffer.from([
+    0xff,0xd8, 0xff,0xc0,0x00,0x0b,0x08,0x00,0x01,0x00,0x01,0x01,0x01,0x11,0x00,
+    0xff,0xda,0x00,0x08,0x01,0x01,0x00,0x00,0x3f,0x00,0x00,0xff,0xd9
+  ]);
+  const webp=Buffer.from([
+    0x52,0x49,0x46,0x46,0x10,0x00,0x00,0x00,0x57,0x45,0x42,0x50,
+    0x56,0x50,0x38,0x20,0x04,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+  ]);
+  assert.equal(context.validImageSignature_(Array.from(png), 'image/png'),true);
+  assert.equal(context.validImageSignature_(Array.from(jpeg), 'image/jpeg'),true);
+  assert.equal(context.validImageSignature_(Array.from(webp), 'image/webp'),true);
+});
+
+test('image container validation rejects a PNG with a corrupted chunk CRC',()=>{
+  const {context}=makeAdminMediaHarness();
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==','base64');
+  png[52]^=1;
+  assert.equal(context.validImageSignature_(Array.from(png),'image/png'),false);
+});
