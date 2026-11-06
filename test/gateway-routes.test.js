@@ -52,7 +52,7 @@ test('Apps Script-backed public and Admin REST routes preserve the browser API c
         assert.equal(args.token,'admin-secret-token');
         return {orders:3,pending:1,completed:2,revenue:50};
       }
-      if (action === 'adminMemberLoginLogs') return [{ip_address:'203.0.113.10',login_result:'Success'}];
+      if (action === 'adminMemberLoginLogs') return [{ip_address:'203.0.113.10',is_new_ip:true,login_result:'Success'}];
       if (action === 'adminLogout' || action === 'memberLogout') return {ok:true};
       throw new Error('Unexpected action: ' + action);
     }
@@ -131,7 +131,10 @@ test('Apps Script-backed public and Admin REST routes preserve the browser API c
 
     const logs = await fetch(base + '/api/admin/member-login-logs?limit=20', {headers:{Cookie:adminCookie}});
     assert.equal(logs.status, 200);
-    assert.equal((await logs.json())[0].ip_address, '203.0.113.10');
+    const loginLog = (await logs.json())[0];
+    assert.equal(loginLog.login_result, 'Success');
+    assert.equal(Object.hasOwn(loginLog, 'ip_address'), false);
+    assert.equal(Object.hasOwn(loginLog, 'is_new_ip'), false);
 
     assert.ok(calls.some(item => item.action === 'coupon'));
     assert.ok(calls.some(item => item.action === 'adminMemberLoginLogs'));
@@ -213,7 +216,7 @@ test('slip upload keeps a short receipt cookie for safe retry and clears it afte
 });
 
 
-test('Admin CRUD updates forward the server-derived request IP for audit logging', async () => {
+test('Admin CRUD updates never forward an IP field to Apps Script', async () => {
   const calls = [];
   const root = fs.mkdtempSync(path.join(os.tmpdir(),'nobi-admin-ip-'));
   const client = {
@@ -261,7 +264,7 @@ test('Admin CRUD updates forward the server-derived request IP for audit logging
     assert.equal(upsert.args.token,'admin-secret-token');
     assert.equal(upsert.args.tableName,'games');
     assert.equal(upsert.args.record.game_id,'game-1');
-    assert.match(upsert.args.ipAddress,/^(?:127\.0\.0\.1|::ffff:127\.0\.0\.1)$/);
+    assert.equal(Object.hasOwn(upsert.args,'ipAddress'),false);
   } finally {
     await new Promise(resolve=>server.close(resolve));
     fs.rmSync(root,{recursive:true,force:true});
