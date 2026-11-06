@@ -327,16 +327,25 @@ function adminStoreMedia(token, media, ipAddress) {
 
 function assertDriveFileInPrivateFolder_(file, folderId) {
   const expected = String(folderId || '').trim();
-  if (!expected || !file || typeof file.getParents !== 'function') throw new Error('DRIVE_FOLDER_INVALID');
+  if (!expected || !file || typeof file.getParents !== 'function' ||
+      typeof file.getSharingAccess !== 'function') {
+    throw new Error('DRIVE_FOLDER_INVALID');
+  }
   const folder = DriveApp.getFolderById(expected);
-  if (folder.getSharingAccess && folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+  if (!folder || typeof folder.getSharingAccess !== 'function') {
+    throw new Error('DRIVE_FOLDER_INVALID');
+  }
+  if (folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
     throw new Error('DRIVE_FOLDER_NOT_PRIVATE');
+  }
+  if (file.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+    throw new Error('DRIVE_FILE_NOT_PRIVATE');
   }
   const parents = file.getParents();
   let found = false;
   while (parents.hasNext()) {
     const parent = parents.next();
-    if (String(parent.getId()) === expected) found = true;
+    if (parent && String(parent.getId()) === expected) found = true;
   }
   if (!found) throw new Error('DRIVE_FILE_OUTSIDE_PRIVATE_FOLDER');
   return true;
