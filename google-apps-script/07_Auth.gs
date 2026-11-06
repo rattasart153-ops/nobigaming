@@ -29,7 +29,7 @@ function initializeAdmin() {
   return {ok:true, message:'สร้างบัญชี Admin แล้ว และลบค่า bootstrap password ออกจาก Script Properties แล้ว'};
 }
 
-function adminLogin(username, password, ipAddress) {
+function adminLogin(username, password) {
   const user = String(username || '').trim();
   const normalized = user.toLowerCase();
   const pass = String(password || '');
@@ -391,7 +391,7 @@ function memberChangePassword(token, currentPassword, newPassword) {
   }
 }
 
-function adminChangePassword(token, currentPassword, newPassword, ipAddress) {
+function adminChangePassword(token, currentPassword, newPassword) {
   const authenticated = requireAdmin_(token);
   const nextPassword = String(newPassword || '');
   if (nextPassword.length < 14 || nextPassword.length > 200) throw new Error('รหัสผ่านใหม่ต้องมีความยาว 14-200 ตัวอักษร');
