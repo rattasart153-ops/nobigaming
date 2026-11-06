@@ -55,7 +55,7 @@ The user explicitly requires zero cost at every stage. Vercel + Neon + Blob free
 - [x] Add offline lock-lifecycle regression tests: repository writes request the 15-second ScriptLock wait, release after success and validation failure, and fail closed without writing when lock acquisition times out.
 - [x] Add offline synthetic media-upload regressions: reject mismatched image signatures, truncated images and decoded payloads above 3 MiB before any Drive file is created; verify private ACL enforcement and cleanup after audit failure.
 - [x] Strengthen server-side image-container checks: PNG chunk boundaries and CRC-32, JPEG marker/segment bounds and terminal EOI, and WebP RIFF/chunk lengths; use a valid PNG fixture and reject truncated/corrupted payloads.
-- Latest offline regression CI: [run 42201935731](https://github.com/rattasart-ops/nobigaming/actions/runs/42201935731) passed **135/135** tests on commit `6ae8bb9f361dae438be2dd1a426143ce31822c7f`.
+- Latest offline regression CI: [run 42201935731](https://github.com/rattasart153-ops/nobigaming/actions/runs/42201935731) passed **135/135** tests on commit `6ae8bb9f361dae438be2dd1a426143ce31822c7f`.
 - [x] Retain the PBKDF2-SHA256 reference-vector test to verify the 120,000-iteration implementation has not been weakened or changed.
 - [ ] Benchmark PBKDF2 latency on the actual Apps Script V8 runtime; Node/VM timings are not a substitute.
 - [ ] Measure real Sheets read/write latency and LockService contention under concurrent synthetic requests.
