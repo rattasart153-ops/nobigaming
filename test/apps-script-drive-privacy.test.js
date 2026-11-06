@@ -179,3 +179,16 @@ test('Admin media upload rejects a shared folder before creating a file',()=>{
   }),/DRIVE_FOLDER_NOT_PRIVATE/);
   assert.equal(state.files.length,0);
 });
+
+test('private Drive file validator fails closed when folder sharing metadata is unavailable',()=>{
+  const original = context.DriveApp.getFolderById;
+  context.DriveApp.getFolderById = () => ({});
+  try {
+    assert.throws(
+      () => context.assertDriveFileInPrivateFolder_(driveFile(['private-folder']), 'private-folder'),
+      /DRIVE_FOLDER_INVALID/
+    );
+  } finally {
+    context.DriveApp.getFolderById = original;
+  }
+});
