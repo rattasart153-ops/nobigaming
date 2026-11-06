@@ -57,7 +57,7 @@ test('HtmlService storefront and Admin use named google.script.run facade with m
     assert.ok(source.includes('google.script.run'),file+' must use the named Apps Script facade');
     assert.equal(source.includes('fetch('),false,file+' must not call legacy REST');
     assert.equal(source.includes('localStorage'),false,file+' must not use localStorage');
-    assert.equal((source.match(/sessionStorage\\.setItem/g)||[]).length,file==='Storefront.html'?1:0,file+' may persist only the non-secret order retry key');
+    assert.equal(source.split('sessionStorage.setItem').length-1,file==='Storefront.html'?1:0,file+' may persist only the non-secret order retry key');
     if(file==='Storefront.html')assert.ok(source.includes("sessionStorage.setItem('nobi_order_attempt'"));
   }
   const storefront=fs.readFileSync(path.join(__dirname,'..','google-apps-script','Storefront.html'),'utf8');
