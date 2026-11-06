@@ -261,7 +261,7 @@ test('Admin CRUD updates forward the server-derived request IP for audit logging
     assert.equal(upsert.args.token,'admin-secret-token');
     assert.equal(upsert.args.tableName,'games');
     assert.equal(upsert.args.record.game_id,'game-1');
-    assert.match(upsert.args.ipAddress,/^(?:127\\.0\\.0\\.1|::ffff:127\\.0\\.0\\.1)$/);
+    assert.match(upsert.args.ipAddress,/^(?:127\.0\.0\.1|::ffff:127\.0\.0\.1)$/);
   } finally {
     await new Promise(resolve=>server.close(resolve));
     fs.rmSync(root,{recursive:true,force:true});
