@@ -60,6 +60,37 @@ test('Member session and account are revalidated while holding ScriptLock',()=>{
   assert.throws(()=>context.requireMember_('member-token'),/บัญชีสมาชิกถูกระงับ/);
 });
 
+test('optional Member identity treats invalid sessions as Guest but propagates infrastructure failures',()=>{
+  const {context,data}=makeAuthContext();
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname,'..','google-apps-script','01_HttpEntry.gs'),'utf8'),
+    context,
+    {filename:'01_HttpEntry.gs'}
+  );
+
+  assert.equal(context.gatewayOptionalMemberId_('member-token'),'m-1');
+  assert.equal(context.gatewayOptionalMemberId_(''),'');
+  
+  data.member_sessions[0].expires_at=new Date(Date.now()-1000).toISOString();
+  assert.equal(context.gatewayOptionalMemberId_('member-token'),'',
+    'expired Member sessions must fall back to Guest coupon eligibility');
+
+  data.member_sessions[0].expires_at=new Date(Date.now()+3600000).toISOString();
+  data.member_sessions[0].last_seen_at=new Date(Date.now()-31*60*1000).toISOString();
+  assert.equal(context.gatewayOptionalMemberId_('member-token'),'',
+    'idle-expired Member sessions must fall back to Guest coupon eligibility');
+
+  data.member_sessions[0].last_seen_at=new Date().toISOString();
+  data.members[0].status='Suspended';
+  assert.equal(context.gatewayOptionalMemberId_('member-token'),'',
+    'suspended Member sessions must fall back to Guest coupon eligibility');
+
+  context.requireMember_=()=>{throw new Error('SHEETS_READ_FAILED');};
+  assert.throws(()=>context.gatewayOptionalMemberId_('member-token'),/SHEETS_READ_FAILED/,
+    'infrastructure failures must not be hidden as Guest sessions');
+});
+
+
 test('revoked session is rejected before last-seen can be refreshed',()=>{
   const {context,data}=makeAuthContext();
   data.admin_sessions[0].revoked_at=new Date().toISOString();
