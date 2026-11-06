@@ -275,3 +275,28 @@ The browser facade must expose named, typed operations rather than accepting arb
 - The passing suite includes CREATE/TRANSITION journal recovery and fault injection, schema v1/v2-to-v3 migration checks, 90-day retention and trigger tests, uncertain Drive slip-write preservation, HMAC argument tampering, nonce replay/capacity/locking/corruption tests, and the optional Member-to-Guest regression.
 - These remain local Node test-harness/fake-service checks. They do not prove live Google Apps Script, real Sheets LockService contention, Drive ACL behavior, or production runtime/quota performance.
 - No deployment, production transaction, Google resource creation, billing change, or paid service was performed. Work remains isolated to `vercel-drive-setup`; `main` was not modified.
+
+## 11. P0-R7 / P0-R8 — PromptPay and Drive privacy hardening — 2026-11-06
+
+### P0-R7 — zero-cost PromptPay payload generation
+
+- Replaced the paymentInfo_() placeholder with an Apps Script-native EMVCo PromptPay payload builder. It performs no network request and uses no paid QR service.
+- Supports Thai mobile numbers in local and international forms, 13-digit national/tax IDs, and 15-digit e-wallet IDs. It validates identifiers rather than silently stripping arbitrary letters.
+- Builds PromptPay merchant account information, THB currency, optional fixed amount, static/dynamic initiation method, and CRC-16 checksum.
+- paymentInfo_() now returns {configured, promptpayId, amount, payload} when configured. It intentionally returns the payload string, not a QR image: the current Express storefront continues using its existing local promptpay-qr + qrcode service. The future HtmlService UI must render the returned payload with a locally hosted QR encoder; it must not call a third-party QR-image endpoint or send PromptPay IDs to an external image service.
+- Added compatibility tests against the existing promptpay-qr package for mobile, international mobile, national/tax ID and e-wallet formats, plus static/dynamic payload, CRC, invalid ID/amount and unconfigured cases.
+
+### P0-R8 — fail-closed private Drive validation and upload cleanup
+
+- assertDriveFileInPrivateFolder_() now requires both the configured folder and file to expose sharing metadata and requires both to report DriveApp.Access.PRIVATE. Missing metadata fails closed instead of silently skipping the ACL check.
+- The validator confirms the file has the configured private folder as a parent. Slip uploads and Admin media upload, media reads and Admin media references use the same validator.
+- Slip upload now rejects folders with missing sharing metadata and verifies the newly created file's sharing state and parent before writing the order reference. Failed verification follows the existing safe cleanup path and trashes only an unlinked file.
+- Admin media upload now verifies folder, file and parent, and trashes the unreferenced file if ACL verification or Audit Log persistence fails. It returns a media reference only after the audit write succeeds.
+- Added regression tests for shared file/folder access, missing sharing metadata, wrong parent folder, Admin media audit failure cleanup and slip upload cleanup. Existing uncertain slip-commit recovery behavior remains intact.
+
+### Validation status and limits
+
+- Source and test changes are isolated to vercel-drive-setup.
+- The workflow .github/workflows/api-tests.yml is configured to run npm test on pushes to this branch. A passing run for this pair must be confirmed before marking the pair fully validated.
+- Node VM mocks cannot prove the behavior of real Google Drive inherited permissions, actual file/folder ACLs, or Apps Script execution. Those checks still require a separately authorized synthetic Google test environment; no Google resource or deployment was created here.
+- P0-12 trusted Member IP provenance remains unresolved. P0 is still blocked; do not start P1 or change the approved IP-history / Zero Cost requirements.
