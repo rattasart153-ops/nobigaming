@@ -52,7 +52,6 @@ function adminSlipData(token, orderId, ipAddress) {
   if (!slipFolderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์สลิปส่วนตัว');
   const file = DriveApp.getFileById(String(order.slip_file_id));
   assertDriveFileInPrivateFolder_(file, slipFolderId);
-  if (file.getSharingAccess && file.getSharingAccess() !== DriveApp.Access.PRIVATE) throw new Error('DRIVE_FILE_NOT_PRIVATE');
   const blob = file.getBlob();
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -200,9 +199,6 @@ function adminUpsert(token, tableName, record, ipAddress) {
       if (!mediaFolderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์รูปภาพส่วนตัว');
       const mediaFile = DriveApp.getFileById(String(safe.image_file_id));
       assertDriveFileInPrivateFolder_(mediaFile, mediaFolderId);
-      if (mediaFile.getSharingAccess && mediaFile.getSharingAccess() !== DriveApp.Access.PRIVATE) {
-        throw new Error('DRIVE_FILE_NOT_PRIVATE');
-      }
     }
     const now = new Date().toISOString();
     let id;
@@ -298,31 +294,39 @@ function adminStoreMedia(token, media, ipAddress) {
   const folderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_MEDIA_FOLDER_ID') || '').trim();
   if (!folderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์ Drive ส่วนตัวสำหรับรูปภาพ');
   const folder = DriveApp.getFolderById(folderId);
-  if (folder.getSharingAccess && folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
+  if (!folder || typeof folder.getSharingAccess !== 'function') {
+    throw new Error('DRIVE_FOLDER_INVALID');
+  }
+  if (folder.getSharingAccess() !== DriveApp.Access.PRIVATE) {
     throw new Error('DRIVE_FOLDER_NOT_PRIVATE');
   }
   const ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
-  const file = folder.createFile(
-    Utilities.newBlob(bytes, mimeType, 'nobi-media-' + Utilities.getUuid() + '.' + ext)
-  );
-  file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
-  if (file.getSharingAccess && file.getSharingAccess() !== DriveApp.Access.PRIVATE) {
-    file.setTrashed(true);
-    throw new Error('DRIVE_FILE_NOT_PRIVATE');
-  }
-  const now = new Date().toISOString();
-  const lock = LockService.getScriptLock();
-  lock.waitLock(10000);
+  let file = null;
   try {
-    appendAdminAuditLogLocked_({
-      audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
-      action:'UPLOAD_PRIVATE_MEDIA', target_type:'drive_media', target_id:file.getId(),
-      request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
-      details_json:JSON.stringify({mime_type:mimeType, size_bytes:bytes.length}),
-      created_at:now
-    });
-  } finally { lock.releaseLock(); }
-  return {ok:true, file_id:file.getId(), url:'/api/public/media/' + file.getId()};
+    file = folder.createFile(
+      Utilities.newBlob(bytes, mimeType, 'nobi-media-' + Utilities.getUuid() + '.' + ext)
+    );
+    file.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
+    assertDriveFileInPrivateFolder_(file, folderId);
+    const now = new Date().toISOString();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      appendAdminAuditLogLocked_({
+        audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
+        action:'UPLOAD_PRIVATE_MEDIA', target_type:'drive_media', target_id:file.getId(),
+        request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
+        details_json:JSON.stringify({mime_type:mimeType, size_bytes:bytes.length}),
+        created_at:now
+      });
+    } finally { lock.releaseLock(); }
+    return {ok:true, file_id:file.getId(), url:'/api/public/media/' + file.getId()};
+  } catch (error) {
+    if (file) {
+      try { file.setTrashed(true); } catch (ignored) {}
+    }
+    throw error;
+  }
 }
 
 function assertDriveFileInPrivateFolder_(file, folderId) {
@@ -364,9 +368,6 @@ function publicMediaData(fileId) {
   if (!mediaFolderId) throw new Error('ยังไม่ได้ตั้งค่าโฟลเดอร์รูปภาพส่วนตัว');
   const file = DriveApp.getFileById(id);
   assertDriveFileInPrivateFolder_(file, mediaFolderId);
-  if (file.getSharingAccess && file.getSharingAccess() !== DriveApp.Access.PRIVATE) {
-    throw new Error('DRIVE_FILE_NOT_PRIVATE');
-  }
   const blob = file.getBlob();
   const mimeType = blob.getContentType();
   if (!/^image\/(png|jpeg|webp)$/.test(mimeType)) throw new Error('ชนิดไฟล์รูปภาพไม่รองรับ');
