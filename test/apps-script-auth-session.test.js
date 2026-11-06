@@ -14,7 +14,8 @@ function makeAuthContext() {
     admin_sessions:[{session_id:'as-1',admin_id:'a-1',token_hash:crypto.createHash('sha256').update('admin-token').digest('hex'),auth_version:2,created_at:new Date(now-1000).toISOString(),last_seen_at:new Date(now-1000).toISOString(),expires_at:new Date(now+3600000).toISOString(),revoked_at:''}],
     member_sessions:[{session_id:'ms-1',member_id:'m-1',token_hash:crypto.createHash('sha256').update('member-token').digest('hex'),auth_version:3,created_at:new Date(now-1000).toISOString(),last_seen_at:new Date(now-1000).toISOString(),expires_at:new Date(now+3600000).toISOString(),revoked_at:''}],
     admins:[{admin_id:'a-1',status:'Active',auth_version:2,password_hash:'admin-old-hash',password_salt:'admin-salt',password_algorithm:'PBKDF2-SHA256-120000'}],
-    members:[{member_id:'m-1',status:'Active',auth_version:3,password_hash:'member-old-hash',password_salt:'member-salt',password_algorithm:'PBKDF2-SHA256-120000'}]
+    members:[{member_id:'m-1',status:'Active',auth_version:3,password_hash:'member-old-hash',password_salt:'member-salt',password_algorithm:'PBKDF2-SHA256-120000'}],
+    admin_audit_logs:[]
   };
   const context = {
     Date,
@@ -46,7 +47,10 @@ function makeAuthContext() {
     Utilities:{getUuid:()=>'test-uuid'},
     passwordVerify_:(password,salt,hash)=>password==='current-password'&&Boolean(salt)&&Boolean(hash),
     passwordHash_:(password,salt)=>'new-hash:'+password+':'+salt,
-    appendAdminAuditLogLocked_:()=>{}
+    appendAdminAuditLogLocked_:entry=>{
+      assert.equal(lockHeld,true,'Admin audit writes must occur while ScriptLock is held');
+      data.admin_audit_logs.push({...entry});
+    }
   };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'..','google-apps-script','07_Auth.gs'),'utf8'),context,{filename:'07_Auth.gs'});
@@ -203,5 +207,8 @@ test('Admin password change increments auth_version, revokes all Admin sessions 
   assert.equal(data.admins[0].auth_version,3);
   assert.match(data.admins[0].password_hash,/^new-hash:new-admin-password-longer:/);
   assert.ok(data.admin_sessions.every(session=>Boolean(session.revoked_at)));
+  assert.equal(data.admin_audit_logs.length,1);
+  assert.equal(data.admin_audit_logs[0].action,'ADMIN_PASSWORD_CHANGED');
+  assert.equal(data.admin_audit_logs[0].ip_address,'');
   assert.throws(()=>context.requireAdmin_('admin-token'),/เซสชันหมดอายุ/);
 });
