@@ -12,7 +12,9 @@ Vercel, Neon, PostgreSQL hosting and Vercel Blob are not part of this architectu
 
 - Existing GAS source contains Schema v1, repositories, business handlers, authentication/session logic, coupon/order workflows, private Drive helpers and an HTTP gateway originally intended for Express.
 - The current storefront/Admin still use Vercel REST routes. They are not yet compatible with HtmlService.
-- A dedicated HtmlService `doGet` router, templates and allowlisted `google.script.run` facade still need to be designed and implemented.
+- `Code.gs` now routes `doGet` to `Storefront.html` or `Admin.html`; no database initialization or Admin bootstrap occurs during page rendering.
+- `BrowserFacade.gs` exposes named, typed, allowlisted functions for the existing public, Member and Admin business actions. Generic browser action dispatch is not exposed.
+- Template JavaScript still calls the legacy REST endpoints. The P2 `google.script.run` frontend adapter remains outstanding; the app is not yet end-to-end functional.
 - GAS runtime, quotas, concurrency, file handling and Drive ACLs have not been verified.
 - No Apps Script project, spreadsheet or Drive folders have been created/initialized for this migration.
 
