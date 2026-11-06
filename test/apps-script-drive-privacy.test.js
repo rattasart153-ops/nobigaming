@@ -243,3 +243,78 @@ test('image container validation rejects a PNG with a corrupted chunk CRC',()=>{
   png[52]^=1;
   assert.equal(context.validImageSignature_(Array.from(png),'image/png'),false);
 });
+
+
+function makeAdminSlipHarness(options = {}) {
+  const state = {driveReads:0,audits:[],auditFailure:Boolean(options.auditFailure)};
+  const bytes = Buffer.from('synthetic-private-slip');
+  const file = {
+    getName:()=> 'synthetic-slip.png',
+    getBlob:()=>({getContentType:()=> 'image/png',getBytes:()=>Array.from(bytes)}),
+    getSharingAccess:()=> options.fileAccess || 'PRIVATE',
+    getParents:()=>{
+      let consumed=false;
+      return {hasNext:()=>!consumed,next:()=>{consumed=true;return {getId:()=>options.parentId || 'private-slip-folder'};}};
+    }
+  };
+  const context=vm.createContext({
+    PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='NOBI_PRIVATE_DRIVE_FOLDER_ID'?'private-slip-folder':''})},
+    DriveApp:{
+      Access:{PRIVATE:'PRIVATE'},
+      getFolderById:()=>({getSharingAccess:()=>options.folderAccess || 'PRIVATE'}),
+      getFileById:()=>{state.driveReads++;return file;}
+    },
+    LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
+    Utilities:{base64Encode:value=>Buffer.from(value).toString('base64'),getUuid:()=>'audit-id'},
+    repositoryGetById_:(table,id)=>table==='orders'&&id==='order-1'
+      ? {order_id:'order-1',slip_file_id:'drive-slip-1'} : null,
+    requireAdmin_:()=>{
+      if(options.unauthorized) throw new Error('ADMIN_REQUIRED');
+      return {admin_id:'admin-1'};
+    },
+    appendAdminAuditLogLocked_:entry=>{
+      state.audits.push(entry);
+      if(state.auditFailure) throw new Error('SIMULATED_AUDIT_FAILURE');
+    }
+  });
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname,'..','google-apps-script','08_Admin.gs'),'utf8'),
+    context,
+    {filename:'08_Admin.gs'}
+  );
+  return {context,state,bytes};
+}
+
+test('Admin slip retrieval requires an authenticated Admin before reading Drive',()=>{
+  const {context,state}=makeAdminSlipHarness({unauthorized:true});
+  assert.throws(()=>context.adminSlipData('invalid-token','order-1'),/ADMIN_REQUIRED/);
+  assert.equal(state.driveReads,0);
+  assert.equal(state.audits.length,0);
+});
+
+test('Admin slip retrieval returns bytes only after private-folder validation and audit logging',()=>{
+  const {context,state,bytes}=makeAdminSlipHarness();
+  const result=context.adminSlipData('admin-token','order-1');
+  assert.equal(result.name,'synthetic-slip.png');
+  assert.equal(result.mimeType,'image/png');
+  assert.equal(result.base64,bytes.toString('base64'));
+  assert.equal(state.driveReads,1);
+  assert.equal(state.audits.length,1);
+  assert.equal(state.audits[0].action,'VIEW_ORDER_SLIP');
+  assert.equal(state.audits[0].target_id,'order-1');
+  assert.equal(state.audits[0].ip_address,'');
+});
+
+test('Admin slip retrieval fails closed for a shared file or shared parent folder',()=>{
+  const sharedFile=makeAdminSlipHarness({fileAccess:'ANYONE'});
+  assert.throws(()=>sharedFile.context.adminSlipData('admin-token','order-1'),/DRIVE_FILE_NOT_PRIVATE/);
+
+  const sharedFolder=makeAdminSlipHarness({folderAccess:'ANYONE'});
+  assert.throws(()=>sharedFolder.context.adminSlipData('admin-token','order-1'),/DRIVE_FOLDER_NOT_PRIVATE/);
+});
+
+test('Admin slip bytes are not returned when the required audit write fails',()=>{
+  const {context,state}=makeAdminSlipHarness({auditFailure:true});
+  assert.throws(()=>context.adminSlipData('admin-token','order-1'),/SIMULATED_AUDIT_FAILURE/);
+  assert.equal(state.audits.length,1);
+});
