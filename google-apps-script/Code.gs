@@ -17,3 +17,10 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.DEFAULT);
 }
+
+
+/** HtmlService include helper with a fixed local partial allowlist. */
+function include(filename) {
+  if (String(filename || '') !== 'QrCode') throw new Error('ไม่อนุญาตให้เรียกไฟล์ Template นี้');
+  return HtmlService.createHtmlOutputFromFile('QrCode').getContent();
+}

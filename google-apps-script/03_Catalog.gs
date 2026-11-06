@@ -71,7 +71,8 @@ function publicPromotions() {
 
 
 function catalogImageUrl_(fileId, fallbackUrl) {
-  if (fileId) return '/api/public/media/' + encodeURIComponent(String(fileId));
-  // Storefront images must always come from the private Drive media proxy.
-  return '';
+  const id = String(fileId || '').trim();
+  if (!id) return String(fallbackUrl || '');
+  const media = publicMediaData(id);
+  return 'data:' + media.mimeType + ';base64,' + media.base64;
 }

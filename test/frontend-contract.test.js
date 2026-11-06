@@ -40,3 +40,27 @@ test('storefront and admin inline scripts parse and use REST API, not Apps Scrip
   assert.equal(admin.includes('nobi_admin_token'), false);
   assert.equal(admin.includes('slip_file_id'), false);
 });
+
+
+test('HtmlService storefront and Admin use named google.script.run facade with memory-only auth tokens', () => {
+  for (const file of ['Storefront.html','Admin.html']) {
+    const html=fs.readFileSync(path.join(__dirname,'..','google-apps-script',file),'utf8');
+    const scripts=[];let cursor=0;
+    while((cursor=html.indexOf('<script',cursor))!==-1){const openEnd=html.indexOf('>',cursor),close=html.indexOf('</script>',openEnd+1);if(openEnd<0||close<0)break;scripts.push(html.slice(openEnd+1,close));cursor=close+9;}
+    assert.ok(scripts.length>0,file+' should contain an inline script');
+    scripts.forEach((source,index)=>assert.doesNotThrow(()=>new vm.Script(source,{filename:file+'#script-'+index})));
+    const source=scripts.join('\\n');
+    assert.match(source,/google\\.script\\.run/);
+    assert.doesNotMatch(source,/\\bfetch\\s*\\(/,file+' must not call legacy REST');
+    assert.doesNotMatch(source,/(?:localStorage|sessionStorage)\\s*\\.\\s*(?:setItem|getItem)\\s*\\([^)]*(?:token|session)/i,file+' must not persist authentication tokens');
+  }
+  const storefront=fs.readFileSync(path.join(__dirname,'..','google-apps-script','Storefront.html'),'utf8');
+  const admin=fs.readFileSync(path.join(__dirname,'..','google-apps-script','Admin.html'),'utf8');
+  assert.match(storefront,/let nobiMemberToken = ''/);
+  assert.match(storefront,/let nobiCheckoutToken = ''/);
+  assert.match(storefront,/new QRCode\\(qrHost/);
+  assert.doesNotMatch(storefront,/nobi_active_checkout/);
+  assert.match(storefront,/nobi_order_attempt/);
+  assert.match(admin,/let nobiAdminToken=''/);
+  assert.doesNotMatch(admin,/nobi_admin_token|localStorage|sessionStorage/);
+});

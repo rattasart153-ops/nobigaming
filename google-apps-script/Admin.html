@@ -9,12 +9,34 @@
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];let currentTab='orders',rows=[],games=[],editingId=null,toastTimer;
 const config={games:{title:'เกม',sub:'เพิ่ม แก้ไข หรือปิดการแสดงผลเกม',endpoint:'/api/admin/games',fields:[['name','ชื่อเกม','text',true],['category','หมวดหมู่','text',true],['description','คำอธิบาย','text',false],['active','เปิดใช้งาน','checkbox',false]]},packages:{title:'แพ็กเกจ',sub:'ตั้งราคา รูปภาพ และป้าย Popular Package',endpoint:'/api/admin/packages',fields:[['game_id','เกม','game',true],['name','ชื่อแพ็กเกจ','text',true],['amount','จำนวน','number',true],['unit','หน่วย','text',true],['price','ราคา (บาท)','number',true],['image_url','อัปโหลดรูปภาพ (จัดเก็บใน Google Drive แบบส่วนตัว)','image',false],['popular','Popular Package','checkbox',false],['active','เปิดใช้งาน','checkbox',false]]},coupons:{title:'คูปองส่วนลด',sub:'กำหนดประเภทส่วนลด ยอดขั้นต่ำ เกม วันหมดอายุ และจำนวนใช้',endpoint:'/api/admin/coupons',fields:[['code','โค้ดส่วนลด','text',true],['discount_type','ประเภทส่วนลด','discountType',true],['discount_value','มูลค่าส่วนลด','number',true],['min_spend','ยอดซื้อขั้นต่ำต่อออเดอร์ (บาท)','number',true],['game_id','จำกัดเกม (ว่าง = ทุกเกม)','gameOptional',false],['access_type','สิทธิ์การใช้คูปอง','accessType',true],['member_spend_game_id','เกมที่ใช้คำนวณยอดเติมสะสมสมาชิก','gameOptional',false],['member_min_game_spend','ยอดเติมสะสมขั้นต่ำของสมาชิกในเกมที่กำหนด (บาท)','number',false],['allowed_player_ids','จำกัด UID เฉพาะ (คั่นด้วยจุลภาค/ขึ้นบรรทัดใหม่; ว่าง = ทุก UID)','textarea',false],['min_player_spend','ยอดเติมสะสมขั้นต่ำของ UID ในเกมที่เลือก (บาท; นับเฉพาะออเดอร์สำเร็จ)','number',false],['expires_at','วันหมดอายุ (ใช้ได้ถึง 23:59:59 เวลาไทย)','date',false],['usage_limit','จำกัดจำนวนครั้ง (ว่าง = ไม่จำกัด)','number',false],['active','เปิดใช้งาน','checkbox',false]]},promotions:{title:'โปรโมชั่น / แบนเนอร์',sub:'จัดการแบนเนอร์ที่แสดงบนหน้าแรก',endpoint:'/api/admin/promotions',fields:[['title','หัวข้อโปรโมชั่น','text',true],['subtitle','รายละเอียด','text',false],['image_url','อัปโหลดรูปภาพ (จัดเก็บใน Google Drive แบบส่วนตัว)','image',false],['link_url','ลิงก์ปลายทาง','text',false],['sort_order','ลำดับการแสดง','number',false],['starts_at','เริ่มแสดง (วันที่/เวลา)','datetime',false],['ends_at','หยุดแสดง (วันที่/เวลา)','datetime',false],['active','เปิดใช้งาน','checkbox',false] ]}};
+let nobiAdminToken='';
+function nobiAdminRpc(name,arg){return new Promise((resolve,reject)=>{if(!window.google||!google.script||!google.script.run){reject(Error('ไม่พบการเชื่อมต่อ Apps Script กรุณาเปิดหน้านี้จาก Web App'));return;}const runner=google.script.run.withSuccessHandler(resolve).withFailureHandler(e=>reject(Error(e&&e.message?e.message:'Apps Script request failed')));if(arg===undefined)runner[name]();else runner[name](arg);});}
+async function adminFilePayload(file){if(!(file instanceof Blob)||!file.size||file.size>3*1024*1024)throw Error('ไฟล์ต้องมีขนาดไม่เกิน 3 MB');if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw Error('รองรับเฉพาะ PNG/JPG/WebP');const bytes=new Uint8Array(await file.arrayBuffer());let binary='';for(let i=0;i<bytes.length;i+=0x8000)binary+=String.fromCharCode.apply(null,bytes.subarray(i,Math.min(i+0x8000,bytes.length)));return{name:file.name||'media',mimeType:file.type,base64:btoa(binary)};}
+function adminJsonBody(opts){if(!opts.body||typeof opts.body!=='string')return{};try{return JSON.parse(opts.body)}catch(_){throw Error('ข้อมูลคำขอไม่ถูกต้อง')}}
+function adminRecordId(table,row){return row[({games:'game_id',packages:'package_id',coupons:'coupon_id',promotions:'promotion_id'})[table]]}
 async function api(url,opts={}){
-  const response=await fetch(url,{...opts,credentials:'same-origin',headers:{...(opts.body&&!(opts.body instanceof FormData)?{'Content-Type':'application/json'}:{}),...(opts.headers||{})}});
-  const type=response.headers.get('content-type')||'';
-  const data=type.includes('application/json')?await response.json():null;
-  if(!response.ok)throw Error(data?.error||data?.message||'คำขอไม่สำเร็จ');
-  return data;
+ const method=String(opts.method||'GET').toUpperCase(),parsed=new URL(url,window.location.href),path=parsed.pathname,json=adminJsonBody(opts);
+ if(path==='/api/admin/login'&&method==='POST'){const r=await nobiAdminRpc('nobiLoginAdmin',{username:String(json.username||''),password:String(json.password||'')});nobiAdminToken=r.token||'';return r}
+ if(path==='/api/admin/me'){if(!nobiAdminToken)return{authenticated:false};const r=await nobiAdminRpc('nobiGetAdminSession',nobiAdminToken);if(!r.authenticated)nobiAdminToken='';return r}
+ if(path==='/api/admin/logout'&&method==='POST'){const token=nobiAdminToken;nobiAdminToken='';return token?nobiAdminRpc('nobiLogoutAdmin',token):{ok:true}}
+ if(path==='/api/admin/dashboard')return nobiAdminRpc('nobiGetAdminDashboard',nobiAdminToken);
+ if(path==='/api/admin/orders'&&method==='GET')return nobiAdminRpc('nobiGetAdminOrders',nobiAdminToken);
+ const status=path.match(/^\/api\/admin\/orders\/([^/]+)\/status$/);
+ if(status&&method==='PATCH')return nobiAdminRpc('nobiSetAdminOrderStatus',{token:nobiAdminToken,orderId:decodeURIComponent(status[1]),status:String(json.status||'')});
+ const slip=path.match(/^\/api\/admin\/orders\/([^/]+)\/slip$/);
+ if(slip&&method==='GET')return nobiAdminRpc('nobiGetAdminSlip',{token:nobiAdminToken,orderId:decodeURIComponent(slip[1])});
+ if(path==='/api/admin/members'&&method==='GET')return nobiAdminRpc('nobiGetAdminMembers',{token:nobiAdminToken,search:parsed.searchParams.get('search')||'',limit:Number(parsed.searchParams.get('limit')||200)});
+ if(path==='/api/admin/member-login-logs'&&method==='GET')return nobiAdminRpc('nobiGetAdminMemberLoginLogs',{token:nobiAdminToken,memberId:parsed.searchParams.get('memberId')||'',limit:Number(parsed.searchParams.get('limit')||100)});
+ const member=path.match(/^\/api\/admin\/members\/([^/]+)\/status$/);
+ if(member&&method==='PATCH')return nobiAdminRpc('nobiSetAdminMemberStatus',{token:nobiAdminToken,memberId:decodeURIComponent(member[1]),status:String(json.status||'')});
+ if(path==='/api/admin/upload'&&method==='POST'){const file=opts.body instanceof FormData?opts.body.get('image'):null;return nobiAdminRpc('nobiUploadAdminMedia',{token:nobiAdminToken,media:await adminFilePayload(file)});}
+ const tableMatch=path.match(/^\/api\/admin\/(games|packages|coupons|promotions)(?:\/([^/]+))?$/);
+ if(tableMatch){const table=tableMatch[1],id=tableMatch[2]?decodeURIComponent(tableMatch[2]):'';
+  if(method==='GET'){const records=await nobiAdminRpc('nobiListAdminRecords',{token:nobiAdminToken,tableName:table});const games=table==='games'?records:await nobiAdminRpc('nobiListAdminRecords',{token:nobiAdminToken,tableName:'games'});return records.map(row=>{const item={...row,id:adminRecordId(table,row)};if(table==='packages'||table==='coupons'){const game=games.find(g=>String(g.game_id)===String(row.game_id));item.game_name=game?game.name:'';if(table==='coupons'&&row.member_spend_game_id){const mg=games.find(g=>String(g.game_id)===String(row.member_spend_game_id));item.member_spend_game_name=mg?mg.name:'';}}return item;});}
+  if(method==='POST'||method==='PUT'){const record={...json};if(method==='PUT')record[({games:'game_id',packages:'package_id',coupons:'coupon_id',promotions:'promotion_id'})[table]]=id;return nobiAdminRpc('nobiUpsertAdminRecord',{token:nobiAdminToken,tableName:table,record});}
+  if(method==='DELETE')return nobiAdminRpc('nobiDeleteAdminRecord',{token:nobiAdminToken,tableName:table,id});
+ }
+ throw Error('ไม่รองรับคำขอในหน้า Admin');
 }
 function toast(msg){$('#toast').textContent=msg;$('#toast').classList.remove('hidden');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.add('hidden'),3200)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -37,7 +59,7 @@ function renderOrders(){
  '</tbody></table></div>';
 }
 window.viewSlip=async(id,btn)=>{
- try{btn.disabled=true;const response=await fetch('/api/admin/orders/'+encodeURIComponent(id)+'/slip',{credentials:'same-origin'});if(!response.ok){const data=await response.json().catch(()=>({}));throw Error(data.error||'เปิดสลิปไม่ได้')}const blob=await response.blob();const url=URL.createObjectURL(blob);const img=document.createElement('img');img.className='slip';img.style.maxWidth='240px';img.style.maxHeight='none';img.alt='สลิป '+id;img.src=url;img.onload=()=>URL.revokeObjectURL(url);btn.replaceWith(img)}
+ try{btn.disabled=true;const data=await api('/api/admin/orders/'+encodeURIComponent(id)+'/slip');const binary=atob(data.base64),bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);const blob=new Blob([bytes],{type:data.mimeType}),url=URL.createObjectURL(blob),img=document.createElement('img');img.className='slip';img.style.maxWidth='240px';img.style.maxHeight='none';img.alt='สลิป '+id;img.src=url;img.onload=()=>URL.revokeObjectURL(url);btn.replaceWith(img)}
  catch(e){toast(e.message)}finally{if(btn.isConnected)btn.disabled=false}
 };
 window.setStatus=async(id,status)=>{if(!confirm(`ยืนยันเปลี่ยนสถานะเป็น ${status}?`))return;try{await api(`/api/admin/orders/${encodeURIComponent(id)}/status`,{method:'PATCH',body:JSON.stringify({status})});toast('อัปเดตสถานะแล้ว');loadTab('orders')}catch(e){toast(e.message)}};
