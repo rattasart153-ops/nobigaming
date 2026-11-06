@@ -1,4 +1,4 @@
-/** Admin operations backed exclusively by the version 1 Sheets schema. */
+/** Admin operations backed exclusively by the current versioned Sheets schema. */
 
 function adminDashboard(token) {
   requireAdmin_(token);
