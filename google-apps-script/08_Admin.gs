@@ -59,7 +59,7 @@ function adminSlipData(token, orderId, ipAddress) {
     appendAdminAuditLogLocked_({
       audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
       action:'VIEW_ORDER_SLIP', target_type:'order', target_id:order.order_id,
-      request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
+      request_id:'', ip_address:'',
       details_json:'{}', created_at:new Date().toISOString()
     });
   } finally { lock.releaseLock(); }
@@ -120,7 +120,7 @@ function adminSetOrderStatus(token, orderId, status, ipAddress) {
       audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
       action:expired ? 'ORDER_STATUS_EXPIRED' : 'ORDER_STATUS_' + nextStatus.toUpperCase(),
       target_type:'order', target_id:order.order_id, request_id:'',
-      ip_address:String(ipAddress || '').slice(0,100),
+      ip_address:'',
       details_json:JSON.stringify(expired ? {reason:'PAYMENT_TIMEOUT'} : {previous_status:'Pending',status:nextStatus}),
       created_at:now
     });
@@ -216,7 +216,7 @@ function adminUpsert(token, tableName, record, ipAddress) {
     appendAdminAuditLogLocked_({
       audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
       action: 'UPSERT_' + tableName.toUpperCase(), target_type: tableName,
-      target_id: id, request_id: '', ip_address: String(ipAddress || '').slice(0, 100),
+      target_id: id, request_id: '', ip_address: '',
       details_json: '{}', created_at: now
     });
     return {ok:true, id:id};
@@ -257,7 +257,7 @@ function adminDelete(token, tableName, id, ipAddress) {
       appendAdminAuditLogLocked_({
         audit_id: Utilities.getUuid(), admin_id: admin.admin_id,
         action: 'DELETE_' + tableName.toUpperCase(), target_type: tableName,
-        target_id: String(id), request_id: '', ip_address: String(ipAddress || '').slice(0, 100),
+        target_id: String(id), request_id: '', ip_address: '',
         details_json: '{}', created_at: now
       });
       return {ok:true};
@@ -276,7 +276,10 @@ function adminMemberLoginLogs(token, memberId, requestedLimit) {
     return !memberId || String(log.member_id) === String(memberId);
   }).sort(function(a, b) {
     return String(b.created_at).localeCompare(String(a.created_at));
-  }).slice(0, limit).map(clean_);
+  }).slice(0, limit).map(function(log) {
+    return {log_id:log.log_id,member_id:log.member_id,login_id_normalized:log.login_id_normalized,
+      login_result:log.login_result,failure_reason_code:log.failure_reason_code,user_agent:log.user_agent,created_at:log.created_at};
+  });
 }
 
 
@@ -315,7 +318,7 @@ function adminStoreMedia(token, media, ipAddress) {
       appendAdminAuditLogLocked_({
         audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
         action:'UPLOAD_PRIVATE_MEDIA', target_type:'drive_media', target_id:file.getId(),
-        request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
+        request_id:'', ip_address:'',
         details_json:JSON.stringify({mime_type:mimeType, size_bytes:bytes.length}),
         created_at:now
       });
@@ -396,8 +399,6 @@ function adminMembers(token, searchTerm, requestedLimit) {
       full_name:member.full_name,
       login_id:member.login_id_display,
       status:member.status,
-      registered_ip:member.registered_ip,
-      last_login_ip:member.last_login_ip,
       last_login_at:member.last_login_at,
       created_at:member.created_at
     };
@@ -431,7 +432,7 @@ function adminSetMemberStatus(token, memberId, status, ipAddress) {
       audit_id:Utilities.getUuid(), admin_id:admin.admin_id,
       action:'MEMBER_STATUS_' + nextStatus.toUpperCase(),
       target_type:'member', target_id:member.member_id,
-      request_id:'', ip_address:String(ipAddress || '').slice(0, 100),
+      request_id:'', ip_address:'',
       details_json:JSON.stringify({previous_status:member.status,status:nextStatus}),
       created_at:now
     });
