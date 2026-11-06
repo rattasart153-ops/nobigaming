@@ -26,6 +26,7 @@ function makePaymentHarness(promptpayId = '081-234-5678') {
 test('PromptPay payload matches the existing promptpay-qr implementation for phone, citizen ID and e-wallet IDs', () => {
   const cases = [
     ['081-234-5678', 12.34],
+    ['+66-81-234-5678', 10],
     ['1234567890123', 199.99],
     ['123456789012345', 1]
   ];
@@ -35,7 +36,7 @@ test('PromptPay payload matches the existing promptpay-qr implementation for pho
     assert.equal(result.configured, true);
     assert.equal(result.payload, generatePayload(id, {amount}));
     assert.equal(result.amount, amount);
-    assert.ok(result.payload.endsWith(result.payload.slice(-4)));
+    assert.equal(result.payload.slice(-4), context.promptPayCrc16_(result.payload.slice(0, -4)));
   }
 });
 
