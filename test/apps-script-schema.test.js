@@ -22,6 +22,7 @@ class FakeRange {
     return result;
   }
   setValues(matrix) {
+    this.sheet.metrics.setValuesCalls++;
     matrix.forEach((values, r) => {
       const index = this.row + r - 1;
       while (this.sheet.rows.length <= index) this.sheet.rows.push([]);
@@ -34,7 +35,11 @@ class FakeRange {
 }
 
 class FakeSheet {
-  constructor(name) { this.name = name; this.rows = []; }
+  constructor(name) {
+    this.name = name;
+    this.rows = [];
+    this.metrics = { rangeReads: 0, dataRangeReads: 0, setValuesCalls: 0, appendRowCalls: 0 };
+  }
   getName() { return this.name; }
   getLastRow() {
     for (let i = this.rows.length - 1; i >= 0; i--) {
@@ -49,12 +54,14 @@ class FakeSheet {
     return last;
   }
   getRange(row, column, rowCount, columnCount) {
+    this.metrics.rangeReads++;
     return new FakeRange(this, row, column, rowCount, columnCount);
   }
   getDataRange() {
+    this.metrics.dataRangeReads++;
     return new FakeRange(this, 1, 1, Math.max(1, this.getLastRow()), Math.max(1, this.getLastColumn()));
   }
-  appendRow(row) { this.rows.push(row.slice()); }
+  appendRow(row) { this.metrics.appendRowCalls++; this.rows.push(row.slice()); }
   setFrozenRows() {}
 }
 
@@ -182,6 +189,48 @@ test('Sheets repositories enforce schema, primary keys, unique keys and safe upd
     member_id: 'member-3',
     unknown_column: 'not allowed'
   }), /FIELD_NOT_ALLOWED/);
+});
+
+test('repository insert reuses one Sheets data snapshot for primary and unique checks', () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const { context } = loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  const games = spreadsheet.getSheetByName('games');
+  games.metrics = { rangeReads: 0, dataRangeReads: 0, setValuesCalls: 0, appendRowCalls: 0 };
+
+  context.__repoInsert('games', { game_id: 'perf-game-1', name: 'Performance Game' });
+  assert.equal(games.metrics.dataRangeReads, 1, 'insert should fetch the table body once');
+  assert.equal(games.metrics.rangeReads, 1, 'insert should validate the schema header once');
+  assert.equal(games.metrics.appendRowCalls, 1);
+  assert.equal(games.metrics.setValuesCalls, 0);
+
+  games.metrics = { rangeReads: 0, dataRangeReads: 0, setValuesCalls: 0, appendRowCalls: 0 };
+  assert.throws(() => context.__repoInsert('games', {
+    game_id: 'perf-game-2', name: 'Performance Game'
+  }), /REPOSITORY_DUPLICATE/);
+  assert.equal(games.metrics.dataRangeReads, 1, 'duplicate unique-key check must reuse the same snapshot');
+  assert.equal(games.metrics.appendRowCalls, 0, 'duplicate insert must not write');
+});
+
+test('repository update reuses its single Sheets snapshot for unique-key validation', () => {
+  const spreadsheet = new FakeSpreadsheet();
+  const { context } = loadGasDatabase(spreadsheet);
+  context.__setupNobiDatabase();
+  context.__repoInsert('games', { game_id: 'perf-game-1', name: 'Original Game' });
+  context.__repoInsert('games', { game_id: 'perf-game-2', name: 'Other Game' });
+  const games = spreadsheet.getSheetByName('games');
+  games.metrics = { rangeReads: 0, dataRangeReads: 0, setValuesCalls: 0, appendRowCalls: 0 };
+
+  context.__repoUpdate('games', 'perf-game-1', { name: 'Renamed Game' });
+  assert.equal(games.metrics.dataRangeReads, 1, 'update should fetch the table body once');
+  assert.equal(games.metrics.rangeReads, 1, 'update should validate the schema header once');
+  assert.equal(games.metrics.setValuesCalls, 1);
+  assert.equal(games.metrics.appendRowCalls, 0);
+
+  games.metrics = { rangeReads: 0, dataRangeReads: 0, setValuesCalls: 0, appendRowCalls: 0 };
+  assert.throws(() => context.__repoUpdate('games', 'perf-game-1', { name: 'Other Game' }), /REPOSITORY_DUPLICATE/);
+  assert.equal(games.metrics.dataRangeReads, 1, 'duplicate update must reuse the existing snapshot');
+  assert.equal(games.metrics.setValuesCalls, 0, 'duplicate update must not write');
 });
 
 test('idempotency repository uniqueness is scoped by both scope and request key', () => {
