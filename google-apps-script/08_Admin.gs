@@ -44,7 +44,7 @@ function adminOrders(token) {
   });
 }
 
-function adminSlipData(token, orderId, ipAddress) {
+function adminSlipData(token, orderId) {
   const admin = requireAdmin_(token);
   const order = repositoryGetById_('orders', orderId);
   if (!order || !order.slip_file_id) throw new Error('ไม่พบสลิป');
@@ -70,7 +70,7 @@ function adminSlipData(token, orderId, ipAddress) {
   };
 }
 
-function adminSetOrderStatus(token, orderId, status, ipAddress) {
+function adminSetOrderStatus(token, orderId, status) {
   const admin = requireAdmin_(token);
   const nextStatus = String(status || '');
   if (!['Completed', 'Rejected'].includes(nextStatus)) throw new Error('สถานะไม่ถูกต้อง');
@@ -151,7 +151,7 @@ function adminList(token, tableName) {
   return records.map(clean_);
 }
 
-function adminUpsert(token, tableName, record, ipAddress) {
+function adminUpsert(token, tableName, record) {
   const admin = requireAdmin_(token);
   if (!['games', 'packages', 'coupons', 'promotions'].includes(String(tableName))) {
     throw new Error('ไม่อนุญาตให้แก้ไขตารางนี้');
@@ -225,7 +225,7 @@ function adminUpsert(token, tableName, record, ipAddress) {
   }
 }
 
-function adminDelete(token, tableName, id, ipAddress) {
+function adminDelete(token, tableName, id) {
   const admin = requireAdmin_(token);
   if (!['games', 'packages', 'coupons', 'promotions'].includes(String(tableName))) {
     throw new Error('ไม่อนุญาตให้ลบตารางนี้');
@@ -283,7 +283,7 @@ function adminMemberLoginLogs(token, memberId, requestedLimit) {
 }
 
 
-function adminStoreMedia(token, media, ipAddress) {
+function adminStoreMedia(token, media) {
   const admin = requireAdmin_(token);
   media = media || {};
   const mimeType = String(media.mimeType || '');
@@ -405,7 +405,7 @@ function adminMembers(token, searchTerm, requestedLimit) {
   });
 }
 
-function adminSetMemberStatus(token, memberId, status, ipAddress) {
+function adminSetMemberStatus(token, memberId, status) {
   const admin = requireAdmin_(token);
   const nextStatus = String(status || '');
   if (!['Active','Suspended'].includes(nextStatus)) throw new Error('สถานะสมาชิกไม่ถูกต้อง');
