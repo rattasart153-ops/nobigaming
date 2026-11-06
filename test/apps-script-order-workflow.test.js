@@ -30,6 +30,9 @@ function makeOrderHarness() {
   let uuid = 0;
   const files = [];
   let folderAccess = 'PRIVATE';
+  let fileAccess = 'PRIVATE';
+  let fileParentId = 'private-folder-id';
+  let fileMetadataAvailable = true;
   const context = {
     Date:FixedDate,
     NOBI:{MAX_SLIP_BYTES:3*1024*1024,SHEETS:{orders:['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at'],coupon_redemptions:['redemption_id','coupon_id','order_id','member_id','player_id','game_id','discount_satang','state','reserved_at','reserved_until','finalized_at','released_at'],idempotency_records:['idempotency_id','scope','request_key','payload_hash','resource_id','state','created_at','expires_at']}},
@@ -45,7 +48,12 @@ function makeOrderHarness() {
       Access:{PRIVATE:'PRIVATE'}, Permission:{VIEW:'VIEW'},
       getFolderById:()=>({createFile:blob=>{
         const file={id:'drive-file-'+(files.length+1),blob,trashed:false,
-          getId(){return this.id;},getSharingAccess(){return 'PRIVATE';},setSharing(){},setTrashed(value){this.trashed=value;}};
+          getId(){return this.id;},setSharing(){},setTrashed(value){this.trashed=value;},
+          getParents(){
+            let consumed=false;
+            return {hasNext:()=>!consumed,next:()=>{consumed=true;return {getId:()=>fileParentId};}};
+          }};
+        if(fileMetadataAvailable) file.getSharingAccess=()=>fileAccess;
         files.push(file); return file;
       },getSharingAccess:()=> folderAccess})
     },
@@ -85,11 +93,17 @@ function makeOrderHarness() {
     money_:value=>Math.round(Number(value)*100)/100
   };
   vm.createContext(context);
-  for (const file of ['04_Coupons.gs','06_Orders.gs']) {
+  for (const file of ['04_Coupons.gs','06_Orders.gs','08_Admin.gs']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname,'..','google-apps-script',file),'utf8'),context,{filename:file});
   }
   context.checkoutTokenForOrder_=(orderId,requestKey)=>'derived-checkout-token.'+orderId+'.'+requestKey;
-  return {context,data,files,fixedNow,setFolderAccess:value=>{folderAccess=value;}};
+  return {
+    context,data,files,fixedNow,
+    setFolderAccess:value=>{folderAccess=value;},
+    setFileAccess:value=>{fileAccess=value;},
+    setFileParent:value=>{fileParentId=value;},
+    setFileMetadataAvailable:value=>{fileMetadataAvailable=value;}
+  };
 }
 
 test('checkout creates a Pending order with a 15-minute deadline and a one-time token', () => {
@@ -277,6 +291,62 @@ test('slip upload fails closed when the configured Drive folder is shared',()=>{
   assert.equal(data.orders[0].slip_submitted_at,'');
 });
 
+
+
+test('slip upload fails closed and trashes a file whose sharing access is not private',()=>{
+  const {context,data,files,setFileAccess}=makeOrderHarness();
+  const order=context.createOrder({
+    request_key:'request-key-drive-shared-file-01',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-123',server_id:'',coupon_code:''
+  });
+  setFileAccess('ANYONE');
+  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  assert.throws(()=>context.submitOrderSlip({
+    order_id:order.order.order_id,
+    checkout_token:order.checkout_token,
+    slip:{mimeType:'image/png',base64:png.toString('base64')}
+  }),/DRIVE_FILE_NOT_PRIVATE/);
+  assert.equal(files.length,1);
+  assert.equal(files[0].trashed,true);
+  assert.equal(data.orders[0].slip_file_id,'');
+  assert.equal(data.orders[0].slip_submitted_at,'');
+});
+
+test('slip upload fails closed when Drive cannot verify file sharing metadata',()=>{
+  const {context,data,files,setFileMetadataAvailable}=makeOrderHarness();
+  const order=context.createOrder({
+    request_key:'request-key-drive-no-metadata-01',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-123',server_id:'',coupon_code:''
+  });
+  setFileMetadataAvailable(false);
+  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  assert.throws(()=>context.submitOrderSlip({
+    order_id:order.order.order_id,
+    checkout_token:order.checkout_token,
+    slip:{mimeType:'image/png',base64:png.toString('base64')}
+  }),/DRIVE_FOLDER_INVALID/);
+  assert.equal(files.length,1);
+  assert.equal(files[0].trashed,true);
+  assert.equal(data.orders[0].slip_file_id,'');
+});
+
+test('slip upload rejects a file stored outside the configured private folder',()=>{
+  const {context,data,files,setFileParent}=makeOrderHarness();
+  const order=context.createOrder({
+    request_key:'request-key-drive-wrong-parent-01',game_id:'game-1',package_id:'pack-1',
+    player_id:'uid-123',server_id:'',coupon_code:''
+  });
+  setFileParent('unexpected-folder');
+  const png=Buffer.from([137,80,78,71,13,10,26,10,0,0,0,0]);
+  assert.throws(()=>context.submitOrderSlip({
+    order_id:order.order.order_id,
+    checkout_token:order.checkout_token,
+    slip:{mimeType:'image/png',base64:png.toString('base64')}
+  }),/DRIVE_FILE_OUTSIDE_PRIVATE_FOLDER/);
+  assert.equal(files.length,1);
+  assert.equal(files[0].trashed,true);
+  assert.equal(data.orders[0].slip_file_id,'');
+});
 
 test('checkout derives Member ID from the verified session and rejects caller-supplied identity',()=>{
   const {context,data}=makeOrderHarness();
