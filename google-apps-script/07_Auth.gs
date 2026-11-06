@@ -34,7 +34,7 @@ function adminLogin(username, password, ipAddress) {
   const normalized = user.toLowerCase();
   const pass = String(password || '');
   if (!user || !pass) throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
-  consumeLoginAttempt_('MEMBER_LOGIN_ATTEMPT', normalized, 10);
+  consumeLoginAttempt_('ADMIN_LOGIN_ATTEMPT', normalized, 10);
   assertAccountNotBlocked_('ADMIN_ACCOUNT', normalized);
 
   // Password KDF is intentionally outside ScriptLock so a slow login cannot
@@ -196,7 +196,7 @@ function memberLogin(loginId, password, ipAddress, userAgent) {
   const pass = String(password || '');
     const agent = String(userAgent || '').slice(0, 300);
   if (!login || !pass) throw new Error('Login ID หรือรหัสผ่านไม่ถูกต้อง');
-  consumeAuthIpAttempt_(ipAddress);
+  consumeLoginAttempt_('MEMBER_LOGIN_ATTEMPT', normalized, 10);
   try {
     assertAccountNotBlocked_('MEMBER_ACCOUNT', normalized);
   } catch (error) {
