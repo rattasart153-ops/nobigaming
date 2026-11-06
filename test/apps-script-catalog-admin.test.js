@@ -34,7 +34,22 @@ function makeCatalogAdminContext(seed = {}) {
     Utilities:{getUuid:()=> 'generated-id-' + (inserted.length + 1)},
     LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
     PropertiesService:{getScriptProperties:()=>({getProperty:key=>key==='NOBI_PRIVATE_MEDIA_FOLDER_ID'?'private-media-folder':''})},
-    DriveApp:{getFileById:id=>({id})},
+    DriveApp:{
+      Access:{PRIVATE:'PRIVATE'},
+      Permission:{VIEW:'VIEW'},
+      getFileById:id=>{
+        mediaChecks.push({fileId:id,folderId:'private-media-folder'});
+        return {
+          id,
+          getSharingAccess:()=> 'PRIVATE',
+          getParents:()=>{
+            let consumed=false;
+            return {hasNext:()=>!consumed,next:()=>{consumed=true;return {getId:()=> 'private-media-folder'};}};
+          }
+        };
+      },
+      getFolderById:()=>({getSharingAccess:()=> 'PRIVATE'})
+    },
     requireAdmin_:token=>{assert.equal(token,'valid-admin-token');return {admin_id:'admin-1'};},
     truth_:value=>value===true||value===1||String(value).toLowerCase()==='true',
     clean_:value=>JSON.parse(JSON.stringify(value)),
@@ -66,7 +81,6 @@ function makeCatalogAdminContext(seed = {}) {
     },
     repositorySheet_:()=>{throw new Error('ADMIN CRUD MUST NOT BYPASS REPOSITORY');},
     appendAdminAuditLogLocked_:record=>audits.push({...record}),
-    assertDriveFileInPrivateFolder_:(file,folderId)=>{mediaChecks.push({fileId:file.id,folderId});return true;}
   };
   vm.createContext(context);
   const gasDir=path.join(__dirname,'..','google-apps-script');
