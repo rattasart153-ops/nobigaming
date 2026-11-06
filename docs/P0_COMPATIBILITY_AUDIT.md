@@ -69,7 +69,7 @@ The legacy local-SQLite route modules remain in `src/routes/public.routes.js` an
 | `02_Database.gs` | Spreadsheet setup/schema validation | Present; real Sheets behavior unverified |
 | `03_Catalog.gs` | Catalog/promotions | Present |
 | `04_Coupons.gs` | Coupon eligibility and suggestions | Present; business tests use mocks |
-| `05_Payments.gs` | PromptPay response | **Stub: returns configured=false even if PromptPay ID exists** |
+| `05_Payments.gs` | PromptPay response | P0-R7 implements a native EMVCo payload builder; QR image rendering remains a frontend responsibility and must use a local encoder |
 | `06_Orders.gs` | Order creation, deadlines, slips, idempotency and write-ahead recovery journal | P0-R1 through R3 implemented; expanded fault-injection and linkage checks added; real Drive/Sheets concurrency remains unverified |
 | `07_Auth.gs` | Admin/member auth and sessions | Present; PBKDF2 performance unverified in Apps Script |
 | `08_Admin.gs` | Admin CRUD, audit, private files | Present; real Drive ACLs unverified |
@@ -96,7 +96,7 @@ This dispatcher can be reused behind a narrower typed facade, but must not be ex
 | P0-01 | Critical | GAS `doGet()` returns JSON; no HtmlService renderer or HTML template files exist | P1: implement HtmlService entry and template routing |
 | P0-02 | Critical | Current HTML pages call Express REST, not `google.script.run`; they cannot run as the approved standalone HtmlService app | P1/P2: implement facade then frontend adapter |
 | P0-03 | Critical | `01_HttpEntry.gs` dispatcher is invoked through signed `doPost()`; no browser-callable facade exists | P1: add allowlisted facade; do not expose arbitrary table/action dispatch |
-| P0-04 | High | `paymentInfo_()` is an explicit stub and never returns a QR even when PromptPay is configured | P1/P2: implement compatible PromptPay QR generation without a paid service; test payload/amount correctness before real payment |
+| P0-04 | High | PromptPay payload generation was previously a stub | P0-R7 now returns a validated EMVCo payload without a paid service; HtmlService must render it with a local QR encoder and complete runtime verification before real payment |
 | P0-05 | High | Existing Admin slip and media paths transfer base64 data through Apps Script actions | P1/P3: design bounded upload/download and memory-safe limits; preserve 3 MB upload cap and private Drive access |
 | P0-06 | High | Current frontend/Admin session model assumes Express same-origin cookie sessions; GAS business handlers issue opaque tokens | P1/P2: define secure HtmlService session transport, token lifecycle and XSS protections before switching |
 | P0-07 | High | Sheets has no relational transaction; order + coupon redemption + idempotency rows require recovery after partial writes | P0-R1/R2 write-ahead journal and P0-R3 fault-injection coverage implemented. Recovery preflights full CREATE order/redemption/idempotency records before writes, validates legal transition states and patches, and rejects cross-order linkage; actual Apps Script concurrency/runtime verification remains open |
@@ -225,7 +225,7 @@ The browser facade must expose named, typed operations rather than accepting arb
 - [x] Observe and record CI result after the Node 22 workflow change (`42001254891`: success).
 - [x] Review frontend session/storage and HtmlService client-call constraints.
 - [x] Check trusted IP-history feasibility against official Apps Script request/API documentation.
-- [ ] Complete detailed field-by-field response/payload mapping for every Admin CRUD and checkout action.
+- [x] Complete detailed field-by-field response/payload mapping for every Admin CRUD and checkout action — see [P0_ADMIN_CHECKOUT_FIELD_MAPPING.md](./P0_ADMIN_CHECKOUT_FIELD_MAPPING.md) (P0-R9).
 - [x] Complete source-level HTML/session/storage and HtmlService call-constraint review.
 - [ ] Resolve P0-12 trusted Member IP-history compatibility without changing approved requirements or Zero Cost constraints.
 
@@ -300,3 +300,25 @@ The browser facade must expose named, typed operations rather than accepting arb
 - GitHub Actions run 42148644591 on commit e566919bcdc854578fc116cd07f95abbc011025c completed successfully with 94/94 tests. The final expanded regression run 42148809409 on commit c62b0ad64bc4dea05f112a9584212537f3a31999 completed successfully with 95/95 tests and 0 failures, including the missing-folder-sharing-metadata case.
 - Node VM mocks cannot prove the behavior of real Google Drive inherited permissions, actual file/folder ACLs, or Apps Script execution. Those checks still require a separately authorized synthetic Google test environment; no Google resource or deployment was created here.
 - P0-12 trusted Member IP provenance remains unresolved. P0 is still blocked; do not start P1 or change the approved IP-history / Zero Cost requirements.
+
+
+## 12. P0-R9/R10 — Admin/checkout mapping and trusted IP decision — 2026-11-06
+
+### P0-R9 — Admin CRUD and checkout contract mapping
+
+- Added [P0_ADMIN_CHECKOUT_FIELD_MAPPING.md](./P0_ADMIN_CHECKOUT_FIELD_MAPPING.md) with field-by-field browser request, GAS action arguments, response shape, record conversions, authentication requirements and business invariants for Admin sessions, dashboard/orders, all four CRUD tables, member administration, media upload, coupon validation and the two-step checkout/slip workflow.
+- Reconciled stale PromptPay stub descriptions in this audit with P0-R7's implemented EMVCo payload builder.
+- Found and fixed a source defect: Admin CRUD PUT previously omitted the server-derived `ipAddress` when calling `adminUpsert`. GAS consequently wrote an empty IP for update audit events. The route now passes `String(req.ip || '')`; the value is not accepted from browser input.
+- Added a route-level regression test proving the Admin update passes the request-derived IP to the GAS client.
+
+### P0-R10 — Trusted IP-history feasibility
+
+- Revalidated the HtmlService + `google.script.run` boundary: it provides no trusted client remote-IP field to the server function. Browser-supplied values or browser-discovered addresses are not trusted substitutes.
+- No compliant trusted-IP observer exists within the currently approved Apps Script-only execution boundary. Adding a proxy or another server/service would change the approved architecture/cost boundary; changing or dropping verified Member IP history would change an approved business/security requirement.
+- **P0-12 remains unresolved and Phase 0 remains BLOCKED.** No spoofable IP fallback or silent downgrade was introduced. A separate user decision is required before changing either constraint.
+
+### Validation boundary
+
+- Source change is limited to the Admin update route's audit-IP propagation and its regression test; the mapping and P0-12 analysis are documentation.
+- GitHub Actions on `vercel-drive-setup` is the required automated regression gate. This test harness does not prove live Apps Script, Google Sheets, Drive ACL, or remote-IP provenance in a deployed environment.
+- No deployment, live Google resource, billing, paid service, production payment, or real customer data was used.
