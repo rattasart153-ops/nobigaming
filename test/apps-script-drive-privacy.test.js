@@ -123,7 +123,7 @@ function makeAdminMediaHarness(options = {}) {
       base64Decode:value=>Array.from(Buffer.from(String(value),'base64')).map(x=>x>127?x-256:x),
       newBlob:(bytes,mimeType,name)=>({bytes,mimeType,name})
     },
-    LockService:{getScriptLock:()=>({waitLock(){state.lockWaits++;if(options.lockTimeout)throw new Error('LOCK_TIMEOUT');assert.equal(state.lockHeld,false);state.lockHeld=true;},releaseLock(){assert.equal(state.lockHeld,true);state.lockHeld=false;state.lockReleases++;}})},
+    LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
     requireAdmin_:()=>({admin_id:'admin-1'}),
     appendAdminAuditLogLocked_:()=>{
       if(state.auditFailure) throw new Error('SIMULATED_AUDIT_WRITE_FAILURE');
@@ -267,7 +267,7 @@ function makeAdminSlipHarness(options = {}) {
       getFolderById:()=>({getSharingAccess:()=>options.folderAccess || 'PRIVATE'}),
       getFileById:()=>{state.driveReads++;return file;}
     },
-    LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
+    LockService:{getScriptLock:()=>({waitLock(){state.lockWaits++;if(options.lockTimeout)throw new Error('LOCK_TIMEOUT');assert.equal(state.lockHeld,false);state.lockHeld=true;},releaseLock(){assert.equal(state.lockHeld,true);state.lockHeld=false;state.lockReleases++;}})},
     Utilities:{base64Encode:value=>Buffer.from(value).toString('base64'),getUuid:()=>'audit-id'},
     repositoryGetById_:(table,id)=>table==='orders'&&id==='order-1'
       ? {order_id:'order-1',slip_file_id:'drive-slip-1'} : null,
