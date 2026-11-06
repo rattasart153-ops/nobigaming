@@ -13,8 +13,8 @@ function makeAuthContext() {
   const data = {
     admin_sessions:[{session_id:'as-1',admin_id:'a-1',token_hash:crypto.createHash('sha256').update('admin-token').digest('hex'),auth_version:2,created_at:new Date(now-1000).toISOString(),last_seen_at:new Date(now-1000).toISOString(),expires_at:new Date(now+3600000).toISOString(),revoked_at:''}],
     member_sessions:[{session_id:'ms-1',member_id:'m-1',token_hash:crypto.createHash('sha256').update('member-token').digest('hex'),auth_version:3,created_at:new Date(now-1000).toISOString(),last_seen_at:new Date(now-1000).toISOString(),expires_at:new Date(now+3600000).toISOString(),revoked_at:''}],
-    admins:[{admin_id:'a-1',status:'Active',auth_version:2}],
-    members:[{member_id:'m-1',status:'Active',auth_version:3}]
+    admins:[{admin_id:'a-1',status:'Active',auth_version:2,password_hash:'admin-old-hash',password_salt:'admin-salt',password_algorithm:'PBKDF2-SHA256-120000'}],
+    members:[{member_id:'m-1',status:'Active',auth_version:3,password_hash:'member-old-hash',password_salt:'member-salt',password_algorithm:'PBKDF2-SHA256-120000'}]
   };
   const context = {
     Date,
@@ -32,12 +32,21 @@ function makeAuthContext() {
       assert.equal(lockHeld,true,'account state must be read while ScriptLock is held');
       return (data[table]||[]).find(row=>String(row[table==='admins'?'admin_id':'member_id'])===String(id))||null;
     },
+    repositoryRows_:table=>{
+      assert.equal(lockHeld,true,'session lists must be read while ScriptLock is held');
+      return (data[table]||[]).slice();
+    },
     repositoryUpdateLocked_:(table,id,patch)=>{
       assert.equal(lockHeld,true);
-      const row=(data[table]||[]).find(item=>item.session_id===id);
-      if(!row)throw new Error('missing session');
+      const keyField=table==='admins'?'admin_id':table==='members'?'member_id':'session_id';
+      const row=(data[table]||[]).find(item=>item[keyField]===id);
+      if(!row)throw new Error('missing record');
       Object.assign(row,patch);
-    }
+    },
+    Utilities:{getUuid:()=>'test-uuid'},
+    passwordVerify_:(password,salt,hash)=>password==='current-password'&&Boolean(salt)&&Boolean(hash),
+    passwordHash_:(password,salt)=>'new-hash:'+password+':'+salt,
+    appendAdminAuditLogLocked_:()=>{}
   };
   vm.createContext(context);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'..','google-apps-script','07_Auth.gs'),'utf8'),context,{filename:'07_Auth.gs'});
@@ -162,4 +171,37 @@ test('malformed Admin and Member expiry or idle timestamps fail closed',()=>{
   member.data.member_sessions[0].last_seen_at='not-a-date';
   assert.throws(()=>member.context.requireMember_('member-token'),/ไม่มีการใช้งานเกินกำหนด/);
   assert.ok(member.data.member_sessions[0].revoked_at);
+});
+
+
+test('Member password change increments auth_version and revokes every active Member session',()=>{
+  const {context,data}=makeAuthContext();
+  data.member_sessions.push({
+    session_id:'ms-2',member_id:'m-1',
+    token_hash:crypto.createHash('sha256').update('member-other-token').digest('hex'),
+    auth_version:3,created_at:new Date().toISOString(),last_seen_at:new Date().toISOString(),
+    expires_at:new Date(Date.now()+3600000).toISOString(),revoked_at:''
+  });
+  const result=context.memberChangePassword('member-token','current-password','new-member-password');
+  assert.equal(result.ok,true);
+  assert.equal(data.members[0].auth_version,4);
+  assert.match(data.members[0].password_hash,/^new-hash:new-member-password:/);
+  assert.ok(data.member_sessions.every(session=>Boolean(session.revoked_at)));
+  assert.throws(()=>context.requireMember_('member-token'),/เซสชันสมาชิกหมดอายุ/);
+});
+
+test('Admin password change increments auth_version, revokes all Admin sessions and writes a non-IP audit event',()=>{
+  const {context,data}=makeAuthContext();
+  data.admin_sessions.push({
+    session_id:'as-2',admin_id:'a-1',
+    token_hash:crypto.createHash('sha256').update('admin-other-token').digest('hex'),
+    auth_version:2,created_at:new Date().toISOString(),last_seen_at:new Date().toISOString(),
+    expires_at:new Date(Date.now()+3600000).toISOString(),revoked_at:''
+  });
+  const result=context.adminChangePassword('admin-token','current-password','new-admin-password-longer');
+  assert.equal(result.ok,true);
+  assert.equal(data.admins[0].auth_version,3);
+  assert.match(data.admins[0].password_hash,/^new-hash:new-admin-password-longer:/);
+  assert.ok(data.admin_sessions.every(session=>Boolean(session.revoked_at)));
+  assert.throws(()=>context.requireAdmin_('admin-token'),/เซสชันหมดอายุ/);
 });
