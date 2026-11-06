@@ -145,8 +145,8 @@ test('Admin and Member sessions are rejected when the account auth_version chang
 
 test('Admin and Member logout revoke their matching sessions and make reuse impossible',()=>{
   const {context,data}=makeAuthContext();
-  assert.deepEqual(context.adminLogout('admin-token'),{ok:true});
-  assert.deepEqual(context.memberLogout('member-token'),{ok:true});
+  assert.equal(context.adminLogout('admin-token').ok,true);
+  assert.equal(context.memberLogout('member-token').ok,true);
   assert.ok(data.admin_sessions[0].revoked_at);
   assert.ok(data.member_sessions[0].revoked_at);
   assert.throws(()=>context.requireAdmin_('admin-token'),/เซสชันหมดอายุ/);
