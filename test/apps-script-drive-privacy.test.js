@@ -91,7 +91,7 @@ test('private Drive file validator fails closed for missing folder, shared folde
   );
   assert.throws(
     () => context.assertDriveFileInPrivateFolder_({}, 'private-folder'),
-    /DRIVE_ACL_UNVERIFIABLE/
+    /DRIVE_FOLDER_INVALID/
   );
   assert.throws(
     () => context.assertDriveFileInPrivateFolder_(driveFile(['shared-folder']), 'shared-folder'),
@@ -101,7 +101,7 @@ test('private Drive file validator fails closed for missing folder, shared folde
 
 
 test('private Drive file validator fails closed when file sharing metadata is unavailable', () => {
-  const unsupported = {getParents: () => ({hasNext: () => false, next: () => null})};
+  const unsupported = {getSharingAccess:()=> 'PRIVATE',getParents: () => ({hasNext: () => false, next: () => null})};
   assert.throws(
     () => context.assertDriveFileInPrivateFolder_(unsupported, 'private-folder'),
     /DRIVE_ACL_UNVERIFIABLE/
@@ -324,6 +324,8 @@ function makeAdminSlipHarness(options = {}) {
       return {getContentType:()=> 'image/png',getBytes:()=>Array.from(bytes)};
     },
     getSharingAccess:()=> options.fileAccess || 'PRIVATE',
+    getEditors:()=> options.fileEditors || [],
+    getViewers:()=> options.fileViewers || [],
     getParents:()=>{
       let consumed=false;
       return {hasNext:()=>!consumed,next:()=>{consumed=true;return {getId:()=>options.parentId || 'private-slip-folder'};}};
