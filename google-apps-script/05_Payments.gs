@@ -21,8 +21,8 @@ function promptPayCrc16_(value) {
 
 function promptPayPayload_(promptpayId, amount) {
   const raw = String(promptpayId || '').trim();
-  if (!raw || !/^[0-9\\s()+-]+$/.test(raw)) throw new Error('PROMPTPAY_ID_INVALID');
-  const digits = raw.replace(/[\\s()+-]/g, '');
+  if (!raw || !/^[0-9()+-]+$/.test(raw)) throw new Error('PROMPTPAY_ID_INVALID');
+  const digits = raw.replace(/[()+-]/g, '');
   let type;
   let target;
   if (/^0[0-9]{9}$/.test(digits)) {
