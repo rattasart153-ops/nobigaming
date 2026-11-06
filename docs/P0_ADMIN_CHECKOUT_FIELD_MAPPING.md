@@ -50,9 +50,9 @@ Image URLs must be application media references, not direct Google Drive/Googleu
 
 | Browser operation | GAS action / arguments | Result contract |
 |---|---|---|
-| List members | `adminMembers({token,search,limit})` | Member records; limit bounded by GAS handler. |
+| List members | `adminMembers({token,search,limit})` | Member records; limit bounded by GAS handler. Response excludes all IP fields. |
 | Change member status | `adminSetMemberStatus({token,memberId,status,ipAddress})` | Result object; status transition revokes sessions as required. |
-| Member login/IP history | `adminMemberLoginLogs({token,memberId,limit})` | Admin-only log array, newest first, bounded limit. IP data must remain restricted to authenticated Admin. |
+| Member login/security history | `adminMemberLoginLogs({token,memberId,limit})` | Admin-only event array, newest first, bounded limit; includes time, Login ID, result, failure reason and user-agent metadata, never IP address or IP-change flags. |
 | Upload media | `adminStoreMedia({token,media:{name,mimeType,base64},ipAddress})` | `{ok:true,file_id,url}`; PNG/JPEG/WebP, max 3 MB, private folder/file checks, audit before returning reference. |
 
 ### Checkout and payment contract
@@ -73,21 +73,20 @@ Checkout invariants: request key is 16–128 allowed characters and bound to a c
 
 The Admin `PUT /api/admin/{table}/:id` route called `adminUpsert` without forwarding `ipAddress`, unlike the matching POST route. GAS therefore wrote an empty IP into the audit event for updates. The route now forwards `String(req.ip || '')`, and a regression test asserts the update request sends the server-derived loopback address to the GAS client. This does not accept an IP from the browser.
 
-## P0-R10 — Trusted Member IP-history compatibility decision
+## P0-R10 — Approved decision B: no Member IP history
 
-**Result: investigated; not safely resolvable under the currently approved HtmlService-only + existing-Google-account + Zero Cost constraints. P0-12 remains BLOCKED.**
+**Status: RESOLVED BY EXPLICIT USER DECISION.** The user selected B: retain the HtmlService + Apps Script-only / Zero Cost direction and remove the requirement for Admin to view Member IP history.
 
-Evidence from the approved architecture and source:
+Implementation rules:
+- Never accept `ipAddress`, `X-Forwarded-For`, query parameters, WebRTC/STUN results or browser-discovered values as verified visitor IP.
+- Member registration/login no longer collect or persist IP values. Legacy schema columns remain for compatibility and are written as empty values.
+- Member login/security events remain available to Admin for 90 days, but contain no IP address or `is_new_ip` flag. Login result, failure reason, event time and user-agent metadata remain.
+- Admin member list and login/security history responses exclude IP fields; the Admin UI no longer displays IP-history navigation or columns.
+- Legacy Member IP values, Member session IP values and Member login-log IP fields are cleared immediately by the retention cleanup. Admin session/audit IP fields are also cleared because the HtmlService path has no trusted remote-IP source.
+- IP-based Apps Script rate-limit buckets are replaced with HMAC-keyed account-scoped login/registration buckets. The existing five-failure account lockout remains separate. This is an account-level control, not a claim of per-network rate limiting.
+- Other requirements remain unchanged: Admin-only access control, 8-hour maximum session lifetime, 30-minute idle timeout, revocation rules, and 90-day security-event retention.
 
-1. Current signed gateway architecture can obtain a server-side request IP at the Express ingress and pass it to GAS in a signed server-to-server request. That is a trusted server observation only when the ingress/proxy trust configuration is correctly controlled.
-2. The approved target replaces that ingress with Apps Script HtmlService and `google.script.run`. The browser-callable server function receives named arguments, not a trusted remote socket address.
-3. The documented Apps Script Web App event object does not expose a remote-IP field. `google.script.run` does not supply a trusted client IP as an implicit server argument.
-4. Accepting `ipAddress`, `X-Forwarded-For`, query parameters, WebRTC/STUN results, or JavaScript-discovered addresses from the browser would be spoofable or would not establish the connecting public IP. It must not be stored as verified Member IP history.
-5. Therefore the system cannot honestly preserve the approved Admin-only verified Member IP history using only the approved HtmlService execution path. Do not fabricate, relabel, or silently omit IP history.
-
-No IP collection code was weakened or changed. No additional proxy/service, account, billing, paid tier, domain, or infrastructure was introduced.
-
-**Release gate:** keep P0-12 open and do not start P1 or claim Phase 0 completion until a user-approved design provides a trusted IP-observing server boundary while preserving Zero Cost, or the user explicitly revises one of those constraints. Any such architecture/requirement change needs separate approval.
+The legacy Vercel route may still pass a server-observed IP in its old transport contract, but the Apps Script business layer deliberately discards it for the approved HtmlService target. No source IP is exposed as Member history.
 
 ## Pair validation limits
 
