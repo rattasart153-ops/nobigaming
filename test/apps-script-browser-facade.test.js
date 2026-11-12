@@ -26,11 +26,11 @@ function loadFacade() {
 test('public facade exposes named functions for every existing business action', () => {
   const { source } = loadFacade();
   const names = Array.from(source.matchAll(/^function (nobi[A-Za-z0-9]+)\(/gm), match => match[1]);
-  assert.equal(names.length, 28);
+  assert.equal(names.length, 30);
   for (const name of [
     'nobiGetCatalog','nobiGetPromotions','nobiValidateCoupon','nobiGetCouponSuggestions',
     'nobiGetPaymentInfo','nobiCreateOrder','nobiSubmitOrderSlip','nobiRegisterMember',
-    'nobiLoginMember','nobiGetMemberSession','nobiLogoutMember','nobiChangeMemberPassword',
+    'nobiLoginMember','nobiGetMemberDashboard','nobiGetMemberOrders','nobiGetMemberSession','nobiLogoutMember','nobiChangeMemberPassword',
     'nobiLoginAdmin','nobiGetAdminSession','nobiLogoutAdmin','nobiChangeAdminPassword',
     'nobiGetAdminDashboard','nobiGetAdminOrders','nobiGetAdminSlip','nobiSetAdminOrderStatus',
     'nobiListAdminRecords','nobiUpsertAdminRecord','nobiDeleteAdminRecord',
