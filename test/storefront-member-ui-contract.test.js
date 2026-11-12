@@ -100,11 +100,11 @@ test('Storefront and Admin facade calls map to defined browser wrappers and disp
   const missingWrappers = Array.from(calledWrappers).filter(name => !definedWrappers.has(name));
   assert.deepEqual(missingWrappers, [], 'frontend calls must resolve to named BrowserFacade functions');
 
-  const browserActionsBlock = facade.match(/NOBI_BROWSER_FACADE_ACTIONS_\\s*=\\s*\\[([\\s\\S]*?)\\]/);
+  const browserActionsBlock = facade.match(/NOBI_BROWSER_FACADE_ACTIONS_\s*=\s*\[([\s\S]*?)\]/);
   assert.ok(browserActionsBlock, 'BrowserFacade action allowlist must exist');
   const allowedActions = new Set(Array.from(browserActionsBlock[1].matchAll(/['"]([^'"]+)['"]/g), match => match[1]));
-  const facadeActions = new Set(Array.from(facade.matchAll(/nobiFacadeCall_\\(\\s*['"]([^'"]+)['"]/g), match => match[1]));
-  const dispatcherActions = new Set(Array.from(dispatcher.matchAll(/case\\s+['"]([^'"]+)['"]\\s*:/g), match => match[1]));
+  const facadeActions = new Set(Array.from(facade.matchAll(/nobiFacadeCall_\(\s*['"]([^'"]+)['"]/g), match => match[1]));
+  const dispatcherActions = new Set(Array.from(dispatcher.matchAll(/case\s+['"]([^'"]+)['"]\s*:/g), match => match[1]));
 
   assert.deepEqual(Array.from(facadeActions).filter(action => !allowedActions.has(action)), []);
   assert.deepEqual(Array.from(facadeActions).filter(action => !dispatcherActions.has(action)), []);
