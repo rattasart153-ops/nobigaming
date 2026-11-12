@@ -25,6 +25,8 @@ function dispatchGatewayAction_(action, args) {
     case 'adminLogin': return adminLogin(args.username, args.password);
     case 'memberRegister': return memberRegister(args.fullName, args.loginId, args.password);
     case 'memberLogin': return memberLogin(args.loginId, args.password, args.userAgent);
+    case 'memberDashboard': return memberDashboard(args.token);
+    case 'memberOrders': return memberOrders(args.token, args.limit);
     case 'memberMe':
       try { return memberMe(args.token); }
       catch (error) {
