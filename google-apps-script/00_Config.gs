@@ -11,7 +11,7 @@ const NOBI = {
     admin_audit_logs: ['audit_id','admin_id','action','target_type','target_id','request_id','ip_address','details_json','created_at'],
     games: ['game_id','name','category','description','active','sort_order','created_at','updated_at'],
     packages: ['package_id','game_id','name','amount','unit','price_satang','image_file_id','image_url','popular','active','sort_order','created_at','updated_at'],
-    coupons: ['coupon_id','code_normalized','code_display','discount_type','discount_value','min_order_satang','game_id','access_type','member_spend_game_id','member_min_game_spend_satang','expires_at','usage_limit','active','allowed_player_ids_json','min_player_spend_satang','created_at','updated_at'],
+    coupons: ['coupon_id','code_normalized','code_display','discount_type','discount_value','min_order_satang','game_id','access_type','member_spend_game_id','member_min_game_spend_satang','member_min_total_spend_satang','expires_at','usage_limit','active','allowed_player_ids_json','min_player_spend_satang','created_at','updated_at'],
     coupon_redemptions: ['redemption_id','coupon_id','order_id','member_id','player_id','game_id','discount_satang','state','reserved_at','reserved_until','finalized_at','released_at'],
     member_coupon_alerts: ['alert_id','member_coupon_key','member_id','coupon_id','last_stage','notified_at','created_at','updated_at'],
     promotions: ['promotion_id','title','subtitle','image_file_id','image_url','link_url','active','sort_order','starts_at','ends_at','created_at','updated_at'],
