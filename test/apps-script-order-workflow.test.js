@@ -231,7 +231,7 @@ test('slip upload preserves the Drive file when the order write committed but it
 test('member-game coupon requires an authenticated member with completed spend in the qualifying game', () => {
   const {context,data,fixedNow}=makeOrderHarness();
   data.members.push({member_id:'member-1',status:'Active'});
-  data.orders.push({order_id:'old-order',member_id:'member-1',game_id:'game-1',status:'Completed',total_satang:50000});
+  data.orders.push({order_id:'old-order',member_id:'member-1',game_id:'game-1',status:'Completed',completed_at:new Date(fixedNow-24*60*60*1000).toISOString(),total_satang:50000});
   const coupon={
     coupon_id:'member-coupon',code_normalized:'MEMBER',code_display:'MEMBER',
     discount_type:'percent',discount_value:10,access_type:'member_game_spend',
