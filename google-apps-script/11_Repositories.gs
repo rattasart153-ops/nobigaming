@@ -13,7 +13,8 @@ const NOBI_REPOSITORY_UNIQUE_FIELDS = {
   orders: ['request_key'],
   idempotency_records: [['scope', 'request_key']],
   system_metadata: ['key'],
-  gateway_nonces: ['nonce_hash']
+  gateway_nonces: ['nonce_hash'],
+  member_coupon_alerts: ['member_coupon_key']
 };
 
 function repositorySheet_(tableName) {
