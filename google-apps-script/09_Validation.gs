@@ -33,10 +33,10 @@ function validateRecord_(tableName, record) {
         (record.discount_type === 'percent' && Number(record.discount_value) > 100)) {
       throw new Error('ข้อมูลส่วนลดไม่ถูกต้อง');
     }
-    if (!['public', 'member_only', 'member_game_spend'].includes(String(record.access_type))) {
+    if (!['public', 'member_only', 'member_game_spend', 'member_total_spend'].includes(String(record.access_type))) {
       throw new Error('รูปแบบสิทธิ์คูปองไม่ถูกต้อง');
     }
-    ['min_order_satang', 'member_min_game_spend_satang', 'min_player_spend_satang'].forEach(function(field) {
+    ['min_order_satang', 'member_min_game_spend_satang', 'member_min_total_spend_satang', 'min_player_spend_satang'].forEach(function(field) {
       if (record[field] !== undefined &&
           (!Number.isSafeInteger(Number(record[field])) || Number(record[field]) < 0)) {
         throw new Error('เงื่อนไขยอดใช้จ่ายไม่ถูกต้อง');
@@ -45,6 +45,9 @@ function validateRecord_(tableName, record) {
     if (record.access_type === 'member_game_spend' &&
         (!record.member_spend_game_id || Number(record.member_min_game_spend_satang || 0) <= 0)) {
       throw new Error('ต้องกำหนดเกมและยอดเติมสะสมขั้นต่ำสำหรับคูปองสมาชิก');
+    }
+    if (record.access_type === 'member_total_spend' && Number(record.member_min_total_spend_satang || 0) <= 0) {
+      throw new Error('ต้องกำหนดยอดซื้อรวมทุกเกมย้อนหลัง 30 วันขั้นต่ำสำหรับคูปองสมาชิก');
     }
     if ((record.allowed_player_ids_json || Number(record.min_player_spend_satang || 0) > 0) && !record.game_id) {
       throw new Error('ต้องเลือกเกมเมื่อจำกัด UID หรือกำหนดยอดเติมสะสมของ UID');
