@@ -25,6 +25,7 @@ test('member password change enforces the same 8-200 ASCII alphanumeric policy',
   const source = functionSource('memberChangePassword', 'adminChangePassword');
   assert.match(source, /!\/\^\[A-Za-z0-9\]\{8,200\}\$\//);
   assert.match(source, /รหัสผ่านใหม่ต้องเป็นภาษาอังกฤษ\/ตัวเลข 8-200 ตัว/);
+  assert.match(source, /requireMemberLocked_\(token, Date\.now\(\)\)/);
 });
 
 test('password policy boundaries accept 8 and 200 alphanumeric characters only', () => {
@@ -41,4 +42,5 @@ test('password policy boundaries accept 8 and 200 alphanumeric characters only',
 test('admin password policy remains stricter and unchanged', () => {
   const source = functionSource('adminChangePassword');
   assert.match(source, /nextPassword\.length < 14 \|\| nextPassword\.length > 200/);
+  assert.match(source, /requireAdminLocked_\(token, Date\.now\(\)\)/);
 });
