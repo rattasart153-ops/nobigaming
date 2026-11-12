@@ -56,12 +56,13 @@ function memberCouponProgress_(coupon, spend, memberId, nowMs, redemptions, game
 }
 
 function memberDashboard(token) {
-  const member = requireMember_(token);
   expirePendingOrders_();
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
     const nowMs = Date.now();
+    // Revalidate while holding the same lock used for session revocation.
+    const member = requireMemberLocked_(token, nowMs);
     const spend = memberSpendSummary_(member.member_id, nowMs);
     const games = repositoryRows_('games');
     const redemptions = repositoryRows_('coupon_redemptions');
@@ -116,26 +117,30 @@ function memberDashboard(token) {
 }
 
 function memberOrders(token, requestedLimit) {
-  const member = requireMember_(token);
   expirePendingOrders_();
-  const limit = Math.min(100,Math.max(1,Number(requestedLimit)||50));
-  return repositoryRows_('orders').filter(function(order) {
-    return String(order.member_id || '') === String(member.member_id);
-  }).sort(function(a,b) {
-    return String(b.created_at || '').localeCompare(String(a.created_at || ''));
-  }).slice(0,limit).map(function(order) {
-    const game = repositoryGetById_('games',order.game_id);
-    const pack = repositoryGetById_('packages',order.package_id);
-    return {
-      order_id:order.order_id,order_number:order.order_number,
-      game_name:game ? game.name : '',package_name:pack ? pack.name : '',
-      player_id:order.player_id,status:order.status,
-      subtotal_satang:Number(order.subtotal_satang||0),
-      discount_satang:Number(order.discount_satang||0),
-      total_satang:Number(order.total_satang||0),
-      created_at:order.created_at,completed_at:order.completed_at,
-      payment_expires_at:order.payment_expires_at,
-      slip_submitted_at:order.slip_submitted_at
-    };
-  });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const member = requireMemberLocked_(token, Date.now());
+    const limit = Math.min(100,Math.max(1,Number(requestedLimit)||50));
+    return repositoryRows_('orders').filter(function(order) {
+      return String(order.member_id || '') === String(member.member_id);
+    }).sort(function(a,b) {
+      return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    }).slice(0,limit).map(function(order) {
+      const game = repositoryGetById_('games',order.game_id);
+      const pack = repositoryGetById_('packages',order.package_id);
+      return {
+        order_id:order.order_id,order_number:order.order_number,
+        game_name:game ? game.name : '',package_name:pack ? pack.name : '',
+        player_id:order.player_id,status:order.status,
+        subtotal_satang:Number(order.subtotal_satang||0),
+        discount_satang:Number(order.discount_satang||0),
+        total_satang:Number(order.total_satang||0),
+        created_at:order.created_at,completed_at:order.completed_at,
+        payment_expires_at:order.payment_expires_at,
+        slip_submitted_at:order.slip_submitted_at
+      };
+    });
+  } finally { lock.releaseLock(); }
 }
