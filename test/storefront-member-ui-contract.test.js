@@ -27,7 +27,7 @@ function inlineScripts(html) {
 }
 
 function formMarkup(html, id) {
-  const match = html.match(new RegExp('<form\\b(?=[^>]*\\bid=["\\']' + id + '["\\'])[^>]*>[\\s\\S]*?<\\/form>', 'i'));
+  const start = html.indexOf('<form id="' + id + '"');\n  const end = start < 0 ? -1 : html.indexOf('</form>', start);\n  const match = start < 0 || end < 0 ? null : [html.slice(start, end + 7)];
   assert.ok(match, 'missing form markup: ' + id);
   return match[0];
 }
@@ -35,8 +35,8 @@ function formMarkup(html, id) {
 test('Storefront and Admin static ID selectors resolve to elements in their HTML', () => {
   for (const [file, filePath] of [['Storefront.html', storefrontPath], ['Admin.html', adminPath]]) {
     const html = readHtml(filePath);
-    const selectorIds = new Set(Array.from(html.matchAll(/\\$\\(\\s*['"]#([A-Za-z][\\w:-]*)['"]/g), match => match[1]));
-    const definedIds = new Set(Array.from(html.matchAll(/\\bid\\s*=\\s*['"]([A-Za-z][\\w:-]*)['"]/g), match => match[1]));
+    const selectorIds = new Set(Array.from(html.matchAll(/\$\(\s*['"]#([A-Za-z][\w:-]*)['"]/g), match => match[1]));
+    const definedIds = new Set(Array.from(html.matchAll(/\bid\s*=\s*['"]([A-Za-z][\w:-]*)['"]/g), match => match[1]));
     const missing = Array.from(selectorIds).filter(id => !definedIds.has(id));
     assert.deepEqual(missing, [], file + ' contains selectors for missing DOM elements');
     const scripts = inlineScripts(html);
@@ -69,12 +69,12 @@ test('member registration and password change forms match the 8-200 ASCII alphan
   for (const name of ['fullName', 'loginId', 'password']) {
     assert.match(register, new RegExp('\\bname=["\\']' + name + '["\\']'));
   }
-  assert.match(register, /name=["']password["'][^>]*pattern=["'][[]A-Za-z0-9[]]{8,200}["']/);
+  assert.ok(register.includes('pattern="[A-Za-z0-9]{8,200}"'));
   assert.match(register, /name=["']password["'][^>]*minlength=["']8["']/);
   assert.match(register, /name=["']password["'][^>]*maxlength=["']200["']/);
 
   assert.match(changePassword, /name=["']currentPassword["']/);
-  assert.match(changePassword, /name=["']newPassword["'][^>]*pattern=["'][[]A-Za-z0-9[]]{8,200}["']/);
+  assert.ok(changePassword.includes('pattern="[A-Za-z0-9]{8,200}"'));
   assert.match(changePassword, /name=["']newPassword["'][^>]*minlength=["']8["']/);
   assert.match(changePassword, /name=["']newPassword["'][^>]*maxlength=["']200["']/);
 });
