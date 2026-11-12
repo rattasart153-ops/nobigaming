@@ -80,3 +80,33 @@ test('member registration and password change forms match the 8-200 ASCII alphan
   assert.ok(changePassword.includes('minlength="8"'));
   assert.ok(changePassword.includes('maxlength="200"'));
 });
+
+
+test('Storefront and Admin facade calls map to defined browser wrappers and dispatcher actions', () => {
+  const gasDir = path.join(__dirname, '..', 'google-apps-script');
+  const storefront = readHtml(storefrontPath);
+  const admin = readHtml(adminPath);
+  const facade = fs.readFileSync(path.join(gasDir, 'BrowserFacade.gs'), 'utf8');
+  const dispatcher = fs.readFileSync(path.join(gasDir, '01_HttpEntry.gs'), 'utf8');
+
+  const definedWrappers = new Set(Array.from(
+    facade.matchAll(/^function (nobi[A-Za-z0-9]+)\(/gm),
+    match => match[1]
+  ));
+  const calledWrappers = new Set([
+    ...Array.from(storefront.matchAll(/nobiRpc\(\s*['"]([^'"]+)['"]/g), match => match[1]),
+    ...Array.from(admin.matchAll(/nobiAdminRpc\(\s*['"]([^'"]+)['"]/g), match => match[1])
+  ]);
+  const missingWrappers = Array.from(calledWrappers).filter(name => !definedWrappers.has(name));
+  assert.deepEqual(missingWrappers, [], 'frontend calls must resolve to named BrowserFacade functions');
+
+  const browserActionsBlock = facade.match(/NOBI_BROWSER_FACADE_ACTIONS_\\s*=\\s*\\[([\\s\\S]*?)\\]/);
+  assert.ok(browserActionsBlock, 'BrowserFacade action allowlist must exist');
+  const allowedActions = new Set(Array.from(browserActionsBlock[1].matchAll(/['"]([^'"]+)['"]/g), match => match[1]));
+  const facadeActions = new Set(Array.from(facade.matchAll(/nobiFacadeCall_\\(\\s*['"]([^'"]+)['"]/g), match => match[1]));
+  const dispatcherActions = new Set(Array.from(dispatcher.matchAll(/case\\s+['"]([^'"]+)['"]\\s*:/g), match => match[1]));
+
+  assert.deepEqual(Array.from(facadeActions).filter(action => !allowedActions.has(action)), []);
+  assert.deepEqual(Array.from(facadeActions).filter(action => !dispatcherActions.has(action)), []);
+  assert.deepEqual(Array.from(allowedActions).filter(action => !dispatcherActions.has(action)), []);
+});
