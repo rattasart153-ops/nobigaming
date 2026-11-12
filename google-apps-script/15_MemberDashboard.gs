@@ -28,7 +28,7 @@ function memberCouponProgress_(coupon, spend, memberId, nowMs) {
   }
   const target = access === 'member_game_spend'
     ? Number(coupon.member_min_game_spend_satang)
-    : access === 'member_total_spend' ? Number(coupon.member_min_total_spend_satang) : 0;
+    : access === 'member_total_spend' ? Number(coupon.member_min_game_spend_satang) : 0;
   if (!Number.isSafeInteger(target) || target < 0 || (access !== 'member_only' && target <= 0)) return null;
   const gameId = access === 'member_game_spend' ? String(coupon.member_spend_game_id || '') : '';
   if (access === 'member_game_spend' && !gameId) return null;
