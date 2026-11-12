@@ -26,6 +26,7 @@ function makeContext() {
     LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
     Utilities:{getUuid:()=>String(++id)},
     requireMember_:()=>data.members[0],
+    expirePendingOrders_:()=>{},
     repositoryRows_:name=>data[name]||[],
     repositoryFindByField_:(name,field,value)=>(data[name]||[]).filter(row=>String(row[field])===String(value)),
     repositoryGetById_:(name,key)=>(data[name]||[]).find(row=>String(row[{games:'game_id',members:'member_id'}[name]])===String(key))||null,
@@ -100,4 +101,27 @@ test('coupon eligibility enforces rolling 30-day member spend, not lifetime spen
   const result=context.couponEligibility_(coupon,'g1',5000,'uid','m1',now);
   assert.equal(result.valid,false);
   assert.match(result.error,/30 วัน/);
+});
+
+test('member page, RPC facade, coupon Admin fields, and alert ledger are wired',()=>{
+  const root=path.join(__dirname,'..','google-apps-script');
+  const code=fs.readFileSync(path.join(root,'Code.gs'),'utf8');
+  const member=fs.readFileSync(path.join(root,'Member.html'),'utf8');
+  const facade=fs.readFileSync(path.join(root,'BrowserFacade.gs'),'utf8');
+  const gateway=fs.readFileSync(path.join(root,'01_HttpEntry.gs'),'utf8');
+  const admin=fs.readFileSync(path.join(root,'Admin.html'),'utf8');
+  const config=fs.readFileSync(path.join(root,'00_Config.gs'),'utf8');
+  assert.match(code,/pathInfo === 'member'/);
+  assert.match(member,/id="orderForm"/);
+  assert.match(member,/id="ordersTable"/);
+  assert.match(member,/nobiCreateOrder/);
+  assert.match(member,/nobiSubmitOrderSlip/);
+  assert.match(facade,/function nobiGetMemberDashboard/);
+  assert.match(facade,/function nobiGetMemberOrders/);
+  assert.match(gateway,/case 'memberDashboard'/);
+  assert.match(gateway,/case 'memberOrders'/);
+  assert.match(admin,/member_total_spend/);
+  assert.match(admin,/ยอดซื้อสะสมย้อนหลัง 30 วัน/);
+  assert.match(config,/member_coupon_alerts/);
+  assert.match(config,/SCHEMA_VERSION: 4/);
 });
