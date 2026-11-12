@@ -154,8 +154,8 @@ function memberRegister(fullName, loginId, password) {
   const login = String(loginId || '').trim();
   const normalized = login.toLowerCase();
   const pass = String(password || '');
-  if (!name || name.length > 100 || !/^[A-Za-z0-9]{4,30}$/.test(login) || pass.length < 10 || pass.length > 200) {
-    throw new Error('กรุณากรอกชื่อ Login ID (ภาษาอังกฤษ/ตัวเลข 4-30 ตัว) และรหัสผ่านอย่างน้อย 10 ตัวอักษร');
+  if (!name || name.length > 100 || !/^[A-Za-z0-9]{4,30}$/.test(login) || !/^[A-Za-z0-9]{8,200}$/.test(pass)) {
+    throw new Error('กรุณากรอกชื่อ Login ID (ภาษาอังกฤษ/ตัวเลข 4-30 ตัว) และรหัสผ่านภาษาอังกฤษ/ตัวเลข 8-200 ตัว');
   }
   consumeRegistrationAttempt_(normalized);
 
@@ -354,7 +354,7 @@ function pruneMemberLoginLogsLocked_(nowMs) {
 function memberChangePassword(token, currentPassword, newPassword) {
   const authenticated = requireMember_(token);
   const nextPassword = String(newPassword || '');
-  if (nextPassword.length < 10 || nextPassword.length > 200) throw new Error('รหัสผ่านใหม่ต้องมีความยาว 10-200 ตัวอักษร');
+  if (!/^[A-Za-z0-9]{8,200}$/.test(nextPassword)) throw new Error('รหัสผ่านใหม่ต้องเป็นภาษาอังกฤษ/ตัวเลข 8-200 ตัว');
 
   // Run the expensive KDF outside ScriptLock; re-check the credential snapshot before commit.
   if (!passwordVerify_(String(currentPassword || ''), authenticated.password_salt,
