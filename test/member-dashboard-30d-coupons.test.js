@@ -26,6 +26,7 @@ function makeContext() {
     LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
     Utilities:{getUuid:()=>String(++id)},
     requireMember_:()=>data.members[0],
+    requireMemberLocked_:()=>data.members[0],
     expirePendingOrders_:()=>{},
     repositoryRows_:name=>data[name]||[],
     repositoryFindByField_:(name,field,value)=>(data[name]||[]).filter(row=>String(row[field])===String(value)),
@@ -124,4 +125,27 @@ test('member page, RPC facade, coupon Admin fields, and alert ledger are wired',
   assert.match(admin,/ยอดซื้อสะสมย้อนหลัง 30 วัน/);
   assert.match(config,/member_coupon_alerts/);
   assert.match(config,/SCHEMA_VERSION: 4/);
+});
+
+
+test('member dashboard revalidates the session after acquiring ScriptLock',()=>{
+  const {context,data}=makeContext();
+  let locked=false, validated=false;
+  context.LockService.getScriptLock=()=>({waitLock(){locked=true;},releaseLock(){locked=false;}});
+  context.requireMemberLocked_=()=>{assert.equal(locked,true);validated=true;return data.members[0];};
+  context.memberDashboard('token');
+  assert.equal(validated,true);
+  assert.equal(locked,false);
+});
+
+test('member orders revalidates the session under ScriptLock and releases the lock',()=>{
+  const {context,data}=makeContext();
+  let locked=false, validated=false;
+  context.LockService.getScriptLock=()=>({waitLock(){locked=true;},releaseLock(){locked=false;}});
+  context.requireMemberLocked_=()=>{assert.equal(locked,true);validated=true;return data.members[0];};
+  data.orders.push({member_id:'m1',game_id:'g1',package_id:'p1',status:'Completed',created_at:'2026-11-12T00:00:00.000Z'});
+  const rows=context.memberOrders('token',50);
+  assert.equal(rows.length,1);
+  assert.equal(validated,true);
+  assert.equal(locked,false);
 });
