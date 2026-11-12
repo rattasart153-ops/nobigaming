@@ -70,7 +70,7 @@ function couponEligibility_(coupon, gameId, subtotalSatang, playerId, memberId, 
     const qualifyingGame = String(coupon.member_spend_game_id || '');
     const minimum = coupon.access_type === 'member_game_spend'
       ? Number(coupon.member_min_game_spend_satang)
-      : Number(coupon.member_min_total_spend_satang);
+      : Number(coupon.member_min_game_spend_satang);
     if (!Number.isSafeInteger(minimum) || minimum <= 0 ||
         (coupon.access_type === 'member_game_spend' && !qualifyingGame)) {
       return {valid:false, error:'ข้อมูลเงื่อนไขสมาชิกของคูปองไม่ครบ'};
