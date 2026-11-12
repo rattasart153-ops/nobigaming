@@ -9,7 +9,7 @@
 var NOBI_BROWSER_FACADE_ACTIONS_ = [
   'catalog','promotions','coupon','couponSuggestions','paymentInfo',
   'createOrder','submitOrderSlip','adminLogin','memberRegister','memberLogin',
-  'memberMe','memberLogout','memberChangePassword','adminChangePassword',
+  'memberMe','memberDashboard','memberOrders','memberLogout','memberChangePassword','adminChangePassword',
   'adminMe','adminLogout','adminDashboard','adminOrders','adminSlipData',
   'adminSetOrderStatus','adminList','adminUpsert','adminDelete',
   'adminMemberLoginLogs','adminMembers','adminSetMemberStatus',
@@ -119,6 +119,15 @@ function nobiLoginMember(input) {
 
 function nobiGetMemberSession(token) {
   return nobiFacadeCall_('memberMe', {token:nobiFacadeToken_(token)});
+}
+
+function nobiGetMemberDashboard(token) {
+  return nobiFacadeCall_('memberDashboard', {token:nobiFacadeToken_(token)});
+}
+
+function nobiGetMemberOrders(input) {
+  var p = nobiFacadePayload_(input, ['token','limit'], ['token']);
+  return nobiFacadeCall_('memberOrders', {token:nobiFacadeToken_(p.token),limit:p.limit == null ? 50 : Number(p.limit)});
 }
 
 function nobiLogoutMember(token) {
