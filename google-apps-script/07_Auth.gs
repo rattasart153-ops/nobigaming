@@ -366,8 +366,9 @@ function memberChangePassword(token, currentPassword, newPassword) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const member = repositoryGetById_('members', authenticated.member_id);
-    if (!member || member.status !== 'Active' ||
+    // Revalidate the live session under the same lock used by logout and revocation.
+    const member = requireMemberLocked_(token, Date.now());
+    if (String(member.member_id) !== String(authenticated.member_id) ||
         String(member.password_hash) !== String(authenticated.password_hash) ||
         Number(member.auth_version) !== Number(authenticated.auth_version)) {
       throw new Error('ข้อมูลบัญชีเปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่');
@@ -406,8 +407,9 @@ function adminChangePassword(token, currentPassword, newPassword) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const admin = repositoryGetById_('admins', authenticated.admin_id);
-    if (!admin || admin.status !== 'Active' ||
+    // Revalidate the live session under the same lock used by logout and revocation.
+    const admin = requireAdminLocked_(token, Date.now());
+    if (String(admin.admin_id) !== String(authenticated.admin_id) ||
         String(admin.password_hash) !== String(authenticated.password_hash) ||
         Number(admin.auth_version) !== Number(authenticated.auth_version)) {
       throw new Error('ข้อมูลบัญชีเปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่');
