@@ -1720,6 +1720,7 @@ body {
         <button class="btn btn-primary" type="submit" style="width:100%">เปลี่ยนรหัสผ่าน</button>
       </form>
       <div class="member-profile-actions" style="margin-top:14px">
+        <button type="button" class="btn btn-primary" id="openMemberDashboard" style="width:100%;margin-bottom:8px">เปิดศูนย์สมาชิก</button>
         <button type="button" class="btn btn-ghost" id="memberLogoutBtn">ออกจากระบบสมาชิก</button>
       </div>
     </section>
@@ -2377,6 +2378,7 @@ function resolveMediaUrl(value) {
       await refreshMember(); memberModal.hidden = true; showToast('สมัครและเข้าสู่ระบบสมาชิกเรียบร้อย');
     } catch (error) { memberMessage.textContent = error.message; }
   });
+  $('#openMemberDashboard').addEventListener('click', () => { window.location.href = new URL('member', window.location.href).toString(); });
   $('#memberLogoutBtn').addEventListener('click', async () => {
     try { await apiRequest('/api/member/logout', {method:'POST'}); currentMember = null; await refreshMember(); memberModal.hidden = true; showToast('ออกจากระบบสมาชิกแล้ว'); }
     catch (error) { memberMessage.textContent = error.message; }
