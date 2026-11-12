@@ -72,7 +72,7 @@ function memberDashboard(token) {
       return memberCouponProgress_(coupon, spend, member.member_id, nowMs);
     }).filter(Boolean);
     progress.forEach(function(item) {
-      if (!item.target_satang || !item.capacity_available || item.unlocked) return;
+      if (!item.target_satang || !item.capacity_available) return;
       const stage = NOBI_MEMBER_ALERT_STAGES.filter(function(value) {
         return item.current_satang * 100 >= item.target_satang * value;
       }).pop() || 0;
