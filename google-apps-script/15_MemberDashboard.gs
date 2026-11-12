@@ -57,6 +57,7 @@ function memberCouponProgress_(coupon, spend, memberId, nowMs) {
 
 function memberDashboard(token) {
   const member = requireMember_(token);
+  expirePendingOrders_();
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
@@ -115,6 +116,7 @@ function memberDashboard(token) {
 
 function memberOrders(token, requestedLimit) {
   const member = requireMember_(token);
+  expirePendingOrders_();
   const limit = Math.min(100,Math.max(1,Number(requestedLimit)||50));
   return repositoryRows_('orders').filter(function(order) {
     return String(order.member_id || '') === String(member.member_id);
