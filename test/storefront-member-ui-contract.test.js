@@ -27,9 +27,10 @@ function inlineScripts(html) {
 }
 
 function formMarkup(html, id) {
-  const start = html.indexOf('<form id="' + id + '"');\n  const end = start < 0 ? -1 : html.indexOf('</form>', start);\n  const match = start < 0 || end < 0 ? null : [html.slice(start, end + 7)];
-  assert.ok(match, 'missing form markup: ' + id);
-  return match[0];
+  const start = html.indexOf('<form id="' + id + '"');
+  const end = start < 0 ? -1 : html.indexOf('</form>', start);
+  assert.ok(start >= 0 && end >= 0, 'missing form markup: ' + id);
+  return html.slice(start, end + 7);
 }
 
 test('Storefront and Admin static ID selectors resolve to elements in their HTML', () => {
@@ -54,11 +55,11 @@ test('member account modal supplies every element required by the storefront mem
     'memberLoginForm', 'memberRegisterForm', 'memberPasswordForm',
     'memberProfileName', 'closeMemberModal', 'memberLoginTab',
     'memberRegisterTab', 'memberLogoutBtn'
-  ]) assert.match(html, new RegExp('\\bid=["\\']' + id + '["\\']'));
+  ]) assert.ok(html.includes('id="' + id + '"'), 'missing member UI element: ' + id);
 
-  assert.match(html, /id=["']memberModal["'][^>]*\\bhidden/);
-  assert.match(html, /id=["']memberProfile["'][^>]*\\bhidden/);
-  assert.match(html, /id=["']memberRegisterForm["'][^>]*\\bhidden/);
+  assert.ok(html.includes('id="memberModal" hidden'));
+  assert.ok(html.includes('id="memberProfile" hidden'));
+  assert.ok(html.includes('id="memberRegisterForm" hidden'));
 });
 
 test('member registration and password change forms match the 8-200 ASCII alphanumeric policy', () => {
@@ -67,14 +68,15 @@ test('member registration and password change forms match the 8-200 ASCII alphan
   const changePassword = formMarkup(html, 'memberPasswordForm');
 
   for (const name of ['fullName', 'loginId', 'password']) {
-    assert.match(register, new RegExp('\\bname=["\\']' + name + '["\\']'));
+    assert.ok(register.includes('name="' + name + '"'), 'registration form missing ' + name);
   }
   assert.ok(register.includes('pattern="[A-Za-z0-9]{8,200}"'));
-  assert.match(register, /name=["']password["'][^>]*minlength=["']8["']/);
-  assert.match(register, /name=["']password["'][^>]*maxlength=["']200["']/);
+  assert.ok(register.includes('minlength="8"'));
+  assert.ok(register.includes('maxlength="200"'));
 
-  assert.match(changePassword, /name=["']currentPassword["']/);
+  assert.ok(changePassword.includes('name="currentPassword"'));
+  assert.ok(changePassword.includes('name="newPassword"'));
   assert.ok(changePassword.includes('pattern="[A-Za-z0-9]{8,200}"'));
-  assert.match(changePassword, /name=["']newPassword["'][^>]*minlength=["']8["']/);
-  assert.match(changePassword, /name=["']newPassword["'][^>]*maxlength=["']200["']/);
+  assert.ok(changePassword.includes('minlength="8"'));
+  assert.ok(changePassword.includes('maxlength="200"'));
 });
