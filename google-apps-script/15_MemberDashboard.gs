@@ -18,7 +18,7 @@ function memberSpendSummary_(memberId, nowMs) {
   return totals;
 }
 
-function memberCouponProgress_(coupon, spend, memberId, nowMs) {
+function memberCouponProgress_(coupon, spend, memberId, nowMs, redemptions, games) {
   if (!truth_(coupon.active)) return null;
   const access = String(coupon.access_type || '');
   if (!['member_only','member_game_spend','member_total_spend'].includes(access)) return null;
@@ -36,16 +36,16 @@ function memberCouponProgress_(coupon, spend, memberId, nowMs) {
     ? Number(spend.by_game[gameId] || 0) : access === 'member_total_spend' ? spend.total_satang : target;
   const ratio = target > 0 ? current / target : 1;
   const percent = Math.min(100, Math.floor(ratio * 100));
-  const redemptions = repositoryRows_('coupon_redemptions').filter(function(item) {
+  const used = (Array.isArray(redemptions) ? redemptions : repositoryRows_('coupon_redemptions')).filter(function(item) {
     return String(item.coupon_id) === String(coupon.coupon_id) &&
       (item.state === 'Reserved' || item.state === 'Consumed');
   }).length;
   const capacityAvailable = coupon.usage_limit === '' || coupon.usage_limit == null ||
-    redemptions < Number(coupon.usage_limit);
+    used < Number(coupon.usage_limit);
   return {
     coupon_id:String(coupon.coupon_id), code:String(coupon.code_display || ''),
     access_type:access, scope:access === 'member_game_spend' ? 'game' : access === 'member_total_spend' ? 'total' : 'member',
-    game_id:gameId, game_name:gameId && repositoryGetById_('games', gameId) ? repositoryGetById_('games', gameId).name : '',
+    game_id:gameId, game_name:gameId && Array.isArray(games) && games.find(function(game) { return String(game.game_id) === gameId; }) ? games.find(function(game) { return String(game.game_id) === gameId; }).name : '',
     current_satang:current, target_satang:target, percent:percent,
     remaining_satang:Math.max(0,target-current), unlocked:percent >= 100 && capacityAvailable,
     capacity_available:capacityAvailable, expires_at:String(coupon.expires_at || ''),
@@ -64,18 +64,19 @@ function memberDashboard(token) {
     const nowMs = Date.now();
     const spend = memberSpendSummary_(member.member_id, nowMs);
     const games = repositoryRows_('games');
+    const redemptions = repositoryRows_('coupon_redemptions');
     const byGame = Object.keys(spend.by_game).map(function(gameId) {
       const game = games.find(function(item) { return String(item.game_id) === gameId; });
       return {game_id:gameId,game_name:game ? game.name : 'เกมที่ไม่พบ',total_satang:spend.by_game[gameId]};
     }).sort(function(a,b) { return b.total_satang-a.total_satang; });
     const alerts = [];
     const progress = repositoryRows_('coupons').map(function(coupon) {
-      return memberCouponProgress_(coupon, spend, member.member_id, nowMs);
+      return memberCouponProgress_(coupon, spend, member.member_id, nowMs, redemptions, games);
     }).filter(Boolean);
     progress.forEach(function(item) {
       if (!item.target_satang || !item.capacity_available) return;
       const stage = item.unlocked ? 100 : (NOBI_MEMBER_ALERT_STAGES.filter(function(value) {
-        return item.current_satang * 100 >= item.target_satang * value;
+        return item.current_satang / item.target_satang >= value / 100;
       }).pop() || 0);
       const existing = repositoryFindByField_('member_coupon_alerts','member_coupon_key',
         String(member.member_id) + ':' + item.coupon_id)[0];
