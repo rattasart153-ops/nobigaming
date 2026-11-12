@@ -73,9 +73,9 @@ function memberDashboard(token) {
     }).filter(Boolean);
     progress.forEach(function(item) {
       if (!item.target_satang || !item.capacity_available) return;
-      const stage = NOBI_MEMBER_ALERT_STAGES.filter(function(value) {
+      const stage = item.unlocked ? 100 : (NOBI_MEMBER_ALERT_STAGES.filter(function(value) {
         return item.current_satang * 100 >= item.target_satang * value;
-      }).pop() || 0;
+      }).pop() || 0);
       const existing = repositoryFindByField_('member_coupon_alerts','member_coupon_key',
         String(member.member_id) + ':' + item.coupon_id)[0];
       const previous = existing ? Number(existing.last_stage || 0) : 0;
@@ -84,13 +84,14 @@ function memberDashboard(token) {
           last_stage:stage, updated_at:new Date(nowMs).toISOString()
         });
       } else if (stage > previous) {
-        NOBI_MEMBER_ALERT_STAGES.filter(function(value) { return value > previous && value <= stage; })
+        NOBI_MEMBER_ALERT_STAGES.filter(function(value) { return value > previous && value <= Math.min(stage,90); })
           .forEach(function(value) {
             alerts.push({
               coupon_id:item.coupon_id,code:item.code,stage:value,
               message:'คูปอง ' + item.code + ' ใกล้ปลดล็อกแล้ว ' + value + '% — ขาดอีก ' + money_(Math.max(0,item.target_satang-item.current_satang)/100) + ' บาท'
             });
           });
+        if (stage === 100 && previous < 100) alerts.push({coupon_id:item.coupon_id,code:item.code,stage:100,message:'ยินดีด้วย! คูปอง ' + item.code + ' ปลดล็อกแล้ว สามารถนำไปใช้สั่งซื้อได้'});
         const now = new Date(nowMs).toISOString();
         if (existing) repositoryUpdateLocked_('member_coupon_alerts', existing.alert_id, {
           last_stage:stage,notified_at:now,updated_at:now
