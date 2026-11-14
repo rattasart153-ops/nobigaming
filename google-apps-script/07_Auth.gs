@@ -154,8 +154,8 @@ function memberRegister(fullName, loginId, password) {
   const login = String(loginId || '').trim();
   const normalized = login.toLowerCase();
   const pass = String(password || '');
-  if (!name || name.length > 100 || !/^[A-Za-z0-9]{4,30}$/.test(login) || pass.length < 10 || pass.length > 200) {
-    throw new Error('กรุณากรอกชื่อ Login ID (ภาษาอังกฤษ/ตัวเลข 4-30 ตัว) และรหัสผ่านอย่างน้อย 10 ตัวอักษร');
+  if (!name || name.length > 100 || !/^[A-Za-z0-9]{4,30}$/.test(login) || !/^[A-Za-z0-9]{8,200}$/.test(pass)) {
+    throw new Error('กรุณากรอกชื่อ Login ID (ภาษาอังกฤษ/ตัวเลข 4-30 ตัว) และรหัสผ่านภาษาอังกฤษ/ตัวเลข 8-200 ตัว');
   }
   consumeRegistrationAttempt_(normalized);
 
@@ -354,7 +354,7 @@ function pruneMemberLoginLogsLocked_(nowMs) {
 function memberChangePassword(token, currentPassword, newPassword) {
   const authenticated = requireMember_(token);
   const nextPassword = String(newPassword || '');
-  if (nextPassword.length < 10 || nextPassword.length > 200) throw new Error('รหัสผ่านใหม่ต้องมีความยาว 10-200 ตัวอักษร');
+  if (!/^[A-Za-z0-9]{8,200}$/.test(nextPassword)) throw new Error('รหัสผ่านใหม่ต้องเป็นภาษาอังกฤษ/ตัวเลข 8-200 ตัว');
 
   // Run the expensive KDF outside ScriptLock; re-check the credential snapshot before commit.
   if (!passwordVerify_(String(currentPassword || ''), authenticated.password_salt,
@@ -366,8 +366,9 @@ function memberChangePassword(token, currentPassword, newPassword) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const member = repositoryGetById_('members', authenticated.member_id);
-    if (!member || member.status !== 'Active' ||
+    // Revalidate the live session under the same lock used by logout and revocation.
+    const member = requireMemberLocked_(token, Date.now());
+    if (String(member.member_id) !== String(authenticated.member_id) ||
         String(member.password_hash) !== String(authenticated.password_hash) ||
         Number(member.auth_version) !== Number(authenticated.auth_version)) {
       throw new Error('ข้อมูลบัญชีเปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่');
@@ -406,8 +407,9 @@ function adminChangePassword(token, currentPassword, newPassword) {
   const lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
-    const admin = repositoryGetById_('admins', authenticated.admin_id);
-    if (!admin || admin.status !== 'Active' ||
+    // Revalidate the live session under the same lock used by logout and revocation.
+    const admin = requireAdminLocked_(token, Date.now());
+    if (String(admin.admin_id) !== String(authenticated.admin_id) ||
         String(admin.password_hash) !== String(authenticated.password_hash) ||
         Number(admin.auth_version) !== Number(authenticated.auth_version)) {
       throw new Error('ข้อมูลบัญชีเปลี่ยนแปลง กรุณาเข้าสู่ระบบใหม่');

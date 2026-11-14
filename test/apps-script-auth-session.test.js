@@ -187,10 +187,10 @@ test('Member password change increments auth_version and revokes every active Me
     auth_version:3,created_at:new Date().toISOString(),last_seen_at:new Date().toISOString(),
     expires_at:new Date(Date.now()+3600000).toISOString(),revoked_at:''
   });
-  const result=context.memberChangePassword('member-token','current-password','new-member-password');
+  const result=context.memberChangePassword('member-token','current-password','newMemberPassword123');
   assert.equal(result.ok,true);
   assert.equal(data.members[0].auth_version,4);
-  assert.match(data.members[0].password_hash,/^new-hash:new-member-password:/);
+  assert.match(data.members[0].password_hash,/^new-hash:newMemberPassword123:/);
   assert.ok(data.member_sessions.every(session=>Boolean(session.revoked_at)));
   assert.throws(()=>context.requireMember_('member-token'),/เซสชันสมาชิกหมดอายุ/);
 });
@@ -223,8 +223,8 @@ test('Member password change rejects a stale credential snapshot if another chan
     return 'stale-request-hash';
   };
   assert.throws(
-    ()=>context.memberChangePassword('member-token','current-password','requested-password'),
-    /ข้อมูลบัญชีเปลี่ยนแปลง/
+    ()=>context.memberChangePassword('member-token','current-password','requestedPassword123'),
+    /เซสชันถูกเพิกถอน/
   );
   assert.equal(data.members[0].password_hash,'concurrent-newer-hash');
   assert.equal(data.members[0].auth_version,4);
@@ -240,8 +240,8 @@ test('Admin password change rejects a stale credential snapshot if another chang
     return 'stale-request-hash';
   };
   assert.throws(
-    ()=>context.adminChangePassword('admin-token','current-password','requested-password-long'),
-    /ข้อมูลบัญชีเปลี่ยนแปลง/
+    ()=>context.adminChangePassword('admin-token','current-password','requestedPasswordLong123'),
+    /เซสชันถูกเพิกถอน/
   );
   assert.equal(data.admins[0].password_hash,'concurrent-newer-hash');
   assert.equal(data.admins[0].auth_version,3);
