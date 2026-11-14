@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <base target="_top">
-<!-- HtmlService template; browser transport is ported in the following phase. -->
+<!-- HtmlService template; browser transport uses the allowlisted google.script.run facade. -->
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Nobi Topup — เติมเกมออนไลน์ เติมไว 24 ชม.</title>
@@ -856,6 +856,13 @@ svg {
 .field-input::placeholder { color: var(--muted-2); }
 .field-input:focus { border-color: var(--line-strong); }
 
+.member-tabs { display: flex; gap: 8px; margin: 0 0 18px; }
+.member-tabs .btn { flex: 1; }
+.member-help { margin: -8px 0 16px; color: var(--muted-2); font-size: 0.72rem; line-height: 1.6; }
+.member-message { min-height: 1.4em; margin-top: 12px; color: #fda4af; font-size: 0.82rem; }
+.member-profile-name { margin: 0 0 18px; color: var(--text); font-size: 0.92rem; }
+.member-profile-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
 .pack-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1649,6 +1656,78 @@ body {
   </div>
 </div>
 
+<!-- ===================== MEMBER ACCOUNT MODAL ===================== -->
+<div class="modal" id="memberModal" hidden>
+  <div class="modal-scrim" aria-hidden="true"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="memberModalTitle">
+    <button type="button" class="modal-close" id="closeMemberModal" aria-label="ปิด">
+      <svg><use href="#ic-x"/></svg>
+    </button>
+    <div class="modal-head">
+      <span class="modal-thumb"><svg><use href="#ic-user"/></svg></span>
+      <div>
+        <h3 id="memberModalTitle">บัญชีสมาชิก</h3>
+        <p>เข้าสู่ระบบหรือสมัครสมาชิก Nobi Topup</p>
+      </div>
+    </div>
+
+    <section id="memberAuthPanel">
+      <div class="member-tabs">
+        <button type="button" class="btn btn-ghost" id="memberLoginTab">เข้าสู่ระบบ</button>
+        <button type="button" class="btn btn-ghost" id="memberRegisterTab">สมัครสมาชิก</button>
+      </div>
+      <form id="memberLoginForm">
+        <label class="field">
+          <span class="field-label">Login ID</span>
+          <input class="field-input" type="text" name="loginId" autocomplete="username" maxlength="30" required>
+        </label>
+        <label class="field">
+          <span class="field-label">รหัสผ่าน</span>
+          <input class="field-input" type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <button class="btn btn-primary" type="submit" style="width:100%">เข้าสู่ระบบ</button>
+      </form>
+
+      <form id="memberRegisterForm" hidden>
+        <label class="field">
+          <span class="field-label">ชื่อที่ใช้แสดง</span>
+          <input class="field-input" type="text" name="fullName" maxlength="100" autocomplete="name" required>
+        </label>
+        <label class="field">
+          <span class="field-label">Login ID (ภาษาอังกฤษ/ตัวเลข 4–30 ตัว)</span>
+          <input class="field-input" type="text" name="loginId" pattern="[A-Za-z0-9]{4,30}" maxlength="30" autocomplete="username" required>
+        </label>
+        <label class="field">
+          <span class="field-label">รหัสผ่าน (ภาษาอังกฤษ/ตัวเลข 8–200 ตัว)</span>
+          <input class="field-input" type="password" name="password" pattern="[A-Za-z0-9]{8,200}" minlength="8" maxlength="200" autocomplete="new-password" required>
+        </label>
+        <p class="member-help">ใช้ตัวอักษรภาษาอังกฤษ A–Z และตัวเลข 0–9 เท่านั้น</p>
+        <button class="btn btn-primary" type="submit" style="width:100%">สมัครสมาชิก</button>
+      </form>
+    </section>
+
+    <section id="memberProfile" hidden>
+      <p class="member-profile-name" id="memberProfileName"></p>
+      <form id="memberPasswordForm">
+        <label class="field">
+          <span class="field-label">รหัสผ่านปัจจุบัน</span>
+          <input class="field-input" type="password" name="currentPassword" autocomplete="current-password" required>
+        </label>
+        <label class="field">
+          <span class="field-label">รหัสผ่านใหม่ (ภาษาอังกฤษ/ตัวเลข 8–200 ตัว)</span>
+          <input class="field-input" type="password" name="newPassword" pattern="[A-Za-z0-9]{8,200}" minlength="8" maxlength="200" autocomplete="new-password" required>
+        </label>
+        <button class="btn btn-primary" type="submit" style="width:100%">เปลี่ยนรหัสผ่าน</button>
+      </form>
+      <div class="member-profile-actions" style="margin-top:14px">
+        <button type="button" class="btn btn-primary" id="openMemberDashboard" style="width:100%;margin-bottom:8px">เปิดศูนย์สมาชิก</button>
+        <button type="button" class="btn btn-ghost" id="memberLogoutBtn">ออกจากระบบสมาชิก</button>
+      </div>
+    </section>
+    <p class="member-message" id="memberMessage" role="alert" aria-live="polite"></p>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <?!= include('QrCode'); ?>
@@ -2278,7 +2357,7 @@ function resolveMediaUrl(value) {
   }
   $('#memberBtn').addEventListener('click', openMemberModal);
   $('#closeMemberModal').addEventListener('click', () => { memberModal.hidden = true; });
-  memberModal.addEventListener('click', e => { if (e.target === memberModal) memberModal.hidden = true; });
+  memberModal.addEventListener('click', e => { if (e.target === memberModal || e.target.classList.contains('modal-scrim')) memberModal.hidden = true; });
   $('#memberLoginTab').addEventListener('click', () => showMemberMode('login'));
   $('#memberRegisterTab').addEventListener('click', () => showMemberMode('register'));
   memberLoginForm.addEventListener('submit', async e => {
@@ -2299,6 +2378,7 @@ function resolveMediaUrl(value) {
       await refreshMember(); memberModal.hidden = true; showToast('สมัครและเข้าสู่ระบบสมาชิกเรียบร้อย');
     } catch (error) { memberMessage.textContent = error.message; }
   });
+  $('#openMemberDashboard').addEventListener('click', () => { window.location.href = new URL('member', window.location.href).toString(); });
   $('#memberLogoutBtn').addEventListener('click', async () => {
     try { await apiRequest('/api/member/logout', {method:'POST'}); currentMember = null; await refreshMember(); memberModal.hidden = true; showToast('ออกจากระบบสมาชิกแล้ว'); }
     catch (error) { memberMessage.textContent = error.message; }

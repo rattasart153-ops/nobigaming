@@ -7,9 +7,12 @@ function doGet(e) {
   var requestedPage = String(
     e && e.parameter && e.parameter.page ? e.parameter.page : 'storefront'
   ).trim().toLowerCase();
+  var pathInfo = String(e && e.pathInfo || '').split('/').filter(Boolean).join('/').toLowerCase();
+  if (pathInfo === 'member') requestedPage = 'member';
   var isAdmin = requestedPage === 'admin';
-  var templateName = isAdmin ? 'Admin' : 'Storefront';
-  var pageTitle = isAdmin ? 'Nobi Topup · Admin' : 'Nobi Topup — เติมเกมออนไลน์';
+  var isMember = requestedPage === 'member';
+  var templateName = isAdmin ? 'Admin' : isMember ? 'Member' : 'Storefront';
+  var pageTitle = isAdmin ? 'Nobi Topup · Admin' : isMember ? 'Nobi Topup · สมาชิก' : 'Nobi Topup — เติมเกมออนไลน์';
 
   return HtmlService.createTemplateFromFile(templateName)
     .evaluate()

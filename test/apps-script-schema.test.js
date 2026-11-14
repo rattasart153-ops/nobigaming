@@ -117,7 +117,7 @@ test('versioned Sheets setup creates the complete approved schema and is idempot
   const { context, properties } = loadGasDatabase(spreadsheet);
   const first = context.__setupNobiDatabase();
   assert.equal(first.ok, true);
-  assert.equal(first.schemaVersion, 3);
+  assert.equal(first.schemaVersion, 4);
   assert.equal(first.sheetCount, Object.keys(context.__nobi.SHEETS).length);
   assert.equal(properties.NOBI_SHEET_ID, spreadsheet.getId());
   assert.equal(spreadsheet.getSheetByName('members').rows[0][0], 'member_id');
@@ -142,7 +142,7 @@ test('versioned Sheets setup refuses incompatible legacy headers without changin
   assert.deepEqual(games.rows, [['id','name','category'],['old-1','Legacy Game','moba']]);
 });
 
-test('schema v1 database upgrades cumulatively to v3 without changing existing business rows', () => {
+test('schema v1 database upgrades cumulatively to v4 without changing existing business rows', () => {
   const spreadsheet = new FakeSpreadsheet();
   const { context } = loadGasDatabase(spreadsheet);
   context.__setupNobiDatabase();
@@ -154,13 +154,13 @@ test('schema v1 database upgrades cumulatively to v3 without changing existing b
 
   const upgraded = context.__setupNobiDatabase();
   assert.equal(upgraded.ok, true);
-  assert.equal(upgraded.schemaVersion, 3);
+  assert.equal(upgraded.schemaVersion, 4);
   assert.deepEqual(games.rows[1], ['game-1','RoV','moba','Arena of Valor',true,1,'2026-11-04T00:00:00.000Z','2026-11-04T00:00:00.000Z']);
   assert.deepEqual(
     Array.from(spreadsheet.getSheetByName('order_recovery_journal').rows[0]),
     Array.from(context.__nobi.SHEETS.order_recovery_journal)
   );
-  assert.equal(metadata.rows[1][1], '3');
+  assert.equal(metadata.rows[1][1], '4');
 });
 
 test('versioned Sheets setup refuses unknown schema versions', () => {
@@ -420,7 +420,7 @@ test('default catalog seed preserves an existing custom package catalog',()=>{
 });
 
 
-test('schema v2 database upgrades to v3 while preserving recovery journal and business rows',()=>{
+test('schema v2 database upgrades to v4 while preserving recovery journal and business rows',()=>{
   const spreadsheet=new FakeSpreadsheet();
   const {context}=loadGasDatabase(spreadsheet);
   context.__setupNobiDatabase();
@@ -433,10 +433,10 @@ test('schema v2 database upgrades to v3 while preserving recovery journal and bu
 
   const upgraded=context.__setupNobiDatabase();
   assert.equal(upgraded.ok,true);
-  assert.equal(upgraded.schemaVersion,3);
+  assert.equal(upgraded.schemaVersion,4);
   assert.deepEqual(games.rows[1],['game-v2','Legacy v2 Game','moba','Preserve me',true,1,'2026-11-05T00:00:00.000Z','2026-11-05T00:00:00.000Z']);
   assert.deepEqual(journal.rows[1],['journal-v2','order-v2','CREATE','','','','','','','Pending',2,'RECOVERY_RETRY','2026-11-05T00:00:00.000Z','2026-11-05T00:01:00.000Z']);
-  assert.equal(metadata.rows[1][1],'3');
+  assert.equal(metadata.rows[1][1],'4');
 });
 
 
