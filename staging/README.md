@@ -119,7 +119,7 @@ Do not add `NOBI_GATEWAY_SECRET`, production IDs, payment credentials, or custom
 In the Apps Script editor, select and run each function manually, one at a time:
 
 1. `setupNobiDatabase`
-   - Expected: `ok: true`, `schemaVersion: 4`, `sheetCount: 19`.
+   - Expected: `ok: true`, `schemaVersion: 4`, `sheetCount: 18`.
    - Confirm the new STAGING spreadsheet now contains the schema tabs, including `member_coupon_alerts`.
    - If the function reports an incompatible schema, stop. Do not delete or rename tabs to force it through.
 2. `seedDefaultCatalog`
