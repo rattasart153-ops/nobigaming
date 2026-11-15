@@ -52,6 +52,10 @@ For each folder, open Share / General access and confirm **Restricted**. Do not 
 
 The app checks the folder's broad sharing mode and explicit editor/viewer lists. If it cannot verify privacy, the test should fail closed; do not loosen sharing to make it pass.
 
+## Browser-only alternative (recommended for phone users)
+
+If you are using a phone or do not want Terminal/clasp, use [BROWSER_ONLY_SETUP.md](./BROWSER_ONLY_SETUP.md). It provides one combined `Code.gs` bundle plus the four HTML files to paste directly into a newly created Apps Script project. This avoids both Terminal and the Apps Script API. After importing those files, continue at Part C below.
+
 ## Part B — Create a separate Apps Script project
 
 ### 3. Create the project
