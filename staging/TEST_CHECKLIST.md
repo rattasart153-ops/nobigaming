@@ -6,7 +6,7 @@ Record each test as PASS / FAIL / NOT RUN, with a short sanitized note. Never re
 
 ## 1. Initialization and access
 
-- [ ] `setupNobiDatabase` returns `ok: true`, Schema v4, and 19 sheets.
+- [ ] `setupNobiDatabase` returns `ok: true`, Schema v4, and 18 sheets.
 - [ ] Spreadsheet includes `member_coupon_alerts` with the expected header row.
 - [ ] `seedDefaultCatalog` adds the expected synthetic catalog and can be safely rerun without duplicating packages.
 - [ ] `initializeAdmin` creates the staging Admin account and removes the bootstrap password property.
