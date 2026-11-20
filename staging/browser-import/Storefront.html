@@ -1730,6 +1730,38 @@ body {
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<script>
+(function () {
+  function showDiagnostic(title, detail) {
+    var panel = document.getElementById("nobiRuntimeDiagnostic");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "nobiRuntimeDiagnostic";
+      panel.style.cssText = "position:fixed;z-index:2147483647;left:10px;right:10px;bottom:10px;padding:14px 16px;border:1px solid #d97706;border-radius:12px;background:#21170b;color:#fff7ed;font:14px/1.5 system-ui,sans-serif;box-shadow:0 8px 30px #0008;white-space:pre-wrap;overflow-wrap:anywhere";
+      document.body.appendChild(panel);
+    }
+    panel.textContent = title + (detail ? "\\n" + detail : "");
+  }
+  window.addEventListener("error", function (event) {
+    showDiagnostic("NOBI STAGING: พบ JavaScript error", [
+      event.message || "ไม่ทราบข้อความผิดพลาด",
+      event.filename ? event.filename.split("/").pop() : "",
+      event.lineno ? "บรรทัด " + event.lineno : ""
+    ].filter(Boolean).join(" · "));
+  });
+  window.addEventListener("unhandledrejection", function (event) {
+    var reason = event.reason;
+    showDiagnostic("NOBI STAGING: พบ Promise error", reason && (reason.stack || reason.message) || String(reason || "ไม่ทราบสาเหตุ"));
+  });
+  window.__NOBI_STOREFRONT_DIAGNOSTIC__ = { started: true, ready: false };
+  window.setTimeout(function () {
+    var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
+    if (state && !state.ready && !document.getElementById("nobiRuntimeDiagnostic")) {
+      showDiagnostic("NOBI STAGING: JavaScript เริ่มต้นไม่สำเร็จ", "สคริปต์หลักไม่ส่งสัญญาณว่าเริ่มทำงานครบ");
+    }
+  }, 1800);
+})();
+</script>
 <?!= include('QrCode'); ?>
 <script>
 const apiRequest = (() => {
@@ -2475,6 +2507,7 @@ function resolveMediaUrl(value) {
   });
 })();
 
+if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) window.__NOBI_STOREFRONT_DIAGNOSTIC__.ready = true;
 </script>
 </body>
 </html>
