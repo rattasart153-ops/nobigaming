@@ -14,6 +14,18 @@ button,input,select{font:inherit}button{cursor:pointer}.wrap{max-width:1180px;ma
 .alert{border:1px solid #47637b;background:#10243a;border-radius:12px;padding:12px 14px;margin:8px 0;color:#d9f7ff}.alert strong{color:var(--cyan)}.alert.success{border-color:#24664f;background:#0c2b27;color:#c8fbe7}
 .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}.wide{grid-column:1/-1}.order-summary{background:#0a1526;border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:12px}.order-summary strong{font-size:1.3rem}.qr{display:flex;justify-content:center;background:white;padding:12px;border-radius:12px;width:max-content;max-width:100%;margin:12px auto}.notice{color:var(--muted);font-size:.82rem;line-height:1.6}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:12px}table{border-collapse:collapse;width:100%;min-width:680px}th,td{text-align:left;padding:12px;border-bottom:1px solid var(--line);font-size:.86rem}th{color:var(--muted);font-weight:500;background:#0b1526}tr:last-child td{border:0}.pill{border-radius:99px;padding:3px 8px;background:#26334a;font-size:.75rem}.pill.Completed{background:#10382f;color:var(--green)}.pill.Pending{color:var(--gold)}.pill.Rejected,.pill.Expired{color:var(--red)}
 @media(max-width:760px){.wrap{padding:18px 14px 42px}.grid2{grid-template-columns:1fr}.welcome{align-items:center}.panel{padding:17px}.stats{gap:8px}.stat strong{font-size:1.4rem}}@media(max-width:420px){.form-grid{grid-template-columns:1fr}.wide{grid-column:auto}.top{align-items:flex-start}.top .btn{padding:8px 10px;font-size:.82rem}}
+
+/* Nobi Topup brand palette */
+:root{--bg:#070b1a;--panel:#10182d;--panel2:#172440;--line:#29405f;--text:#f4f7ff;--muted:#a4b5d1;--cyan:#00d9ff;--purple:#a52cff;--gold:#ffd52a}
+body{background:radial-gradient(ellipse at 15% 0%,rgba(0,217,255,.13) 0,transparent 42%),radial-gradient(ellipse at 100% 18%,rgba(165,44,255,.12) 0,transparent 44%),var(--bg)}
+.logo{background:linear-gradient(135deg,var(--cyan),var(--purple),var(--gold));color:#070b1a}
+.btn.primary{background:linear-gradient(105deg,var(--cyan),#8beeff);color:#06101e;border-color:var(--cyan)}
+.tabs .active{border-color:var(--cyan);color:var(--cyan)}
+input:focus,select:focus{outline-color:rgba(0,217,255,.34);border-color:var(--cyan)}
+.progress i{background:linear-gradient(90deg,var(--cyan),var(--purple),var(--gold))}
+.coupon code,.alert strong{color:var(--gold)}
+.alert{border-color:rgba(0,217,255,.35);background:rgba(0,217,255,.07)}
+
 </style></head><body>
 <div class="wrap">
 <header class="top"><div class="brand"><span class="logo">N</span><span>NOBI <span class="muted">MEMBER</span></span></div><button class="btn" id="homeBtn">กลับหน้าร้าน</button></header>
