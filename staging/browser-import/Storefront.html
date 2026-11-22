@@ -2030,6 +2030,19 @@ function resolveMediaUrl(value) {
   const goTo = (next) => {
     index = (next + slides.length) % slides.length;
     slides.forEach((s, i) => s.classList.toggle("is-active", i === index));
+    if (diagnosticState) {
+      const activeSlide = slides[index];
+      const style = activeSlide ? window.getComputedStyle(activeSlide) : null;
+      const rect = activeSlide ? activeSlide.getBoundingClientRect() : null;
+      const panel = $("#nobiRuntimeDiagnostic");
+      diagnosticState.stage = "hero-slide-check";
+      if (panel) panel.textContent = "NOBI STAGING · ตรวจสอบ Banner\nslides=" + slides.length +
+        " · active=" + slides.filter((s) => s.classList.contains("is-active")).length +
+        " · display=" + (style ? style.display : "n/a") +
+        " · opacity=" + (style ? style.opacity : "n/a") +
+        " · visibility=" + (style ? style.visibility : "n/a") +
+        " · size=" + (rect ? Math.round(rect.width) + "x" + Math.round(rect.height) : "n/a");
+    }
     dots.forEach((d, i) => {
       const active = i === index;
       d.classList.toggle("is-active", active);
