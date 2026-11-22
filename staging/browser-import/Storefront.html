@@ -1773,6 +1773,20 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
   };
   setDiagnosticStatus("NOBI STAGING · กำลังตรวจสอบ", "ตัวตรวจจับทำงานแล้ว · รอสคริปต์หน้าร้านเริ่มต้น");
   var capturedRuntimeError = "";
+  window.addEventListener("securitypolicyviolation", function (event) {
+    var detail = [
+      "directive=" + (event.effectiveDirective || "unknown"),
+      "blocked=" + (event.blockedURI || "unknown"),
+      "source=" + (event.sourceFile || "unknown"),
+      event.lineNumber ? "line=" + event.lineNumber : "",
+      "disposition=" + (event.disposition || "unknown"),
+      event.originalPolicy ? "policy=" + event.originalPolicy.slice(0, 280) : ""
+    ].filter(Boolean).join(" · ");
+    capturedRuntimeError = "CSP violation · " + detail;
+    var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
+    if (state) state.stage = "csp-violation";
+    setDiagnosticStatus("NOBI STAGING · เบราว์เซอร์บล็อกสคริปต์ (CSP)", detail, true);
+  });
   window.addEventListener("error", function (event) {
     capturedRuntimeError = [
       event.message || "ไม่ทราบข้อความผิดพลาด",
@@ -1809,7 +1823,7 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
 })();
 </script>
 <?!= include('QrCode'); ?>
-<script type="text/plain" id="nobiMainScriptSource">
+<script id="nobiMainScriptSource">
 if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) window.__NOBI_STOREFRONT_DIAGNOSTIC__.stage = "main-script-entered";
 const apiRequest = (() => {
   let memberToken = '';
@@ -2561,45 +2575,6 @@ function resolveMediaUrl(value) {
 })();
 
 if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) { window.__NOBI_STOREFRONT_DIAGNOSTIC__.stage = "ready"; window.__NOBI_STOREFRONT_DIAGNOSTIC__.ready = true; var panel = document.getElementById("nobiRuntimeDiagnostic"); if (panel) { panel.style.borderColor = "#22d3ee"; panel.textContent = "NOBI STAGING · JavaScript เริ่มต้นสำเร็จ\\nทดลองกดการ์ดเกม ปุ่ม Banner และค้นหาเกมได้เลย"; } }
-</script>
-<script>
-(function () {
-  var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
-  var sourceNode = document.getElementById("nobiMainScriptSource");
-  if (!sourceNode) {
-    if (state) state.stage = "main-source-missing";
-    return;
-  }
-  var source = sourceNode.textContent || sourceNode.text || "";
-  if (state) state.stage = "main-source-read";
-  try {
-    new Function(source + "\n//# sourceURL=nobi-storefront-main-validation.js");
-    if (state) state.stage = "main-syntax-valid";
-  } catch (error) {
-    var detail = error && error.stack ? error.stack : String(error);
-    var match = detail.match(/nobi-storefront-main-validation\.js:(\d+):(\d+)/) || detail.match(/(?:anonymous|<anonymous>):(\d+):(\d+)/);
-    var fingerprint = source.length + " chars / FNV " + (function (value) { var h = 2166136261; for (var j = 0; j < value.length; j++) { h ^= value.charCodeAt(j); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16); })(source);
-    var location = match ? "บรรทัด " + match[1] + " คอลัมน์ " + match[2] : "ไม่พบตำแหน่งบรรทัดจากเบราว์เซอร์";
-    if (state) state.stage = "main-syntax-error";
-    var panel = document.getElementById("nobiRuntimeDiagnostic");
-    if (panel) {
-      panel.style.borderColor = "#f59e0b";
-      panel.textContent = "NOBI STAGING · ตรวจ Syntax ของ JavaScript หลักไม่ผ่าน\\n" + (error && error.message || String(error)) + " · " + location + "\\n" + fingerprint + "\\n" + detail;
-    }
-    return;
-  }
-  try {
-    var executable = document.createElement("script");
-    executable.text = source;
-    executable.text += "\n//# sourceURL=nobi-storefront-main-runtime.js";
-    document.body.appendChild(executable);
-    if (state) state.stage = "main-script-injected";
-  } catch (error) {
-    if (state) state.stage = "main-injection-error";
-    var panel = document.getElementById("nobiRuntimeDiagnostic");
-    if (panel) panel.textContent = "NOBI STAGING · แทรก JavaScript หลักไม่สำเร็จ\\n" + (error && error.stack || String(error));
-  }
-})();
 </script>
 </body>
 </html>
