@@ -1823,6 +1823,12 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
 })();
 </script>
 <?!= include('QrCode'); ?>
+<script>
+(function () {
+  var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
+  if (state) state.stage = "pre-main-script";
+})();
+</script>
 <script id="nobiMainScriptSource">
 if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) window.__NOBI_STOREFRONT_DIAGNOSTIC__.stage = "main-script-entered";
 const apiRequest = (() => {
@@ -2575,6 +2581,26 @@ function resolveMediaUrl(value) {
 })();
 
 if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) { window.__NOBI_STOREFRONT_DIAGNOSTIC__.stage = "ready"; window.__NOBI_STOREFRONT_DIAGNOSTIC__.ready = true; var panel = document.getElementById("nobiRuntimeDiagnostic"); if (panel) { panel.style.borderColor = "#22d3ee"; panel.textContent = "NOBI STAGING · JavaScript เริ่มต้นสำเร็จ\\nทดลองกดการ์ดเกม ปุ่ม Banner และค้นหาเกมได้เลย"; } }
+</script>
+<script>
+(function () {
+  var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
+  if (!state || state.ready || state.stage !== "pre-main-script") return;
+  var main = document.getElementById("nobiMainScriptSource");
+  var details = [
+    "พบแท็ก=" + String(!!main),
+    "type=" + (main ? (main.getAttribute("type") || "(default)") : "n/a"),
+    "length=" + (main ? main.textContent.length : 0),
+    "scripts=" + document.scripts.length,
+    "readyState=" + document.readyState
+  ].join(" · ");
+  state.stage = "main-script-not-executed";
+  var panel = document.getElementById("nobiRuntimeDiagnostic");
+  if (panel) {
+    panel.style.borderColor = "#f59e0b";
+    panel.textContent = "NOBI STAGING · พบแท็กสคริปต์ แต่โค้ดหลักไม่เริ่มทำงาน\\n" + details;
+  }
+})();
 </script>
 </body>
 </html>
