@@ -2012,8 +2012,8 @@ function resolveMediaUrl(value) {
      2. Hero slider
      --------------------------------------------------------- */
   const hero = $(".hero");
-  const slides = $(".hero-slide");
-  const dots = $(".dot-btn");
+  const slides = queryAll(".hero-slide");
+  const dots = queryAll(".dot-btn");
   const DURATION = 6000;
   let index = 0;
   let timer = null;
