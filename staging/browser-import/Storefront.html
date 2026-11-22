@@ -1771,16 +1771,20 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
     lastInteraction: "ยังไม่มีการทดสอบการกดหรือค้นหา"
   };
   setDiagnosticStatus("NOBI STAGING · กำลังตรวจสอบ", "ตัวตรวจจับทำงานแล้ว · รอสคริปต์หน้าร้านเริ่มต้น");
+  var capturedRuntimeError = "";
   window.addEventListener("error", function (event) {
-    setDiagnosticStatus("NOBI STAGING · พบ JavaScript error", [
+    capturedRuntimeError = [
       event.message || "ไม่ทราบข้อความผิดพลาด",
       event.filename ? event.filename.split("/").pop() : "",
-      event.lineno ? "บรรทัด " + event.lineno : ""
-    ].filter(Boolean).join(" · "), true);
+      event.lineno ? "บรรทัด " + event.lineno : "",
+      event.error && event.error.stack ? event.error.stack : ""
+    ].filter(Boolean).join(" · ");
+    setDiagnosticStatus("NOBI STAGING · พบ JavaScript error", capturedRuntimeError, true);
   });
   window.addEventListener("unhandledrejection", function (event) {
     var reason = event.reason;
-    setDiagnosticStatus("NOBI STAGING · พบ Promise error", reason && (reason.stack || reason.message) || String(reason || "ไม่ทราบสาเหตุ"), true);
+    capturedRuntimeError = reason && (reason.stack || reason.message) || String(reason || "ไม่ทราบสาเหตุ");
+    setDiagnosticStatus("NOBI STAGING · พบ Promise error", capturedRuntimeError, true);
   });
   document.addEventListener("click", function (event) {
     var target = event.target && event.target.closest ? event.target.closest(".game-card, .arrow-btn, .dot-btn") : null;
@@ -1797,8 +1801,8 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
   }, true);
   window.setTimeout(function () {
     var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
-    if (state && !state.ready) {
-      setDiagnosticStatus("NOBI STAGING · JavaScript เริ่มต้นไม่สำเร็จ", "สคริปต์หลักไม่ส่งสัญญาณว่าเริ่มทำงานครบภายใน 1.8 วินาที", true);
+    if (state && !state.ready && !capturedRuntimeError) {
+      setDiagnosticStatus("NOBI STAGING · JavaScript ยังไม่พร้อม", "ไม่พบ JavaScript error ที่จับได้ แต่สคริปต์หลักยังไม่ส่งสัญญาณ ready ภายใน 1.8 วินาที", true);
     }
   }, 1800);
 })();
