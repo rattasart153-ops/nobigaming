@@ -1984,10 +1984,10 @@ function resolveMediaUrl(value) {
   };
   navToggle.addEventListener("click", () => setNav(!nav.classList.contains("is-open")));
   navScrim.addEventListener("click", () => setNav(false));
-  $(".nav-link", nav).forEach((a) => a.addEventListener("click", () => setNav(false)));
+  queryAll(".nav-link", nav).forEach((a) => a.addEventListener("click", () => setNav(false)));
 
   // highlight nav link on scroll
-  const navLinks = $(".nav-link").filter((a) => !a.classList.contains("nav-link--mobile-only"));
+  const navLinks = queryAll(".nav-link").filter((a) => !a.classList.contains("nav-link--mobile-only"));
   const sections = navLinks
     .map((a) => ({ link: a, el: $(a.getAttribute("href")) }))
     .filter((x) => x.el);
@@ -2343,7 +2343,7 @@ function resolveMediaUrl(value) {
     });
   });
 
-  $("[data-close]", modal).forEach((el) => el.addEventListener("click", closeModal));
+  queryAll("[data-close]", modal).forEach((el) => el.addEventListener("click", closeModal));
 
   // focus trap
   modal.addEventListener("keydown", (e) => {
@@ -2583,7 +2583,7 @@ function resolveMediaUrl(value) {
   }
 
   // anchor offset for fixed header
-  $('a[href^="#"]').forEach((a) => {
+  queryAll('a[href^="#"]').forEach((a) => {
     a.addEventListener("click", (e) => {
       const id = a.getAttribute("href");
       if (!id || id === "#") return;
