@@ -1803,7 +1803,7 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
   window.setTimeout(function () {
     var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
     if (state && !state.ready && !capturedRuntimeError) {
-      setDiagnosticStatus("NOBI STAGING · JavaScript ยังไม่พร้อม", "ไม่พบ JavaScript error ที่จับได้ แต่สคริปต์หลักยังไม่ส่งสัญญาณ ready ภายใน 1.8 วินาที", true);
+      setDiagnosticStatus("NOBI STAGING · JavaScript ยังไม่พร้อม", "ไม่พบ JavaScript error ที่จับได้ · ขั้นตอนล่าสุด: " + (state.stage || "ไม่ทราบ") + " · source: " + (document.getElementById("nobiMainScriptSource") ? "พบ" : "ไม่พบ") + " · ready: " + String(!!state.ready) + " · เกิน 1.8 วินาที", true);
     }
   }, 1800);
 })();
