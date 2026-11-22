@@ -2577,20 +2577,21 @@ if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) { window.__NOBI_STOREFRONT_DIAGNOSTIC
     if (state) state.stage = "main-syntax-valid";
   } catch (error) {
     var detail = error && error.stack ? error.stack : String(error);
-    var match = detail.match(/nobi-storefront-main-validation\\.js:(\\d+):(\\d+)/);
+    var match = detail.match(/nobi-storefront-main-validation\.js:(\d+):(\d+)/) || detail.match(/(?:anonymous|<anonymous>):(\d+):(\d+)/);
+    var fingerprint = source.length + " chars / FNV " + (function (value) { var h = 2166136261; for (var j = 0; j < value.length; j++) { h ^= value.charCodeAt(j); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16); })(source);
     var location = match ? "บรรทัด " + match[1] + " คอลัมน์ " + match[2] : "ไม่พบตำแหน่งบรรทัดจากเบราว์เซอร์";
     if (state) state.stage = "main-syntax-error";
     var panel = document.getElementById("nobiRuntimeDiagnostic");
     if (panel) {
       panel.style.borderColor = "#f59e0b";
-      panel.textContent = "NOBI STAGING · ตรวจ Syntax ของ JavaScript หลักไม่ผ่าน\\n" + (error && error.message || String(error)) + " · " + location + "\\n" + detail;
+      panel.textContent = "NOBI STAGING · ตรวจ Syntax ของ JavaScript หลักไม่ผ่าน\\n" + (error && error.message || String(error)) + " · " + location + "\\n" + fingerprint + "\\n" + detail;
     }
     return;
   }
   try {
     var executable = document.createElement("script");
     executable.text = source;
-    executable.text += "\\n//# sourceURL=nobi-storefront-main-runtime.js";
+    executable.text += "\n//# sourceURL=nobi-storefront-main-runtime.js";
     document.body.appendChild(executable);
     if (state) state.stage = "main-script-injected";
   } catch (error) {
