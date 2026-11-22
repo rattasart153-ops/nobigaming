@@ -1957,7 +1957,7 @@ function resolveMediaUrl(value) {
   if (diagnosticState) diagnosticState.stage = "storefront-init-entered";
 
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
-  const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
+  const $ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 
   /* ---------------------------------------------------------
      1. Header / mobile nav
@@ -1984,10 +1984,10 @@ function resolveMediaUrl(value) {
   };
   navToggle.addEventListener("click", () => setNav(!nav.classList.contains("is-open")));
   navScrim.addEventListener("click", () => setNav(false));
-  $$(".nav-link", nav).forEach((a) => a.addEventListener("click", () => setNav(false)));
+  $(".nav-link", nav).forEach((a) => a.addEventListener("click", () => setNav(false)));
 
   // highlight nav link on scroll
-  const navLinks = $$(".nav-link").filter((a) => !a.classList.contains("nav-link--mobile-only"));
+  const navLinks = $(".nav-link").filter((a) => !a.classList.contains("nav-link--mobile-only"));
   const sections = navLinks
     .map((a) => ({ link: a, el: $(a.getAttribute("href")) }))
     .filter((x) => x.el);
@@ -2012,8 +2012,8 @@ function resolveMediaUrl(value) {
      2. Hero slider
      --------------------------------------------------------- */
   const hero = $(".hero");
-  const slides = $$(".hero-slide");
-  const dots = $$(".dot-btn");
+  const slides = $(".hero-slide");
+  const dots = $(".dot-btn");
   const DURATION = 6000;
   let index = 0;
   let timer = null;
@@ -2119,8 +2119,8 @@ function resolveMediaUrl(value) {
      --------------------------------------------------------- */
   const searchInput = $("#gameSearch");
   const searchClear = $("#searchClear");
-  const chips = $$(".chip");
-  let cards = $$(".game-card");
+  const chips = $(".chip");
+  let cards = $(".game-card");
   const emptyState = $("#emptyState");
   const resultCount = $("#resultCount");
   const grid = $("#gameGrid");
@@ -2250,6 +2250,10 @@ function resolveMediaUrl(value) {
     const name = $(".card-name", card).textContent.trim();
     const data = PACKS[name];
     if (!data) return;
+    if (!Array.isArray(data.packs) || data.packs.length === 0) {
+      showToast('ยังไม่มีแพ็กเกจสำหรับเกมนี้ กรุณาลองใหม่ภายหลัง', false);
+      return;
+    }
 
     currentGame = name;
     currentGameId = data.gameId || null;
@@ -2261,7 +2265,7 @@ function resolveMediaUrl(value) {
 
     confirmBtn.textContent = 'สร้างออเดอร์และดำเนินการชำระเงิน';
     confirmBtn.disabled = false;
-    $$$('.pack',packGrid).forEach(el=>el.disabled=false);
+    $('.pack',packGrid).forEach(el=>el.disabled=false);
     ['#playerId','#serverId','#couponCode','#applyCoupon'].forEach(sel=>$(sel).disabled=false);
     lastFocused = card;
 
@@ -2291,7 +2295,7 @@ function resolveMediaUrl(value) {
         btn.prepend(image);
       }
       btn.addEventListener("click", () => {
-        $$(".pack", packGrid).forEach((p) => p.classList.remove("is-active"));
+        $(".pack", packGrid).forEach((p) => p.classList.remove("is-active"));
         btn.classList.add("is-active");
         selected = { amount, price };
         selectedPackageId = packageId;
@@ -2305,7 +2309,7 @@ function resolveMediaUrl(value) {
     });
 
     // default to the most popular tier
-    const defaultPack = $$(".pack", packGrid)[3] || $$(".pack", packGrid)[0];
+    const defaultPack = $(".pack", packGrid)[3] || $(".pack", packGrid)[0];
     if (defaultPack) defaultPack.click();
 
     $("#serverId").value = ""; $("#couponCode").value = ""; $("#paymentSlip").value = "";
@@ -2314,7 +2318,7 @@ function resolveMediaUrl(value) {
     if (activeCheckout) {
       checkoutNotice.textContent = 'ออเดอร์ ' + activeCheckout.id + ' กำลังรอส่งสลิป กรุณาชำระเงินและส่งสลิปภายใน ' + new Date(activeCheckout.expiresAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'}) + ' (เวลาไทย)';
       confirmBtn.textContent = 'ส่งสลิปการชำระเงิน';
-      $$('.pack',packGrid).forEach(el=>el.disabled=true);
+      $('.pack',packGrid).forEach(el=>el.disabled=true);
       ['#playerId','#serverId','#couponCode','#applyCoupon'].forEach(sel=>$(sel).disabled=true);
     }
     modal.hidden = false;
@@ -2339,13 +2343,13 @@ function resolveMediaUrl(value) {
     });
   });
 
-  $$("[data-close]", modal).forEach((el) => el.addEventListener("click", closeModal));
+  $("[data-close]", modal).forEach((el) => el.addEventListener("click", closeModal));
 
   // focus trap
   modal.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { closeModal(); return; }
     if (e.key !== "Tab") return;
-    const focusables = $$('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])', modalCard)
+    const focusables = $('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])', modalCard)
       .filter((el) => !el.disabled && el.offsetParent !== null);
     if (!focusables.length) return;
     const first = focusables[0];
@@ -2413,7 +2417,7 @@ function resolveMediaUrl(value) {
         activeCheckout={id:created.order.id,gameId:currentGameId,expiresAt:created.order.payment_expires_at};
         checkoutNotice.textContent='สร้างออเดอร์ '+activeCheckout.id+' แล้ว กรุณาชำระเงินและส่งสลิปภายใน '+new Date(activeCheckout.expiresAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})+' (เวลาไทย)';
         confirmBtn.textContent='ส่งสลิปการชำระเงิน';
-        $$('.pack',packGrid).forEach(el=>el.disabled=true);
+        $('.pack',packGrid).forEach(el=>el.disabled=true);
         ['#playerId','#serverId','#couponCode','#applyCoupon'].forEach(sel=>$(sel).disabled=true);
         showToast('สร้างออเดอร์แล้ว กรุณาชำระเงินและแนบสลิป');
       }
@@ -2551,10 +2555,10 @@ function resolveMediaUrl(value) {
      5. Scroll reveal
      --------------------------------------------------------- */
   const revealTargets = [
-    ...$$(".section-head"),
-    ...$$(".trust-item"),
-    ...$$(".game-card"),
-    ...$$(".step")
+    ...$(".section-head"),
+    ...$(".trust-item"),
+    ...$(".game-card"),
+    ...$(".step")
   ];
 
   if ("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -2579,7 +2583,7 @@ function resolveMediaUrl(value) {
   }
 
   // anchor offset for fixed header
-  $$('a[href^="#"]').forEach((a) => {
+  $('a[href^="#"]').forEach((a) => {
     a.addEventListener("click", (e) => {
       const id = a.getAttribute("href");
       if (!id || id === "#") return;
