@@ -1768,6 +1768,7 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
   window.__NOBI_STOREFRONT_DIAGNOSTIC__ = {
     started: true,
     ready: false,
+    stage: "diagnostic-ready",
     lastInteraction: "ยังไม่มีการทดสอบการกดหรือค้นหา"
   };
   setDiagnosticStatus("NOBI STAGING · กำลังตรวจสอบ", "ตัวตรวจจับทำงานแล้ว · รอสคริปต์หน้าร้านเริ่มต้น");
@@ -1779,25 +1780,25 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
       event.lineno ? "บรรทัด " + event.lineno : "",
       event.error && event.error.stack ? event.error.stack : ""
     ].filter(Boolean).join(" · ");
-    setDiagnosticStatus("NOBI STAGING · พบ JavaScript error", capturedRuntimeError, true);
+    setDiagnosticStatus("NOBI STAGING · พบ JavaScript error", capturedRuntimeError + " · ขั้นตอน: " + (window.__NOBI_STOREFRONT_DIAGNOSTIC__.stage || "ไม่ทราบ"), true);
   });
   window.addEventListener("unhandledrejection", function (event) {
     var reason = event.reason;
     capturedRuntimeError = reason && (reason.stack || reason.message) || String(reason || "ไม่ทราบสาเหตุ");
-    setDiagnosticStatus("NOBI STAGING · พบ Promise error", capturedRuntimeError, true);
+    setDiagnosticStatus("NOBI STAGING · พบ Promise error", capturedRuntimeError + " · ขั้นตอน: " + (window.__NOBI_STOREFRONT_DIAGNOSTIC__.stage || "ไม่ทราบ"), true);
   });
   document.addEventListener("click", function (event) {
     var target = event.target && event.target.closest ? event.target.closest(".game-card, .arrow-btn, .dot-btn") : null;
     if (!target) return;
     var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
     state.lastInteraction = target.className || target.tagName;
-    setDiagnosticStatus("NOBI STAGING · ตรวจพบการกด", state.lastInteraction + " · JavaScript " + (state.ready ? "เริ่มต้นแล้ว" : "ยังเริ่มต้นไม่เสร็จ"));
+    setDiagnosticStatus("NOBI STAGING · ตรวจพบการกด", state.lastInteraction + " · JavaScript " + (state.ready ? "เริ่มต้นแล้ว" : "ยังเริ่มต้นไม่เสร็จ") + " · ขั้นตอน: " + (state.stage || "ไม่ทราบ"));
   }, true);
   document.addEventListener("input", function (event) {
     if (!event.target || !event.target.matches || !event.target.matches("#gameSearch, .search-input")) return;
     var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
     state.lastInteraction = "พิมพ์ค้นหาเกม";
-    setDiagnosticStatus("NOBI STAGING · ตรวจพบการค้นหา", "รับข้อความค้นหาแล้ว · JavaScript " + (state.ready ? "เริ่มต้นแล้ว" : "ยังเริ่มต้นไม่เสร็จ"));
+    setDiagnosticStatus("NOBI STAGING · ตรวจพบการค้นหา", "รับข้อความค้นหาแล้ว · JavaScript " + (state.ready ? "เริ่มต้นแล้ว" : "ยังเริ่มต้นไม่เสร็จ") + " · ขั้นตอน: " + (state.stage || "ไม่ทราบ"));
   }, true);
   window.setTimeout(function () {
     var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
@@ -1809,6 +1810,7 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
 </script>
 <?!= include('QrCode'); ?>
 <script>
+if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) window.__NOBI_STOREFRONT_DIAGNOSTIC__.stage = "main-script-entered";
 const apiRequest = (() => {
   let memberToken = '';
     let checkoutToken = '';
@@ -1889,6 +1891,7 @@ const apiRequest = (() => {
   return apiRequest;
 })();
 
+if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) window.__NOBI_STOREFRONT_DIAGNOSTIC__.stage = "api-adapter-defined";
 let mediaRpcQueue = Promise.resolve();
 const mediaUrlCache = new Map();
 function safeImageUrl(value) {
@@ -1930,6 +1933,8 @@ function resolveMediaUrl(value) {
    ========================================================= */
 (function () {
   "use strict";
+  var diagnosticState = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
+  if (diagnosticState) diagnosticState.stage = "storefront-init-entered";
 
   const $ = (sel, ctx = document) => ctx.querySelector(sel);
   const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
@@ -1937,6 +1942,7 @@ function resolveMediaUrl(value) {
   /* ---------------------------------------------------------
      1. Header / mobile nav
      --------------------------------------------------------- */
+  if (diagnosticState) diagnosticState.stage = "header-init";
   const header = $("#siteHeader");
   const nav = $("#mainNav");
   const navToggle = $("#navToggle");
@@ -2470,9 +2476,11 @@ function resolveMediaUrl(value) {
   });
   refreshMember();
 
+  if (diagnosticState) diagnosticState.stage = "admin-entry-init";
   // Admin entry opens the real backend dashboard.
   $("#loginBtn").addEventListener("click", () => { window.location.search = "?page=admin"; });
 
+  if (diagnosticState) diagnosticState.stage = "backend-catalog-init";
   // Pull live catalog, popular flags and admin-managed promotions from backend.
   async function loadLiveCatalog() {
     try { const data=await apiRequest('/api/public/catalog'); catalogLoaded=true;
@@ -2552,7 +2560,7 @@ function resolveMediaUrl(value) {
   });
 })();
 
-if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) { window.__NOBI_STOREFRONT_DIAGNOSTIC__.ready = true; var panel = document.getElementById("nobiRuntimeDiagnostic"); if (panel) { panel.style.borderColor = "#22d3ee"; panel.textContent = "NOBI STAGING · JavaScript เริ่มต้นสำเร็จ\\nทดลองกดการ์ดเกม ปุ่ม Banner และค้นหาเกมได้เลย"; } }
+if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) { window.__NOBI_STOREFRONT_DIAGNOSTIC__.stage = "ready"; window.__NOBI_STOREFRONT_DIAGNOSTIC__.ready = true; var panel = document.getElementById("nobiRuntimeDiagnostic"); if (panel) { panel.style.borderColor = "#22d3ee"; panel.textContent = "NOBI STAGING · JavaScript เริ่มต้นสำเร็จ\\nทดลองกดการ์ดเกม ปุ่ม Banner และค้นหาเกมได้เลย"; } }
 </script>
 </body>
 </html>
