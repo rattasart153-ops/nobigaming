@@ -1750,32 +1750,55 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
 
 <script>
 (function () {
-  function showDiagnostic(title, detail) {
+  function getPanel() {
     var panel = document.getElementById("nobiRuntimeDiagnostic");
     if (!panel) {
       panel = document.createElement("div");
       panel.id = "nobiRuntimeDiagnostic";
-      panel.style.cssText = "position:fixed;z-index:2147483647;left:10px;right:10px;bottom:10px;padding:14px 16px;border:1px solid #d97706;border-radius:12px;background:#21170b;color:#fff7ed;font:14px/1.5 system-ui,sans-serif;box-shadow:0 8px 30px #0008;white-space:pre-wrap;overflow-wrap:anywhere";
+      panel.style.cssText = "position:fixed;z-index:2147483647;left:10px;right:10px;bottom:10px;padding:12px 14px;border:1px solid #22d3ee;border-radius:12px;background:#071522;color:#eef5ff;font:13px/1.55 system-ui,sans-serif;box-shadow:0 8px 30px #0008;white-space:pre-wrap;overflow-wrap:anywhere";
       document.body.appendChild(panel);
     }
+    return panel;
+  }
+  function setDiagnosticStatus(title, detail, isError) {
+    var panel = getPanel();
+    panel.style.borderColor = isError ? "#f59e0b" : "#22d3ee";
     panel.textContent = title + (detail ? "\\n" + detail : "");
   }
+  window.__NOBI_STOREFRONT_DIAGNOSTIC__ = {
+    started: true,
+    ready: false,
+    lastInteraction: "ยังไม่มีการทดสอบการกดหรือค้นหา"
+  };
+  setDiagnosticStatus("NOBI STAGING · กำลังตรวจสอบ", "ตัวตรวจจับทำงานแล้ว · รอสคริปต์หน้าร้านเริ่มต้น");
   window.addEventListener("error", function (event) {
-    showDiagnostic("NOBI STAGING: พบ JavaScript error", [
+    setDiagnosticStatus("NOBI STAGING · พบ JavaScript error", [
       event.message || "ไม่ทราบข้อความผิดพลาด",
       event.filename ? event.filename.split("/").pop() : "",
       event.lineno ? "บรรทัด " + event.lineno : ""
-    ].filter(Boolean).join(" · "));
+    ].filter(Boolean).join(" · "), true);
   });
   window.addEventListener("unhandledrejection", function (event) {
     var reason = event.reason;
-    showDiagnostic("NOBI STAGING: พบ Promise error", reason && (reason.stack || reason.message) || String(reason || "ไม่ทราบสาเหตุ"));
+    setDiagnosticStatus("NOBI STAGING · พบ Promise error", reason && (reason.stack || reason.message) || String(reason || "ไม่ทราบสาเหตุ"), true);
   });
-  window.__NOBI_STOREFRONT_DIAGNOSTIC__ = { started: true, ready: false };
+  document.addEventListener("click", function (event) {
+    var target = event.target && event.target.closest ? event.target.closest(".game-card, .arrow-btn, .dot-btn") : null;
+    if (!target) return;
+    var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
+    state.lastInteraction = target.className || target.tagName;
+    setDiagnosticStatus("NOBI STAGING · ตรวจพบการกด", state.lastInteraction + " · JavaScript " + (state.ready ? "เริ่มต้นแล้ว" : "ยังเริ่มต้นไม่เสร็จ"));
+  }, true);
+  document.addEventListener("input", function (event) {
+    if (!event.target || !event.target.matches || !event.target.matches("#gameSearch, .search-input")) return;
+    var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
+    state.lastInteraction = "พิมพ์ค้นหาเกม";
+    setDiagnosticStatus("NOBI STAGING · ตรวจพบการค้นหา", "รับข้อความค้นหาแล้ว · JavaScript " + (state.ready ? "เริ่มต้นแล้ว" : "ยังเริ่มต้นไม่เสร็จ"));
+  }, true);
   window.setTimeout(function () {
     var state = window.__NOBI_STOREFRONT_DIAGNOSTIC__;
-    if (state && !state.ready && !document.getElementById("nobiRuntimeDiagnostic")) {
-      showDiagnostic("NOBI STAGING: JavaScript เริ่มต้นไม่สำเร็จ", "สคริปต์หลักไม่ส่งสัญญาณว่าเริ่มทำงานครบ");
+    if (state && !state.ready) {
+      setDiagnosticStatus("NOBI STAGING · JavaScript เริ่มต้นไม่สำเร็จ", "สคริปต์หลักไม่ส่งสัญญาณว่าเริ่มทำงานครบภายใน 1.8 วินาที", true);
     }
   }, 1800);
 })();
@@ -2525,7 +2548,7 @@ function resolveMediaUrl(value) {
   });
 })();
 
-if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) window.__NOBI_STOREFRONT_DIAGNOSTIC__.ready = true;
+if (window.__NOBI_STOREFRONT_DIAGNOSTIC__) { window.__NOBI_STOREFRONT_DIAGNOSTIC__.ready = true; var panel = document.getElementById("nobiRuntimeDiagnostic"); if (panel) { panel.style.borderColor = "#22d3ee"; panel.textContent = "NOBI STAGING · JavaScript เริ่มต้นสำเร็จ\\nทดลองกดการ์ดเกม ปุ่ม Banner และค้นหาเกมได้เลย"; } }
 </script>
 </body>
 </html>
