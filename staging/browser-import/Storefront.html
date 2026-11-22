@@ -2119,7 +2119,7 @@ function resolveMediaUrl(value) {
      --------------------------------------------------------- */
   const searchInput = $("#gameSearch");
   const searchClear = $("#searchClear");
-  const chips = $(".chip");
+  const chips = queryAll(".chip");
   let cards = queryAll(".game-card");
   const emptyState = $("#emptyState");
   const resultCount = $("#resultCount");
@@ -2555,10 +2555,10 @@ function resolveMediaUrl(value) {
      5. Scroll reveal
      --------------------------------------------------------- */
   const revealTargets = [
-    ...$(".section-head"),
-    ...$(".trust-item"),
+    ...queryAll(".section-head"),
+    ...queryAll(".trust-item"),
     ...queryAll(".game-card"),
-    ...$(".step")
+    ...queryAll(".step")
   ];
 
   if ("IntersectionObserver" in window && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
