@@ -2248,7 +2248,7 @@ function resolveMediaUrl(value) {
 
     confirmBtn.textContent = 'สร้างออเดอร์และดำเนินการชำระเงิน';
     confirmBtn.disabled = false;
-    $('.pack',packGrid).forEach(el=>el.disabled=false);
+    $$('.pack',packGrid).forEach(el=>el.disabled=false);
     ['#playerId','#serverId','#couponCode','#applyCoupon'].forEach(sel=>$(sel).disabled=false);
     lastFocused = card;
 
