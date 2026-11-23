@@ -1175,6 +1175,29 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
 .hero-slide{display:none;position:relative;opacity:1;visibility:visible;transform:none;transition:none}
 .hero-slide.is-active{display:grid;opacity:1;visibility:visible;transform:none}
 
+
+/* Sheets-managed full-width Banner carousel */
+.hero { padding: calc(var(--header-h) + 34px) 0 52px; }
+.hero-slides { position:relative; width:100%; overflow:hidden; border:1px solid rgba(255,255,255,.09); border-radius:22px; background:#070b1a; box-shadow:0 18px 55px rgba(0,0,0,.28); }
+.hero-slide { display:none; position:relative; width:100%; aspect-ratio:16 / 6; min-height:220px; padding:0; overflow:hidden; background:#070b1a; opacity:1; visibility:visible; transform:none; transition:none; }
+.hero-slide.is-active { display:block; position:relative; opacity:1; visibility:visible; transform:none; }
+.hero-banner-link { position:absolute; inset:0; display:block; width:100%; height:100%; color:inherit; text-decoration:none; }
+.hero-banner-image { display:block; width:100%; height:100%; object-fit:cover; object-position:center; }
+.hero-banner-copy { position:absolute; inset:auto 0 0; display:flex; flex-direction:column; gap:5px; padding:clamp(16px,3vw,34px); color:#fff; background:linear-gradient(0deg,rgba(4,8,20,.78),rgba(4,8,20,0)); text-shadow:0 1px 8px rgba(0,0,0,.5); }
+.hero-banner-copy strong { font-size:clamp(1.1rem,2.5vw,2rem); line-height:1.25; font-weight:700; }
+.hero-banner-copy span { max-width:70ch; font-size:clamp(.8rem,1.2vw,1rem); line-height:1.5; }
+.hero-controls { margin-top:14px; padding-top:0; border-top:0; }
+.hero-controls[hidden] { display:none !important; }
+.hero-dots { align-items:center; }
+.hero-dots .dot-btn { height:4px; border-radius:99px; }
+.hero-dots .dot-btn.is-active { width:56px; }
+@media(max-width:700px) {
+  .hero { padding-top:calc(var(--header-h) + 20px); padding-bottom:34px; }
+  .hero-slides { border-radius:14px; }
+  .hero-slide { aspect-ratio:4 / 3; min-height:170px; }
+  .hero-banner-image { object-position:center; }
+  .hero-controls { margin-top:10px; }
+}
 </style>
 </head>
 <body>
@@ -1243,129 +1266,14 @@ body{background-color:var(--bg);background-image:radial-gradient(760px 420px at 
   <section class="container dynamic-promotions" id="dynamicPromotions" hidden aria-label="โปรโมชั่นพิเศษ"></section>
 
   <!-- ===================== HERO ===================== -->
-  <section class="hero" aria-roledescription="carousel" aria-label="โปรโมชันแนะนำ">
-
+  <section class="hero" id="bannerCarousel" aria-roledescription="carousel" aria-label="แบนเนอร์ Nobi Gaming" hidden>
     <div class="container hero-inner">
-      <div class="hero-slides" id="heroSlides">
-
-        <!-- Slide 1 -->
-        <article class="hero-slide is-active" data-index="0">
-          <div class="hero-copy">
-            <span class="eyebrow"><span class="dot"></span>โปรแรงประจำเดือน</span>
-            <h1 class="hero-title">เติมเกม<span class="grad">ไวที่สุด</span><br />ใน 3 วินาที</h1>
-            <p class="hero-sub">RoV, Free Fire, Genshin Impact และอีกกว่า 40 เกม<br />ระบบอัตโนมัติ เปิดให้บริการตลอด 24 ชั่วโมง</p>
-            <div class="hero-badges">
-              <span><svg><use href="#ic-bolt"/></svg>เติมไว 3 วิ</span>
-              <span><svg><use href="#ic-shield"/></svg>ปลอดภัย 100%</span>
-              <span><svg><use href="#ic-clock"/></svg>เปิด 24 ชม.</span>
-            </div>
-            <div class="hero-actions">
-              <a href="#games" class="btn btn-primary">เลือกเกมเลย <svg><use href="#ic-arrow"/></svg></a>
-              <a href="#how" class="btn btn-ghost">วิธีเติมเงิน</a>
-            </div>
-          </div>
-
-          <div class="hero-visual">
-            <div class="promo-card promo-card--rov">
-              <div class="promo-art" aria-hidden="true">
-                <svg class="art-emblem"><use href="#ic-sword"/></svg>
-              </div>
-              <div class="promo-body">
-                <span class="promo-game">Garena RoV</span>
-                <strong class="promo-pack">1,000 + 100 <em>คูปอง</em></strong>
-                <div class="promo-price">
-                  <span class="price-now">฿159</span>
-                  <span class="price-old">฿199</span>
-                  <span class="promo-off">−20%</span>
-                </div>
-                <span class="promo-meta"><svg><use href="#ic-check"/></svg> เข้าทันที ไม่ต้องรอ</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- Slide 2 -->
-        <article class="hero-slide" data-index="1">
-          <div class="hero-copy">
-            <span class="eyebrow"><span class="dot"></span>แพ็กเกจยอดฮิต</span>
-            <h1 class="hero-title">Free Fire<span class="grad">เพชรพุ่ง</span><br />คุ้มกว่าเดิม</h1>
-            <p class="hero-sub">เติมเพชรตรงจากระบบร้าน รับทันทีไม่ต้องล็อกอิน<br />มีโปรสมาชิกรายเดือนให้เลือกครบทุกแพ็ก</p>
-            <div class="hero-badges">
-              <span><svg><use href="#ic-flame"/></svg>โปรสมาชิกรายเดือน</span>
-              <span><svg><use href="#ic-shield"/></svg>ไม่ต้องให้รหัส</span>
-              <span><svg><use href="#ic-clock"/></svg>บริการ 24 ชม.</span>
-            </div>
-            <div class="hero-actions">
-              <a href="#games" class="btn btn-primary">ดูแพ็กเกจ <svg><use href="#ic-arrow"/></svg></a>
-              <a href="#how" class="btn btn-ghost">วิธีเติมเงิน</a>
-            </div>
-          </div>
-
-          <div class="hero-visual">
-            <div class="promo-card promo-card--ff">
-              <div class="promo-art" aria-hidden="true">
-                <svg class="art-emblem"><use href="#ic-flame"/></svg>
-              </div>
-              <div class="promo-body">
-                <span class="promo-game">Free Fire</span>
-                <strong class="promo-pack">1,060 <em>เพชร</em></strong>
-                <div class="promo-price">
-                  <span class="price-now">฿139</span>
-                  <span class="price-old">฿179</span>
-                  <span class="promo-off">−22%</span>
-                </div>
-                <span class="promo-meta"><svg><use href="#ic-check"/></svg> เติมผ่าน UID เท่านั้น</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <!-- Slide 3 -->
-        <article class="hero-slide" data-index="2">
-          <div class="hero-copy">
-            <span class="eyebrow"><span class="dot"></span>เกมใหม่เข้า</span>
-            <h1 class="hero-title">Genshin Impact<br /><span class="grad">Genesis Crystal</span></h1>
-            <p class="hero-sub">เติม Genesis Crystal ราคาพิเศษ พร้อม Welkin Moon<br />รองรับทุกเซิร์ฟเวอร์ Asia / America / Europe</p>
-            <div class="hero-badges">
-              <span><svg><use href="#ic-crystal"/></svg>Welkin Moon</span>
-              <span><svg><use href="#ic-shield"/></svg>มือถือถือว่าง</span>
-              <span><svg><use href="#ic-clock"/></svg>เปิด 24 ชม.</span>
-            </div>
-            <div class="hero-actions">
-              <a href="#games" class="btn btn-primary">ดูแพ็กเกจ <svg><use href="#ic-arrow"/></svg></a>
-              <a href="#how" class="btn btn-ghost">วิธีเติมเงิน</a>
-            </div>
-          </div>
-
-          <div class="hero-visual">
-            <div class="promo-card promo-card--gi">
-              <div class="promo-art" aria-hidden="true">
-                <svg class="art-emblem"><use href="#ic-crystal"/></svg>
-              </div>
-              <div class="promo-body">
-                <span class="promo-game">Genshin Impact</span>
-                <strong class="promo-pack">3,280 <em>Genesis</em></strong>
-                <div class="promo-price">
-                  <span class="price-now">฿1,190</span>
-                  <span class="price-old">฿1,390</span>
-                  <span class="promo-off">−15%</span>
-                </div>
-                <span class="promo-meta"><svg><use href="#ic-check"/></svg> ปลอดภัยด้วยระบบรหัส</span>
-              </div>
-            </div>
-          </div>
-        </article>
-      </div>
-
+      <div class="hero-slides" id="heroSlides" aria-live="polite"></div>
       <div class="hero-controls">
-        <div class="hero-dots" id="heroDots" role="group" aria-label="เลือกสไลด์">
-          <button class="dot-btn is-active" aria-current="true" aria-label="สไลด์ 1" data-go="0"><span class="dot-fill"></span></button>
-          <button class="dot-btn" aria-current="false" aria-label="สไลด์ 2" data-go="1"><span class="dot-fill"></span></button>
-          <button class="dot-btn" aria-current="false" aria-label="สไลด์ 3" data-go="2"><span class="dot-fill"></span></button>
-        </div>
+        <div class="hero-dots" id="heroDots" role="group" aria-label="เลือกแบนเนอร์"></div>
         <div class="hero-arrows">
-          <button type="button" class="arrow-btn" id="heroPrev" aria-label="สไลด์ก่อนหน้า"><svg><use href="#ic-chev-left"/></svg></button>
-          <button type="button" class="arrow-btn" id="heroNext" aria-label="สไลด์ถัดไป"><svg><use href="#ic-chev-right"/></svg></button>
+          <button type="button" class="arrow-btn" id="heroPrev" aria-label="แบนเนอร์ก่อนหน้า"><svg><use href="#ic-chev-left"/></svg></button>
+          <button type="button" class="arrow-btn" id="heroNext" aria-label="แบนเนอร์ถัดไป"><svg><use href="#ic-chev-right"/></svg></button>
         </div>
       </div>
     </div>
@@ -1867,6 +1775,7 @@ const apiRequest = (() => {
   if(mediaMatch)return nobiRpc('nobiGetPublicMedia',decodeURIComponent(mediaMatch[1]));
   if(path==='/api/public/catalog') return nobiRpc('nobiGetCatalog');
     if(path==='/api/public/promotions') return nobiRpc('nobiGetPromotions');
+    if(path==='/api/public/banners') return nobiRpc('nobiGetBanners');
     if(path==='/api/public/coupons/validate') {
       const r=await nobiRpc('nobiValidateCoupon',{code:String(json.code||''),gameId:String(json.gameId||''),subtotal:Number(json.subtotal),playerId:String(json.playerId||''),memberToken:memberToken});
       return {ok:!!r.valid,discount:Number(r.discount||0),message:r.error||r.message||(r.valid?'ใช้โค้ดได้':'ใช้โค้ดไม่ได้')};
@@ -2014,11 +1923,13 @@ function resolveMediaUrl(value) {
   }
 
   /* ---------------------------------------------------------
-     2. Hero slider
+     2. Sheets-managed Banner carousel
      --------------------------------------------------------- */
-  const hero = $(".hero");
-  const slides = queryAll(".hero-slide");
-  const dots = queryAll(".dot-btn");
+  const hero = $("#bannerCarousel");
+  const slidesBox = $("#heroSlides");
+  const dotsBox = $("#heroDots");
+  let slides = [];
+  let dots = [];
   const DURATION = 6000;
   let index = 0;
   let timer = null;
@@ -2028,13 +1939,26 @@ function resolveMediaUrl(value) {
     const fill = $(".dot-fill", dot);
     if (!fill) return;
     fill.style.animation = "none";
-    void fill.offsetWidth; // force reflow
+    void fill.offsetWidth;
     fill.style.animation = "";
   };
 
-  const goTo = (next) => {
-    index = (next + slides.length) % slides.length;
-    slides.forEach((s, i) => s.classList.toggle("is-active", i === index));
+  const start = () => {
+    clearTimeout(timer);
+    if (paused || slides.length < 2) return;
+    timer = setTimeout(next, DURATION);
+  };
+
+  const goTo = (nextIndex) => {
+    if (!slides.length) return;
+    index = (nextIndex + slides.length) % slides.length;
+    slides.forEach((slide, i) => slide.classList.toggle("is-active", i === index));
+    dots.forEach((dot, i) => {
+      const active = i === index;
+      dot.classList.toggle("is-active", active);
+      dot.setAttribute("aria-current", String(active));
+      if (active) restartDot(dot);
+    });
     if (diagnosticState) {
       const activeSlide = slides[index];
       const style = activeSlide ? window.getComputedStyle(activeSlide) : null;
@@ -2042,11 +1966,6 @@ function resolveMediaUrl(value) {
       const panel = $("#nobiRuntimeDiagnostic");
       diagnosticState.stage = "hero-slide-check";
       if (panel) {
-        const heroRect = hero ? hero.getBoundingClientRect() : null;
-        const inner = $(".hero-inner");
-        const slidesWrap = $("#heroSlides");
-        const copy = activeSlide ? $(".hero-copy", activeSlide) : null;
-        const visual = activeSlide ? $(".hero-visual", activeSlide) : null;
         const box = (el) => {
           if (!el) return "n/a";
           const r = el.getBoundingClientRect();
@@ -2054,36 +1973,36 @@ function resolveMediaUrl(value) {
           return Math.round(r.x)+","+Math.round(r.y)+" "+Math.round(r.width)+"x"+Math.round(r.height)+
             " ["+c.display+"/"+c.visibility+"/"+c.opacity+"]";
         };
-        const centerTarget = rect && rect.width && rect.height
-          ? document.elementFromPoint(rect.left + rect.width/2, rect.top + rect.height/2)
-          : null;
+        const image = activeSlide ? $(".hero-banner-image", activeSlide) : null;
+        const imageStyle = image ? window.getComputedStyle(image) : null;
         panel.textContent = "NOBI STAGING · ตรวจสอบ Banner" +
           "\nslide: " + box(activeSlide) +
+          "\nimage: " + box(image) +
           "\nhero: " + box(hero) +
-          "\ninner: " + box(inner) +
-          "\nslides: " + box(slidesWrap) +
-          "\ncopy: " + box(copy) +
-          "\nvisual: " + box(visual) +
-          "\nslide color: " + (style ? style.color : "n/a") +
-          "\ncenter hit: " + (centerTarget ? centerTarget.tagName.toLowerCase()+"."+String(centerTarget.className).slice(0,60) : "n/a");
+          "\nslides: " + box(slidesBox) +
+          "\nimage source: " + (image ? (image.currentSrc ? "loaded" : "pending") : "n/a") +
+          "\nimage natural: " + (image ? image.naturalWidth+"x"+image.naturalHeight : "n/a") +
+          "\nimage display: " + (imageStyle ? imageStyle.objectFit : "n/a");
       }
     }
-    dots.forEach((d, i) => {
-      const active = i === index;
-      d.classList.toggle("is-active", active);
-      d.setAttribute("aria-current", String(active));
-      if (active) restartDot(d);
-    });
     start();
   };
 
   const next = () => goTo(index + 1);
   const prev = () => goTo(index - 1);
 
-  const start = () => {
-    clearTimeout(timer);
-    if (paused) return;
-    timer = setTimeout(next, DURATION);
+  const refreshHeroSlides = () => {
+    slides = queryAll(".hero-slide", slidesBox);
+    dots = queryAll(".dot-btn", dotsBox);
+    if (!slides.length) {
+      hero.hidden = true;
+      clearTimeout(timer);
+      return;
+    }
+    hero.hidden = false;
+    goTo(0);
+    const controls = $(".hero-controls", hero);
+    if (controls) controls.hidden = slides.length < 2;
   };
 
   const pause = () => {
@@ -2094,50 +2013,42 @@ function resolveMediaUrl(value) {
   const resume = () => {
     paused = false;
     hero.classList.remove("is-paused");
-    const activeDot = dots.find((d) => d.classList.contains("is-active"));
+    const activeDot = dots.find((dot) => dot.classList.contains("is-active"));
     if (activeDot) restartDot(activeDot);
     start();
   };
 
   $("#heroNext").addEventListener("click", next);
   $("#heroPrev").addEventListener("click", prev);
-  dots.forEach((d) => d.addEventListener("click", () => goTo(Number(d.dataset.go))));
-
   hero.addEventListener("mouseenter", pause);
   hero.addEventListener("mouseleave", resume);
   hero.addEventListener("focusin", pause);
-  hero.addEventListener("focusout", (e) => {
-    if (!hero.contains(e.relatedTarget)) resume();
+  hero.addEventListener("focusout", (event) => {
+    if (!hero.contains(event.relatedTarget)) resume();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) pause();
     else resume();
   });
-
-  // keyboard within hero
-  hero.addEventListener("keydown", (e) => {
-    if (e.key === "ArrowRight") { e.preventDefault(); next(); }
-    if (e.key === "ArrowLeft") { e.preventDefault(); prev(); }
+  hero.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowRight") { event.preventDefault(); next(); }
+    if (event.key === "ArrowLeft") { event.preventDefault(); prev(); }
   });
-
-  // touch swipe
   let touchX = null;
   let touchY = null;
-  hero.addEventListener("touchstart", (e) => {
-    touchX = e.changedTouches[0].clientX;
-    touchY = e.changedTouches[0].clientY;
+  hero.addEventListener("touchstart", (event) => {
+    touchX = event.changedTouches[0].clientX;
+    touchY = event.changedTouches[0].clientY;
   }, { passive: true });
-  hero.addEventListener("touchend", (e) => {
+  hero.addEventListener("touchend", (event) => {
     if (touchX === null) return;
-    const dx = e.changedTouches[0].clientX - touchX;
-    const dy = e.changedTouches[0].clientY - touchY;
+    const dx = event.changedTouches[0].clientX - touchX;
+    const dy = event.changedTouches[0].clientY - touchY;
     if (Math.abs(dx) > 55 && Math.abs(dx) > Math.abs(dy) * 1.6) {
       dx < 0 ? next() : prev();
     }
     touchX = touchY = null;
   }, { passive: true });
-
-  if (slides.length) start();
 
   /* ---------------------------------------------------------
      3. Search + category filter
@@ -2554,6 +2465,78 @@ function resolveMediaUrl(value) {
       applyFilters();
     } catch(e) {}
   }
+  async function loadBanners() {
+    try {
+      const items = await apiRequest('/api/public/banners');
+      if (!Array.isArray(items) || !items.length) {
+        slidesBox.replaceChildren();
+        dotsBox.replaceChildren();
+        refreshHeroSlides();
+        return;
+      }
+      const prepared = await Promise.all(items.map(async (item) => {
+        const imageUrl = safeImageUrl(item.image_url);
+        if (!imageUrl) return null;
+        try {
+          const src = await resolveMediaUrl(imageUrl);
+          return src ? {item, src} : null;
+        } catch (_) { return null; }
+      }));
+      slidesBox.replaceChildren();
+      dotsBox.replaceChildren();
+      prepared.filter(Boolean).forEach(({item, src}, i) => {
+        const slide = document.createElement('article');
+        slide.className = 'hero-slide';
+        slide.dataset.index = String(i);
+        const link = document.createElement('a');
+        link.className = 'hero-banner-link';
+        link.href = safePromoHref(item.link_url);
+        link.setAttribute('aria-label', String(item.title || ('Nobi Gaming Banner ' + (i + 1))));
+        const image = document.createElement('img');
+        image.className = 'hero-banner-image';
+        image.alt = String(item.title || 'Nobi Gaming promotional banner');
+        image.loading = i === 0 ? 'eager' : 'lazy';
+        image.decoding = 'async';
+        image.src = src;
+        link.appendChild(image);
+        if (item.title || item.subtitle) {
+          const copy = document.createElement('div');
+          copy.className = 'hero-banner-copy';
+          if (item.title) {
+            const title = document.createElement('strong');
+            title.textContent = String(item.title);
+            copy.appendChild(title);
+          }
+          if (item.subtitle) {
+            const subtitle = document.createElement('span');
+            subtitle.textContent = String(item.subtitle);
+            copy.appendChild(subtitle);
+          }
+          link.appendChild(copy);
+        }
+        slide.appendChild(link);
+        slidesBox.appendChild(slide);
+        const dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = 'dot-btn';
+        dot.setAttribute('aria-label', 'แบนเนอร์ ' + (i + 1));
+        dot.setAttribute('aria-current', 'false');
+        dot.dataset.go = String(i);
+        const fill = document.createElement('span');
+        fill.className = 'dot-fill';
+        dot.appendChild(fill);
+        dot.addEventListener('click', () => goTo(Number(dot.dataset.go)));
+        dotsBox.appendChild(dot);
+      });
+      refreshHeroSlides();
+    } catch (error) {
+      slidesBox.replaceChildren();
+      dotsBox.replaceChildren();
+      refreshHeroSlides();
+      console.warn('Nobi banners could not be loaded:', error);
+    }
+  }
+
   async function loadPromotions() {
     const box=$("#dynamicPromotions");
     try {
@@ -2574,7 +2557,7 @@ function resolveMediaUrl(value) {
       box.hidden=false;
     } catch(e) { box.hidden=true; }
   }
-  loadLiveCatalog(); loadPromotions();
+  loadLiveCatalog(); loadPromotions(); loadBanners();
 
   /* ---------------------------------------------------------
      5. Scroll reveal
