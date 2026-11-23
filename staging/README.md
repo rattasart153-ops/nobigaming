@@ -1,6 +1,6 @@
 # Nobi Gaming — Isolated Staging Runtime Test Kit
 
-> This guide supersedes older setup notes that mention Schema v3. The current source on `vercel-drive-setup` uses **Schema v4**.
+> This guide supersedes older setup notes that mention Schema v3/v4. The current STAGING source uses **Schema v5** and upgrades an existing Schema v4 STAGING database non-destructively.
 
 ## Purpose and safety boundary
 
@@ -21,12 +21,12 @@ This guide does not create or authorize production resources. The owner performs
 ## What is being tested
 
 1. Real Apps Script V8 execution of the current source.
-2. Schema v4 initialization on a new, empty spreadsheet.
+2. Schema v5 initialization on a new spreadsheet and non-destructive upgrade from STAGING Schema v4.
 3. `LockService`, Sheets reads/writes, and repository concurrency under synthetic requests.
 4. Restricted Drive folders, private file creation, and Admin-only slip retrieval.
 5. Member registration/login/dashboard/password change/logout and coupon progress.
 6. Guest checkout, coupon rules, order expiry, slip upload, and Admin order review.
-7. HtmlService pages on a real browser/device, including mobile layout.
+7. HtmlService pages on a real browser/device, including mobile layout.\n8. Sheets-managed Banner Carousel, private Drive media delivery, and automatic slide rotation.
 
 The existing Node/VM suite is useful regression coverage, but it does not prove Google's live runtime, Drive ACLs, browser behavior, or actual quota enforcement.
 
@@ -54,7 +54,7 @@ The app checks the folder's broad sharing mode and explicit editor/viewer lists.
 
 ## Browser-only alternative (recommended for phone users)
 
-If you are using a phone or do not want Terminal/clasp, use [BROWSER_ONLY_SETUP.md](./BROWSER_ONLY_SETUP.md). It provides one combined `Code.gs` bundle plus the four HTML files to paste directly into a newly created Apps Script project. This avoids both Terminal and the Apps Script API. After importing those files, continue at Part C below.
+If you are using a phone or do not want Terminal/clasp, use [BROWSER_ONLY_SETUP.md](./BROWSER_ONLY_SETUP.md). It provides one combined `Code.gs` bundle plus the four HTML files to paste directly into a newly created Apps Script project. This avoids both Terminal and the Apps Script API. After importing those files, continue at Part C below.\n\nFor the Sheets-managed Banner Carousel on an already configured STAGING project, follow [BANNER_SETUP.md](./BANNER_SETUP.md).
 
 ## Part B — Create a separate Apps Script project
 
@@ -123,7 +123,7 @@ Do not add `NOBI_GATEWAY_SECRET`, production IDs, payment credentials, or custom
 In the Apps Script editor, select and run each function manually, one at a time:
 
 1. `setupNobiDatabase`
-   - Expected: `ok: true`, `schemaVersion: 4`, `sheetCount: 18`.
+   - Expected: `ok: true`, `schemaVersion: 5`, `sheetCount: 19`.
    - Confirm the new STAGING spreadsheet now contains the schema tabs, including `member_coupon_alerts`.
    - If the function reports an incompatible schema, stop. Do not delete or rename tabs to force it through.
 2. `seedDefaultCatalog`
