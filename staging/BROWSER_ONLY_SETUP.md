@@ -70,7 +70,8 @@ The Code.gs bundle includes all 18 server-side .gs files. Do not also add the or
 
 ### 7. Continue with configuration and initialization
 
-Return to Part C of [the main staging guide](./README.md) and follow it exactly. For an already configured STAGING project that is being upgraded for the Banner Carousel, use [BANNER_SETUP.md](./BANNER_SETUP.md) instead of recreating resources:
+For a **first-time setup**, return to Part C of [the main staging guide](./README.md) and follow these steps. If this STAGING project is already configured and you are adding the Banner Carousel, do not repeat first-time setup; follow [BANNER_SETUP.md](./BANNER_SETUP.md) instead.
+
 1. Add only the new STAGING Script Properties.
 2. Run `setupNobiDatabase`.
 3. Confirm Schema v5 and 19 sheets.
