@@ -328,7 +328,7 @@ function publicBanners() {
     return truth_(row.active) &&
       (!row.starts_at || (Number.isFinite(starts) && starts <= now)) &&
       (!row.ends_at || (Number.isFinite(ends) && ends >= now)) &&
-      (String(row.image_file_id || '').trim() || /^https:\/\//i.test(String(row.image_url || '').trim()));
+      (String(row.image_file_id || '').trim() || (/^https:\/\//i.test(String(row.image_url || '').trim()) && !/drive\.google\.com|googleusercontent\.com/i.test(String(row.image_url || ''))));
   }).sort(function(a, b) {
     return Number(a.sort_order || 0) - Number(b.sort_order || 0);
   }).map(function(row) {
@@ -2098,10 +2098,12 @@ function publicMediaData(fileId) {
   const blob = file.getBlob();
   const mimeType = blob.getContentType();
   if (!/^image\/(png|jpeg|webp)$/.test(mimeType)) throw new Error('ชนิดไฟล์รูปภาพไม่รองรับ');
+  const bytes = blob.getBytes();
+  if (!bytes.length || bytes.length > NOBI.MAX_SLIP_BYTES) throw new Error('รูปภาพต้องมีขนาดไม่เกิน 3 MB');
   return {
     name:file.getName(),
     mimeType:mimeType,
-    base64:Utilities.base64Encode(blob.getBytes())
+    base64:Utilities.base64Encode(bytes)
   };
 }
 
