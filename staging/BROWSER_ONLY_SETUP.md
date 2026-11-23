@@ -15,7 +15,7 @@ Open each raw file link, select all, copy, then paste into the matching file in 
 - [Storefront.html](https://raw.githubusercontent.com/rattasart153-ops/nobigaming/staging-runtime-test-kit/staging/browser-import/Storefront.html)
 - [appsscript.json manifest](https://raw.githubusercontent.com/rattasart153-ops/nobigaming/staging-runtime-test-kit/staging/browser-import/appsscript.json)
 
-The combined Code.gs is approximately 154 KB. If your mobile browser cannot select/copy the full file reliably, do not paste a partial file; use a computer or tell me where the copy operation fails.
+The combined Code.gs is approximately 156 KB. If your mobile browser cannot select/copy the full file reliably, do not paste a partial file; use a computer or tell me where the copy operation fails.
 
 ## Steps
 
@@ -70,10 +70,10 @@ The Code.gs bundle includes all 18 server-side .gs files. Do not also add the or
 
 ### 7. Continue with configuration and initialization
 
-Return to Part C of [the main staging guide](./README.md) and follow it exactly:
+Return to Part C of [the main staging guide](./README.md) and follow it exactly. For an already configured STAGING project that is being upgraded for the Banner Carousel, use [BANNER_SETUP.md](./BANNER_SETUP.md) instead of recreating resources:
 1. Add only the new STAGING Script Properties.
 2. Run `setupNobiDatabase`.
-3. Confirm Schema v4 and 18 sheets.
+3. Confirm Schema v5 and 19 sheets.
 4. Run `seedDefaultCatalog`.
 5. Run `initializeAdmin`.
 6. Only after all steps succeed, follow Part E to create a new web-app deployment with access **Only myself**.
