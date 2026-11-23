@@ -1,7 +1,7 @@
 // ===== SOURCE: google-apps-script/00_Config.gs =====
 /** Nobi Topup Apps Script configuration and versioned Sheets schema. */
 const NOBI = {
-  SCHEMA_VERSION: 4,
+  SCHEMA_VERSION: 5,
   SCHEMA_VERSION_KEY: 'schema_version',
   SHEETS: {
     admins: ['admin_id','username_normalized','username_display','password_hash','password_salt','password_algorithm','status','auth_version','created_at','updated_at','last_login_at'],
@@ -16,6 +16,7 @@ const NOBI = {
     coupon_redemptions: ['redemption_id','coupon_id','order_id','member_id','player_id','game_id','discount_satang','state','reserved_at','reserved_until','finalized_at','released_at'],
     member_coupon_alerts: ['alert_id','member_coupon_key','member_id','coupon_id','last_stage','notified_at','created_at','updated_at'],
     promotions: ['promotion_id','title','subtitle','image_file_id','image_url','link_url','active','sort_order','starts_at','ends_at','created_at','updated_at'],
+    banners: ['banner_id','title','subtitle','image_file_id','image_url','link_url','active','sort_order','starts_at','ends_at','created_at','updated_at'],
     orders: ['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at'],
     idempotency_records: ['idempotency_id','scope','request_key','payload_hash','resource_id','state','created_at','expires_at'],
     order_recovery_journal: ['journal_id','order_id','operation','order_record_json','idempotency_record_json','redemption_record_json','order_patch_json','redemption_id','redemption_patch_json','state','attempts','last_error_code','created_at','updated_at'],
@@ -49,6 +50,7 @@ function dispatchGatewayAction_(action, args) {
   switch (String(action || '')) {
     case 'catalog': return publicCatalog();
     case 'promotions': return publicPromotions();
+    case 'banners': return publicBanners();
     case 'coupon': return validateCoupon(args.code, args.gameId, args.subtotal, args.playerId, gatewayOptionalMemberId_(args.member_token));
     case 'couponSuggestions': return couponSuggestions_(args.gameId, args.subtotal, args.playerId, gatewayOptionalMemberId_(args.member_token));
     case 'paymentInfo': return paymentInfo_(args.amount);
@@ -126,7 +128,7 @@ function setupNobiDatabase() {
       }
     }
 
-    const supportedUpgrade = ['1', '2', '3'].includes(currentVersion) && Number(NOBI.SCHEMA_VERSION) === 4;
+    const supportedUpgrade = ['1', '2', '3', '4'].includes(currentVersion) && Number(NOBI.SCHEMA_VERSION) === 5;
     if (currentVersion && currentVersion !== String(NOBI.SCHEMA_VERSION) && !supportedUpgrade) {
       throw new Error('SCHEMA_VERSION_UNSUPPORTED: expected version ' + NOBI.SCHEMA_VERSION + ' but found ' + currentVersion + '.');
     }
@@ -317,6 +319,29 @@ function publicPromotions() {
   });
 }
 
+
+function publicBanners() {
+  const now = Date.now();
+  return repositoryRows_('banners').filter(function(row) {
+    const starts = row.starts_at ? Date.parse(row.starts_at) : NaN;
+    const ends = row.ends_at ? Date.parse(row.ends_at) : NaN;
+    return truth_(row.active) &&
+      (!row.starts_at || (Number.isFinite(starts) && starts <= now)) &&
+      (!row.ends_at || (Number.isFinite(ends) && ends >= now)) &&
+      (String(row.image_file_id || '').trim() || /^https:\/\//i.test(String(row.image_url || '').trim()));
+  }).sort(function(a, b) {
+    return Number(a.sort_order || 0) - Number(b.sort_order || 0);
+  }).map(function(row) {
+    return {
+      id: row.banner_id,
+      title: row.title || '',
+      subtitle: row.subtitle || '',
+      image_url: catalogImageUrl_(row.image_file_id, row.image_url),
+      link_url: row.link_url || '',
+      sort_order: Number(row.sort_order || 0)
+    };
+  });
+}
 
 function catalogImageUrl_(fileId, fallbackUrl) {
   const id = String(fileId || '').trim();
@@ -2062,6 +2087,8 @@ function publicMediaData(fileId) {
     return truth_(item.active) && String(item.image_file_id) === id;
   }) || repositoryRows_('promotions').some(function(item) {
     return truth_(item.active) && String(item.image_file_id) === id;
+  }) || repositoryRows_('banners').some(function(item) {
+    return truth_(item.active) && String(item.image_file_id) === id;
   });
   if (!referenced) throw new Error('ไม่พบรูปภาพ');
   const mediaFolderId = String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_MEDIA_FOLDER_ID') || '').trim();
@@ -3284,7 +3311,7 @@ function memberOrders(token, requestedLimit) {
  */
 
 var NOBI_BROWSER_FACADE_ACTIONS_ = [
-  'catalog','promotions','coupon','couponSuggestions','paymentInfo',
+  'catalog','promotions','banners','coupon','couponSuggestions','paymentInfo',
   'createOrder','submitOrderSlip','adminLogin','memberRegister','memberLogin',
   'memberMe','memberDashboard','memberOrders','memberLogout','memberChangePassword','adminChangePassword',
   'adminMe','adminLogout','adminDashboard','adminOrders','adminSlipData',
@@ -3331,6 +3358,10 @@ function nobiGetCatalog() {
 
 function nobiGetPromotions() {
   return nobiFacadeCall_('promotions', {});
+}
+
+function nobiGetBanners() {
+  return nobiFacadeCall_('banners', {});
 }
 
 function nobiValidateCoupon(input) {
