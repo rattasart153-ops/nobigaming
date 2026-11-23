@@ -6,7 +6,7 @@ Record each test as PASS / FAIL / NOT RUN, with a short sanitized note. Never re
 
 ## 1. Initialization and access
 
-- [ ] `setupNobiDatabase` returns `ok: true`, Schema v4, and 18 sheets.
+- [ ] `setupNobiDatabase` returns `ok: true`, Schema v5, and 19 sheets.
 - [ ] Spreadsheet includes `member_coupon_alerts` with the expected header row.
 - [ ] `seedDefaultCatalog` adds the expected synthetic catalog and can be safely rerun without duplicating packages.
 - [ ] `initializeAdmin` creates the staging Admin account and removes the bootstrap password property.
@@ -74,11 +74,25 @@ Record each test as PASS / FAIL / NOT RUN, with a short sanitized note. Never re
 - [ ] Media folder is Restricted and has no explicit editors/viewers.
 - [ ] Uploaded synthetic media remains private and belongs to the staging Media folder.
 - [ ] No file is shared as Anyone or Anyone with the link.
-- [ ] Public media endpoint returns only active catalog/promotion media referenced by the staging database.
+- [ ] Public media endpoint returns only active catalog, promotion, or banner media referenced by the staging database.
 - [ ] A missing/unverifiable/private-ACL failure fails closed.
 - [ ] No Google Drive sharing URL is exposed in the browser.
 
-## 7. Runtime, concurrency, and quotas
+## 7. Banner Carousel managed through Google Sheets
+
+- [ ] The Schema v5 setup creates a banners tab with the documented 12-column header.
+- [ ] An active row with a valid private Media file ID appears on Storefront.
+- [ ] An inactive banner is not shown.
+- [ ] sort_order controls the display order.
+- [ ] starts_at / ends_at schedule banner visibility correctly.
+- [ ] Banner advances automatically after approximately 6 seconds.
+- [ ] Dots and arrow buttons select the expected banner.
+- [ ] Android touch swipe moves between banners.
+- [ ] Optional title/subtitle overlay renders without blocking the image.
+- [ ] Updating a banner row takes effect after reloading Storefront without redeploying.
+- [ ] No banner image is stored in or exposed from the private Slips folder.
+
+## 8. Runtime, concurrency, and quotas
 
 - [ ] Apps Script V8 executes core Storefront, Member, and Admin flows without runtime errors.
 - [ ] Sheets read/write operations succeed on the staging spreadsheet.
@@ -88,7 +102,7 @@ Record each test as PASS / FAIL / NOT RUN, with a short sanitized note. Never re
 - [ ] Note execution time and observed latency for setup, login, dashboard, order creation, coupon validation, and slip upload.
 - [ ] Stop on quota exhaustion; do not request a paid upgrade.
 
-## 8. Browser and device checks
+## 9. Browser and device checks
 
 - [ ] Desktop Chrome: Storefront layout and interactions.
 - [ ] Desktop Chrome: Admin login, dashboard, order review, and coupon CRUD.
@@ -99,7 +113,7 @@ Record each test as PASS / FAIL / NOT RUN, with a short sanitized note. Never re
 - [ ] Browser refresh clears in-memory Member/Admin session as expected.
 - [ ] Back navigation does not reveal protected data after logout.
 
-## 9. Acceptance decision
+## 10. Acceptance decision
 
 - [ ] All critical security tests pass.
 - [ ] No production resource was touched.
