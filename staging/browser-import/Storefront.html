@@ -2041,12 +2041,32 @@ function resolveMediaUrl(value) {
       const rect = activeSlide ? activeSlide.getBoundingClientRect() : null;
       const panel = $("#nobiRuntimeDiagnostic");
       diagnosticState.stage = "hero-slide-check";
-      if (panel) panel.textContent = "NOBI STAGING · ตรวจสอบ Banner\nslides=" + slides.length +
-        " · active=" + slides.filter((s) => s.classList.contains("is-active")).length +
-        " · display=" + (style ? style.display : "n/a") +
-        " · opacity=" + (style ? style.opacity : "n/a") +
-        " · visibility=" + (style ? style.visibility : "n/a") +
-        " · size=" + (rect ? Math.round(rect.width) + "x" + Math.round(rect.height) : "n/a");
+      if (panel) {
+        const heroRect = hero ? hero.getBoundingClientRect() : null;
+        const inner = $(".hero-inner");
+        const slidesWrap = $("#heroSlides");
+        const copy = activeSlide ? $(".hero-copy", activeSlide) : null;
+        const visual = activeSlide ? $(".hero-visual", activeSlide) : null;
+        const box = (el) => {
+          if (!el) return "n/a";
+          const r = el.getBoundingClientRect();
+          const c = window.getComputedStyle(el);
+          return Math.round(r.x)+","+Math.round(r.y)+" "+Math.round(r.width)+"x"+Math.round(r.height)+
+            " ["+c.display+"/"+c.visibility+"/"+c.opacity+"]";
+        };
+        const centerTarget = rect && rect.width && rect.height
+          ? document.elementFromPoint(rect.left + rect.width/2, rect.top + rect.height/2)
+          : null;
+        panel.textContent = "NOBI STAGING · ตรวจสอบ Banner" +
+          "\nslide: " + box(activeSlide) +
+          "\nhero: " + box(hero) +
+          "\ninner: " + box(inner) +
+          "\nslides: " + box(slidesWrap) +
+          "\ncopy: " + box(copy) +
+          "\nvisual: " + box(visual) +
+          "\nslide color: " + (style ? style.color : "n/a") +
+          "\ncenter hit: " + (centerTarget ? centerTarget.tagName.toLowerCase()+"."+String(centerTarget.className).slice(0,60) : "n/a");
+      }
     }
     dots.forEach((d, i) => {
       const active = i === index;
