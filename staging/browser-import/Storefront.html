@@ -2465,69 +2465,93 @@ function resolveMediaUrl(value) {
       applyFilters();
     } catch(e) {}
   }
+  function appendBannerSlide(item, src, position) {
+    const slide = document.createElement('article');
+    slide.className = 'hero-slide';
+    slide.dataset.index = String(position);
+    const link = document.createElement('a');
+    link.className = 'hero-banner-link';
+    link.href = safePromoHref(item.link_url);
+    link.setAttribute('aria-label', String(item.title || ('Nobi Gaming Banner ' + (position + 1))));
+    const image = document.createElement('img');
+    image.className = 'hero-banner-image';
+    image.alt = String(item.title || 'Nobi Gaming promotional banner');
+    image.loading = position === 0 ? 'eager' : 'lazy';
+    image.decoding = 'async';
+    image.src = src;
+    link.appendChild(image);
+    if (item.title || item.subtitle) {
+      const copy = document.createElement('div');
+      copy.className = 'hero-banner-copy';
+      if (item.title) {
+        const title = document.createElement('strong');
+        title.textContent = String(item.title);
+        copy.appendChild(title);
+      }
+      if (item.subtitle) {
+        const subtitle = document.createElement('span');
+        subtitle.textContent = String(item.subtitle);
+        copy.appendChild(subtitle);
+      }
+      link.appendChild(copy);
+    }
+    slide.appendChild(link);
+    slidesBox.appendChild(slide);
+
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'dot-btn';
+    dot.setAttribute('aria-label', 'แบนเนอร์ ' + (position + 1));
+    dot.setAttribute('aria-current', 'false');
+    dot.dataset.go = String(position);
+    const fill = document.createElement('span');
+    fill.className = 'dot-fill';
+    dot.appendChild(fill);
+    dot.addEventListener('click', () => goTo(Number(dot.dataset.go)));
+    dotsBox.appendChild(dot);
+  }
+
   async function loadBanners() {
     try {
       const items = await apiRequest('/api/public/banners');
+      slidesBox.replaceChildren();
+      dotsBox.replaceChildren();
       if (!Array.isArray(items) || !items.length) {
-        slidesBox.replaceChildren();
-        dotsBox.replaceChildren();
         refreshHeroSlides();
         return;
       }
-      const prepared = await Promise.all(items.map(async (item) => {
-        const imageUrl = safeImageUrl(item.image_url);
-        if (!imageUrl) return null;
+
+      // Resolve the first usable banner and reveal it immediately.
+      let nextPosition = 0;
+      let firstItemIndex = -1;
+      for (let i = 0; i < items.length; i++) {
+        const imageUrl = safeImageUrl(items[i].image_url);
+        if (!imageUrl) continue;
         try {
-          const src = await resolveMediaUrl(imageUrl);
-          return src ? {item, src} : null;
-        } catch (_) { return null; }
-      }));
-      slidesBox.replaceChildren();
-      dotsBox.replaceChildren();
-      prepared.filter(Boolean).forEach(({item, src}, i) => {
-        const slide = document.createElement('article');
-        slide.className = 'hero-slide';
-        slide.dataset.index = String(i);
-        const link = document.createElement('a');
-        link.className = 'hero-banner-link';
-        link.href = safePromoHref(item.link_url);
-        link.setAttribute('aria-label', String(item.title || ('Nobi Gaming Banner ' + (i + 1))));
-        const image = document.createElement('img');
-        image.className = 'hero-banner-image';
-        image.alt = String(item.title || 'Nobi Gaming promotional banner');
-        image.loading = i === 0 ? 'eager' : 'lazy';
-        image.decoding = 'async';
-        image.src = src;
-        link.appendChild(image);
-        if (item.title || item.subtitle) {
-          const copy = document.createElement('div');
-          copy.className = 'hero-banner-copy';
-          if (item.title) {
-            const title = document.createElement('strong');
-            title.textContent = String(item.title);
-            copy.appendChild(title);
-          }
-          if (item.subtitle) {
-            const subtitle = document.createElement('span');
-            subtitle.textContent = String(item.subtitle);
-            copy.appendChild(subtitle);
-          }
-          link.appendChild(copy);
-        }
-        slide.appendChild(link);
-        slidesBox.appendChild(slide);
-        const dot = document.createElement('button');
-        dot.type = 'button';
-        dot.className = 'dot-btn';
-        dot.setAttribute('aria-label', 'แบนเนอร์ ' + (i + 1));
-        dot.setAttribute('aria-current', 'false');
-        dot.dataset.go = String(i);
-        const fill = document.createElement('span');
-        fill.className = 'dot-fill';
-        dot.appendChild(fill);
-        dot.addEventListener('click', () => goTo(Number(dot.dataset.go)));
-        dotsBox.appendChild(dot);
-      });
+          const firstSrc = await resolveMediaUrl(imageUrl);
+          if (!firstSrc) continue;
+          appendBannerSlide(items[i], firstSrc, nextPosition++);
+          firstItemIndex = i;
+          refreshHeroSlides();
+          break;
+        } catch (_) { /* try the next banner if this image is unavailable */ }
+      }
+
+      if (firstItemIndex < 0) {
+        refreshHeroSlides();
+        return;
+      }
+
+      // Load remaining slides after the first banner is already visible.
+      for (let i = firstItemIndex + 1; i < items.length; i++) {
+        const imageUrl = safeImageUrl(items[i].image_url);
+        if (!imageUrl) continue;
+        try {
+          const imageSrc = await resolveMediaUrl(imageUrl);
+          if (!imageSrc) continue;
+          appendBannerSlide(items[i], imageSrc, nextPosition++);
+        } catch (_) { /* keep the visible banners if another image fails */ }
+      }
       refreshHeroSlides();
     } catch (error) {
       slidesBox.replaceChildren();
