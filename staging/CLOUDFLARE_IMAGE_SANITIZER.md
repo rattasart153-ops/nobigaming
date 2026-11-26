@@ -1,7 +1,7 @@
 # STAGING — Top-up proof image sanitizer prototype
 
 **Branch:** `staging-runtime-test-kit` only  
-**Status:** source prototype and synthetic unit tests; not deployed or connected to Apps Script.
+**Status:** real JPEG/PNG/WebP decode/re-encode verified in local Cloudflare workerd; no Pages route or live resource is deployed or connected to Apps Script.
 
 ## Purpose
 
@@ -31,11 +31,14 @@ WebP decoding uses a full-image decoder in the current SIP implementation, unlik
 
 - `functions/_shared/slip-image-sanitizer.mjs`: format/container checks, bounded request reader, pixel limits, SIP adapter factory and JPEG output verification.
 - `functions/_shared/sip-adapter.ts`: Cloudflare workerd SIP adapter, including the separate WebP decoder WASM import.
-- `test/staging-slip-image-sanitizer.test.js`: synthetic unit tests for validation, animation, trailing payloads, size/dimension limits and mocked codec output.
+- `test/staging-slip-image-sanitizer.test.js`: 15+ synthetic unit checks for validation, animation, trailing payloads, size/dimension limits and mocked codec output.
+- `workerd-test/worker.ts` and `workerd-test/slip-image-sanitizer.workerd.mjs`: isolated Worker entry and real runtime integration tests.
+- `workerd-test/fixtures.mjs`: real JPEG, PNG, WebP, APNG and animated WebP fixtures.
+- `vitest.image-sanitizer.config.mjs` and `wrangler.image-sanitizer-test.jsonc`: local workerd/Vitest configuration; not a deploy configuration.
 
 ## Dependency
 
-The root package pins `@standardagents/sip` to `1.0.1`. Its package exports a workerd-specific entry that loads the bundled core WASM. The WebP codec WASM is imported separately, as in the upstream Worker example.
+The root package pins `@standardagents/sip` to `1.0.1` and `@jsquash/webp` to `1.5.0`. SIP's workerd-specific entry loads the core WASM; the WebP codec WASM is imported separately. The package is exercised through Wrangler's compiled-WASM rule in the isolated workerd test config.
 
 ## Future Pages Function integration
 
@@ -46,8 +49,23 @@ The root package pins `@standardagents/sip` to `1.0.1`. Its package exports a wo
 5. Never pass the original upload, original filename, client dimensions, or client MIME claim to Drive. Do not log image bytes, base64, HMAC secrets, tokens, or Drive IDs.
 6. Keep proof retrieval private and Admin-authorized.
 
-## Verification boundary
+## Verification completed
 
-The Node tests use a fake SIP adapter to test the module's own guards and contract. They do **not** prove the WASM decoder, Cloudflare Pages bundling, WebP codec loading, real image decode/re-encode, Worker memory/CPU limits, or Drive ACLs. Those require a separate Cloudflare/workerd STAGING runtime test with synthetic fixtures before proof uploads can be enabled.
+Run [GitHub Actions 45849308801](https://github.com/rattasart153-ops/nobigaming/actions/runs/45849308801) passed on commit `1ef9a1b97825a49a7df109024f4b5de332962a8e`:
 
-No Pages route, Cloudflare resource, deployment, Apps Script project, Script Property, Sheet, Drive file, trigger, or financial writer gate is changed by this prototype.
+- Node/VM regression suite: **208/208 passed**.
+- Real Cloudflare workerd integration suite: **9/9 passed**.
+- The workerd tests actually load the SIP/WebP WASM modules and decode/re-encode real JPEG, PNG and WebP fixtures, then decode the generated JPEG again.
+- A valid EXIF-bearing JPEG is re-encoded without the EXIF marker or test metadata.
+- Real APNG and animated WebP fixtures are rejected.
+- JPEG trailing payload, MIME mismatch, a 5-megapixel header (rejected before decode), and a streamed body over 3 MiB are rejected.
+
+The isolated Wrangler test config verifies local workerd compatibility and compiled-WASM bundling. It is **not** a deployed Cloudflare Pages test and does not exercise the actual Member session, CSRF/origin checks, HMAC forwarding, or private Drive write path.
+
+## Remaining release boundary
+
+- WebP's decoder performs a full-image decode. The 4-megapixel cap is enforced before decode, but peak memory/CPU at the maximum accepted size has not been benchmarked under deployed Cloudflare limits.
+- The sanitizer is not yet called by a Member Pages Function. The actual authenticated upload route, signed Apps Script handoff, and proof storage must be integrated and tested before enabling uploads.
+- Live Drive privacy/ACLs, Apps Script V8 behavior, Cloudflare session behavior and deployed quotas remain unverified.
+
+No Pages route, Cloudflare resource, deployment, Apps Script project, Script Property, Sheet, Drive file, trigger, or financial writer gate was changed by these tests.
