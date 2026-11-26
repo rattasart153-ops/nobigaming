@@ -93,6 +93,7 @@ function dispatchGatewayAction_(action, args) {
     case 'adminLogout': return adminLogout(args.token);
     case 'adminDashboard': return adminDashboard(args.token);
     case 'adminWalletTopups': return adminWalletTopups(args.token,args.status,args.limit);
+    case 'adminWalletTopupProof': return adminWalletTopupProof(args.token,args.topupId);
     case 'adminApproveWalletTopup': return adminApproveWalletTopup(args.token,args);
     case 'adminRejectWalletTopup': return adminRejectWalletTopup(args.token,args);
     case 'adminGrantPaidCredit': return adminGrantPaidCredit(args.token,args);
@@ -2848,6 +2849,7 @@ const NOBI_GATEWAY = {
     'memberSubmitWalletTopupProof',
     'memberWalletTopups',
     'adminWalletTopups',
+    'adminWalletTopupProof',
     'adminApproveWalletTopup',
     'adminRejectWalletTopup',
     'adminGrantPaidCredit',
@@ -4194,5 +4196,51 @@ function adminCreateBonusGrant(token,args) {
     });
     walletApplyCreditJournalLocked_(repositoryGetById_('wallet_recovery_journal',journal.journal_id));
     return {ok:true,memberId:memberId,amountSatang:amount,expiresAt:grant.expires_at};
+  } finally {lock.releaseLock();}
+}
+
+
+function adminWalletTopupProof(token,topupId) {
+  const admin=requireAdmin_(token);
+  const row=repositoryGetById_('wallet_topups',String(topupId || ''));
+  if(!row || !row.slip_file_id) throw new Error('WALLET_TOPUP_PROOF_NOT_FOUND');
+  const folderId=String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_DRIVE_FOLDER_ID') || '').trim();
+  if(!folderId) throw new Error('DRIVE_FOLDER_NOT_CONFIGURED');
+  const file=DriveApp.getFileById(String(row.slip_file_id));
+  assertDriveFileInPrivateFolder_(file,folderId);
+  const blob=file.getBlob();
+  const bytes=blob.getBytes();
+  if(bytes.length>NOBI.MAX_SLIP_BYTES || !validImageSignature_(bytes,String(blob.getContentType()))) {
+    throw new Error('WALLET_TOPUP_PROOF_INVALID');
+  }
+  const lock=LockService.getScriptLock();lock.waitLock(10000);
+  try {
+    const currentAdmin=requireAdminLocked_(token,Date.now());
+    appendAdminAuditLogLocked_({
+      audit_id:Utilities.getUuid(),admin_id:currentAdmin.admin_id,action:'VIEW_WALLET_TOPUP_PROOF',
+      target_type:'wallet_topup',target_id:row.topup_id,request_id:'',ip_address:'',
+      details_json:JSON.stringify({mime_type:blob.getContentType(),size_bytes:bytes.length}),
+      created_at:new Date().toISOString()
+    });
+    return {name:file.getName(),mimeType:blob.getContentType(),base64:Utilities.base64Encode(bytes)};
+  } finally {lock.releaseLock();}
+}
+
+/** Idempotent expiry worker; install a scheduled trigger only after release approval. */
+function runWalletTopupExpiry() {
+  const lock=LockService.getScriptLock();lock.waitLock(20000);
+  try {
+    walletAssertWriteGateLocked_();
+    const now=Date.now(), nowIso=new Date(now).toISOString();
+    let expired=0;
+    repositoryRows_('wallet_topups').forEach(function(row) {
+      if(row.status!=='AWAITING_PROOF') return;
+      const created=Date.parse(row.created_at);
+      if(Number.isFinite(created) && now>=created+24*60*60*1000) {
+        repositoryUpdateLocked_('wallet_topups',row.topup_id,{status:'EXPIRED',updated_at:nowIso});
+        expired++;
+      }
+    });
+    return {ok:true,expired:expired,checkedAt:nowIso};
   } finally {lock.releaseLock();}
 }
