@@ -1,9 +1,10 @@
 # Nobi Gaming — Isolated Staging Runtime Test Kit
 
-> This guide supersedes older setup notes that mention Schema v3/v4. The current STAGING source uses **Schema v5** and upgrades an existing Schema v4 STAGING database non-destructively.
+> This guide supersedes older setup notes that mention Schema v3/v4. The current E-Budget STAGING schema is **Schema v6**; migration v5→v6 is non-destructive after strict preflight.
 
 - [Pre-P1.3 Completion Register](./PRE_P1_3_COMPLETION_REGISTER.md) — ordered blockers and release gates for unfinished P1.1/P1.2 work.
-- [Cloudflare Image Sanitizer Prototype](./CLOUDFLARE_IMAGE_SANITIZER.md) — server-side proof-image sanitization design and verification boundary.
+- [Cloudflare Image Sanitizer Prototype](./CLOUDFLARE_IMAGE_SANITIZER.md) — real JPEG/PNG/WebP decode–re-encode verification in local workerd.
+- [Cloudflare Auth and Session Design](./CLOUDFLARE_AUTH_SESSION_DESIGN.md) — explicit Member/Admin auth routes, HMAC gateway and encrypted D1 session design.
 
 ## Purpose and safety boundary
 
@@ -15,7 +16,7 @@ This kit prepares an isolated Google Apps Script + Sheets + Drive environment fo
 - Use synthetic names, IDs, orders, coupons, and image/slip files only.
 - Do not use production Script Properties, spreadsheet IDs, Drive folder IDs, Admin credentials, customer records, slips, payment details, or deployment URLs.
 - Do not enable public/anonymous access. Initial web-app access must be **Only myself**.
-- Do not configure `NOBI_GATEWAY_SECRET`; the current HtmlService browser path uses the named `google.script.run` facade and does not need the legacy signed HTTP gateway.
+- For the browser-only HtmlService setup in this guide, do not configure `NOBI_GATEWAY_SECRET`; that path uses the named `google.script.run` facade. The separate API-only Cloudflare track uses HMAC and encrypted D1 sessions, but its secrets and resources must not be configured until the owner approves the live STAGING setup.
 - Do not run `clasp deploy` or update any existing deployment.
 - Stop if Google asks for billing, a paid add-on, or a paid upgrade.
 
