@@ -111,7 +111,7 @@ All tests in this section must run through the single designated Apps Script wri
 
 ## 6. P1.2 automated regression coverage
 
-Node/VM tests now cover: strict finite Bonus expiry and explicit timezone handling; PromptPay-only configuration; request-key validation; safe top-up projection without Drive IDs; single-writer gate on top-up mutations; recovery journal schema/idempotency fields; and the action allowlist boundary. These tests do not emulate real Drive ACLs, Apps Script image decoding, Sheets concurrency or Cloudflare cookie/session behavior.
+Node/VM tests now include a synthetic Sheets/Drive runtime for the member top-up lifecycle (create, retry, proof storage, Admin proof review, approval, rejection, 24-hour expiry), direct Paid Credit, finite Bonus Grant and ledger/balance separation. Additional tests cover explicit expiry timezone handling, PromptPay-only configuration, request-key validation, private-ID projection, single-writer gates, recovery journal schema/idempotency and action allowlist boundaries. These tests do not emulate real Google Drive ACLs, Apps Script image decoding, true concurrent Sheets writes, Apps Script quotas or Cloudflare cookie/session behavior.
 
 ## 7. Acceptance gates
 
