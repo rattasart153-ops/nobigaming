@@ -84,6 +84,10 @@ export function createSessionStore(env, options = {}) {
       throw new Error("Backend session expiry is invalid");
     }
     const expiresAt = Math.min(requestedExpiry, createdAt + MAX_LIFETIME_MS);
+    // Opportunistically prune abandoned browser sessions whenever a new login occurs.
+    await db.prepare(
+      "DELETE FROM nobi_pages_sessions WHERE expires_at <= ? OR last_seen_at <= ?",
+    ).bind(createdAt, createdAt - IDLE_TIMEOUT_MS).run();
     const cookieValue = base64Url(crypto.getRandomValues(new Uint8Array(32)));
     const sessionHash = await sha256Hex(cookieValue);
     const iv = crypto.getRandomValues(new Uint8Array(12));
