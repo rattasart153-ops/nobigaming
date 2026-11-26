@@ -57,9 +57,28 @@ No Cloudflare resource, deployment, Apps Script project, Script Property, Sheet,
 
 ### 3. Member/Admin API and UI integration
 
-**Status: NOT STARTED.**
+**Status: AUTH/SESSION FOUNDATION IMPLEMENTED AND NODE/VM TESTED; WALLET BUSINESS ROUTES AND UI REMAIN.**
 
-Required: explicit Cloudflare Pages Function routes (no generic action proxy), authenticated Member/Admin sessions, CSRF/origin protections, server-side HMAC signing, no-store responses, and Member/Admin screens for top-up requests, proof submission, review, Paid Credit grants and Bonus grants. Do not expose Apps Script tokens, HMAC secrets, Drive IDs or private file URLs to the browser.
+Explicit Pages Function auth routes now exist:
+- Member: register, login, me, logout.
+- Admin: login, me, logout.
+
+Supporting source:
+- `functions/_shared/gateway-client.mjs`: server-side HMAC-SHA256 Apps Script client, strict Apps Script URL allowlist, canonical payload order and response validation.
+- `functions/_shared/session-store.mjs`: D1-backed opaque browser sessions; Apps Script tokens encrypted with AES-256-GCM; role-separated cookies; 8-hour absolute and 30-minute idle limits; expired/idle cleanup.
+- `functions/_shared/auth-api.mjs`: same-origin checks, CSRF Origin/Sec-Fetch-Site checks, bounded JSON, no-store responses and fixed auth actions.
+- `functions/api/auth/**`: explicit route files; no generic browser action proxy.
+- `migrations/0001_pages_sessions.sql`: D1 session schema.
+- `staging/CLOUDFLARE_AUTH_SESSION_DESIGN.md`: route contract, cookie/session design, bindings and verification boundary.
+
+Verified on commit `1fdac2b6c58ea3149c0b6a35ad6acb803892a72f`: Node/VM suite **224/224 passed**, Workerd sanitizer suite **9/9 passed** in [GitHub Actions run 45851314205](https://github.com/rattasart153-ops/nobigaming/actions/runs/45851314205). Auth tests cover HMAC canonicalization, Apps Script URL validation, encrypted D1 token storage, cookie attributes, role separation, absolute/idle expiry, origin rejection, registration/login, Member/Admin session checks and logout.
+
+**Still outstanding:**
+1. Member/Admin wallet and top-up business routes, including sanitized proof upload and Admin-only private proof retrieval.
+2. Member/Admin UI conversion from Apps Script RPC to same-origin HTTP routes.
+3. Real D1 binding/migration, Pages route deployment, Apps Script STAGING end-to-end validation and private Drive ACL verification.
+
+No D1 database, Cloudflare resource, secret, deployment or live Apps Script setting was created or changed. This item remains open until business routes, UI and real STAGING verification are complete.
 
 ### 4. Real Apps Script STAGING verification
 
