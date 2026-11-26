@@ -3949,8 +3949,9 @@ function memberSubmitWalletTopupProof(token,args) {
   const topupId=String(args.topupId || '').trim();
   const slip=args.slip || {};
   const mime=String(slip.mimeType || '');
-  if(!topupId || !slip.base64 || !/^image\/(png|jpeg|webp)$/.test(mime)) throw new Error('WALLET_TOPUP_PROOF_INVALID');
-  const bytes=Utilities.base64Decode(String(slip.base64).replace(/^data:[^,]+,/, ''));
+  const encoded=String(slip.base64 || '').replace(/^data:[^,]+,/, '');
+  if(!topupId || !encoded || encoded.length>Math.ceil(NOBI.MAX_SLIP_BYTES/3)*4+8 || !/^image\/(png|jpeg|webp)$/.test(mime)) throw new Error('WALLET_TOPUP_PROOF_INVALID');
+  const bytes=Utilities.base64Decode(encoded);
   if(!bytes.length || bytes.length>NOBI.MAX_SLIP_BYTES || !validImageSignature_(bytes,mime)) throw new Error('WALLET_TOPUP_PROOF_INVALID');
   const lock=LockService.getScriptLock();lock.waitLock(20000);
   let file=null;
