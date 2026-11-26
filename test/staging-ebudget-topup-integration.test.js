@@ -67,6 +67,7 @@ function createRuntime() {
   let uuid=0;
   const files=new Map();
   const triggers=[];
+  let triggerSequence=0;
   const folder={
     getSharingAccess:()=> 'PRIVATE',
     getEditors:()=>[],
@@ -112,7 +113,8 @@ function createRuntime() {
               everyMinutes(minutes){
                 return {
                   create(){
-                    const trigger={handler,minutes,getHandlerFunction(){return this.handler;}};
+                    const id='trigger-'+(++triggerSequence);
+                    const trigger={handler,minutes,id,getHandlerFunction(){return this.handler;},getUniqueId(){return this.id;}};
                     triggers.push(trigger);
                     return trigger;
                   }
@@ -295,14 +297,27 @@ test('top-up expiry trigger installer is manual, gated, idempotent and uses a 15
   assert.equal(triggers.length,1,'repeat installation must not create duplicates');
 });
 
-test('top-up expiry trigger installer removes duplicate handler triggers without adding another',()=>{
-  const {context,triggers}=createRuntime();
-  const existing=(minutes)=>({handler:'runWalletTopupExpiry',minutes,getHandlerFunction(){return this.handler;}});
-  triggers.push(existing(5),existing(15),existing(60));
+test('top-up expiry trigger installer replaces unknown schedules and keeps its managed trigger',()=>{
+  const {context,props,triggers}=createRuntime();
+  const existing=(minutes,id)=>({
+    handler:'runWalletTopupExpiry',minutes,id,
+    getHandlerFunction(){return this.handler;},
+    getUniqueId(){return this.id;}
+  });
+  triggers.push(existing(5,'manual-5'),existing(15,'manual-15'),existing(60,'manual-60'));
 
   const result=context.ensureWalletTopupExpiryTrigger();
-  assert.equal(result.created,false);
-  assert.equal(result.duplicatesRemoved,2);
+  assert.equal(result.created,true);
+  assert.equal(result.duplicatesRemoved,3);
   assert.equal(triggers.length,1);
-  assert.equal(triggers[0].minutes,5,'installer retains the first existing handler trigger');
+  assert.equal(triggers[0].minutes,15,'unknown schedules must be replaced by the approved 15-minute schedule');
+  const managedId=props.NOBI_WALLET_TOPUP_EXPIRY_TRIGGER_ID;
+  assert.equal(triggers[0].getUniqueId(),managedId);
+
+  triggers.push(existing(1,'duplicate-manual'));
+  const cleanup=context.ensureWalletTopupExpiryTrigger();
+  assert.equal(cleanup.created,false);
+  assert.equal(cleanup.duplicatesRemoved,1);
+  assert.equal(triggers.length,1);
+  assert.equal(triggers[0].getUniqueId(),managedId,'the managed trigger must be preserved');
 });
