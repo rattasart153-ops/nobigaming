@@ -25,3 +25,15 @@ test('API-only gateway allowlists the banners action handled by its dispatcher',
   assert.match(allowlist[1], /'banners'/);
   assert.match(dispatcher[1], /case 'banners':\s*return publicBanners\(\)/);
 });
+
+
+test('top-up expiry worker has a gated, manual, idempotent trigger installer', () => {
+  assert.match(source, /function ensureWalletTopupExpiryTrigger\(\)/);
+  const installer = source.match(/function ensureWalletTopupExpiryTrigger\(\)\s*\{([\s\S]*?)\n\}/);
+  assert.ok(installer, 'trigger installer must exist');
+  assert.match(installer[1], /walletAssertWriteGateLocked_\(\)/);
+  assert.match(installer[1], /getProjectTriggers\(\)/);
+  assert.match(installer[1], /everyMinutes\(15\)/);
+  assert.match(installer[1], /newTrigger\(handler\)/);
+  assert.doesNotMatch(installer[1], /ScriptApp\.newTrigger\(handler\)[\s\S]*?\}\s*ensureWalletTopupExpiryTrigger\(/);
+});
