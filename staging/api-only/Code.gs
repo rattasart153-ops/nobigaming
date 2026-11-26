@@ -4160,7 +4160,7 @@ function adminCreateBonusGrant(token,args) {
   const reason=String(args.reason || '').trim();
   const sourceType=String(args.sourceType || '').trim().toUpperCase();
   const sourceId=String(args.sourceId || '').trim();
-  if(!reason || reason.length>500 || !['PROMOTION','CAMPAIGN','ADMIN_COMPENSATION','OTHER'].includes(sourceType)) {
+  if(!reason || reason.length>500 || sourceId.length>128 || !['PROMOTION','CAMPAIGN','ADMIN_COMPENSATION','OTHER'].includes(sourceType)) {
     throw new Error('WALLET_BONUS_INPUT_INVALID');
   }
   const lock=LockService.getScriptLock();lock.waitLock(20000);
@@ -4184,6 +4184,7 @@ function adminCreateBonusGrant(token,args) {
     if(existing.length) return {ok:true,replayed:true,transactionId:existing[0].transaction_id};
     const now=new Date();
     const startsAt=String(args.startsAt || now.toISOString());
+    if(args.startsAt && !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(?::\\d{2})?(?:\\+07:00|Z)$/.test(startsAt)) throw new Error('WALLET_BONUS_START_OFFSET_REQUIRED');
     const startsMs=Date.parse(startsAt);
     if(!Number.isFinite(startsMs) || startsMs>now.getTime()) throw new Error('WALLET_BONUS_START_INVALID');
     const expiresAt=walletResolveBonusExpiry_(args,now.getTime());
