@@ -175,7 +175,7 @@ test('Member top-up request is idempotent, proof is private, and Admin approval 
 });
 
 test('Admin rejection is journaled and never credits the wallet; awaiting-proof requests expire after 24 hours',()=>{
-  const {context}=createRuntime();
+  const {context,spreadsheet}=createRuntime();
   const rejected=context.memberCreateWalletTopup('member-token',{
     requestKey:'member-topup-0002',amountSatang:5000,paymentMethod:'PROMPTPAY'
   });
@@ -193,14 +193,12 @@ test('Admin rejection is journaled and never credits the wallet; awaiting-proof 
   const expired=context.memberCreateWalletTopup('member-token',{
     requestKey:'member-topup-0003',amountSatang:5000,paymentMethod:'PROMPTPAY'
   });
-  context.__insert; // Keep the test's public path on the repository-backed state.
   const old=new Date(Date.now()-25*60*60*1000).toISOString();
   const row=context.__get('wallet_topups',expired.topup.topupId);
   const sheet=context.__get('wallet_topups',expired.topup.topupId);
   assert.ok(row && sheet);
   const topups=context.__rows('wallet_topups');
   assert.equal(topups.find(x=>x.topup_id===expired.topup.topupId).status,'AWAITING_PROOF');
-  const raw=context.__get('wallet_topups',expired.topup.topupId);
   const headers=spreadsheet.getSheetByName('wallet_topups').rows[0];
   const rowIndex=spreadsheet.getSheetByName('wallet_topups').rows.findIndex(x=>x[0]===expired.topup.topupId);
   spreadsheet.getSheetByName('wallet_topups').getRange(rowIndex+1,headers.indexOf('created_at')+1,1,1).setValue(old);
