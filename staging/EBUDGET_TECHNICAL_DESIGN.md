@@ -130,7 +130,8 @@ Proposed states:
 - `PENDING_REVIEW`: proof submitted; waiting for Admin.
 - `APPROVED`: Admin approval committed and Paid Credit ledger entry exists.
 - `REJECTED`: Admin rejected; no credit was added.
-- `CANCELLED`: member cancelled before proof submission/review, subject to future policy confirmation.
+- `CANCELLED`: member cancelled before proof submission/review.
+- `EXPIRED`: request remained in `AWAITING_PROOF` for 24 hours without accepted proof.
 
 Rules:
 - Amount must be integer satang and at least 5,000.
@@ -238,7 +239,7 @@ Add, through a reviewed Schema v6 migration, these columns at the end of the exi
 6. Verify all writes and mark journal `COMPLETED`.
 7. A retry after timeout returns the already committed result; it must not credit again.
 
-Reject follows a similar guarded path but posts no financial credit. Require a rejection reason.
+Reject follows a similar guarded path but posts no financial credit. Require a rejection reason. An `AWAITING_PROOF` request expires after 24 hours; `PENDING_REVIEW` does not auto-expire.
 
 ### 6.3 Admin direct credit and Bonus Grant
 
@@ -263,7 +264,7 @@ Reject follows a similar guarded path but posts no financial credit. Require a r
 
 - On valid order completion: capture the hold, append negative ledger entries per allocation, decrement each Bonus grant's remaining amount, update wallet aggregate, finalize coupon redemption and mark hold captured.
 - On rejection/cancellation/expiry: release the hold and its allocations; do not create a spend debit.
-- If an order was already captured and a later authorized refund is required, create positive compensating ledger entries using the original credit-type allocations. Do not reopen or rewrite the original ledger entries.
+- If an order was already captured and a later Admin-authorized refund is required, create positive compensating ledger entries using the original credit-type allocations. Full refunds restore the original Paid/Bonus composition. Partial refunds use deterministic integer-satang largest-remainder allocation, bounded by the unrefunded captured amount. Do not reopen or rewrite original ledger entries. A refunded Bonus portion retains Bonus classification and original expiry semantics; if already expired, it is immediately expired rather than converted to Paid Credit.
 - The exact refund policy and which order outcomes permit refund after capture remain subject to the existing order-status policy and future owner approval.
 
 ### 6.6 Bonus expiry
