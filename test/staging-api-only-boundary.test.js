@@ -35,5 +35,8 @@ test('top-up expiry worker has a gated, manual, idempotent trigger installer', (
   assert.match(installer[1], /getProjectTriggers\(\)/);
   assert.match(installer[1], /everyMinutes\(15\)/);
   assert.match(installer[1], /newTrigger\(handler\)/);
+  assert.match(installer[1], /NOBI_WALLET_TOPUP_EXPIRY_TRIGGER_ID/);
+  assert.match(installer[1], /getUniqueId\(\)/);
+  assert.match(installer[1], /existing\.forEach\(function\(trigger\) \{ ScriptApp\.deleteTrigger\(trigger\); \}\)/);
   assert.doesNotMatch(installer[1], /ScriptApp\.newTrigger\(handler\)[\s\S]*?\}\s*ensureWalletTopupExpiryTrigger\(/);
 });
