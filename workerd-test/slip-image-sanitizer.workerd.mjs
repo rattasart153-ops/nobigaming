@@ -2,6 +2,40 @@ import { describe, expect, it } from "vitest";
 import { exports } from "cloudflare:workers";
 import { fixtureBytes, IMAGE_FIXTURES } from "./fixtures.mjs";
 
+function jpegWithExifMetadata() {
+  const jpeg = fixtureBytes("jpeg");
+  const description = new TextEncoder().encode("NOBI-PRIVATE-TEST-METADATA");
+  const tiff = new Uint8Array(26 + description.length + 1);
+  tiff[0] = 0x49; // II, little-endian TIFF
+  tiff[1] = 0x49;
+  const view = new DataView(tiff.buffer);
+  view.setUint16(2, 42, true);
+  view.setUint32(4, 8, true); // IFD0 offset
+  view.setUint16(8, 1, true); // one IFD entry
+  view.setUint16(10, 0x010e, true); // ImageDescription
+  view.setUint16(12, 2, true); // ASCII
+  view.setUint32(14, description.length + 1, true);
+  view.setUint32(18, 26, true); // description offset from TIFF header
+  view.setUint32(22, 0, true); // no next IFD
+  tiff.set(description, 26);
+
+  const payload = new Uint8Array(6 + tiff.length);
+  payload.set([0x45, 0x78, 0x69, 0x66, 0x00, 0x00], 0); // Exif NUL NUL
+  payload.set(tiff, 6);
+  const segmentLength = payload.length + 2;
+  const app1 = new Uint8Array(payload.length + 4);
+  app1.set([0xff, 0xe1, (segmentLength >> 8) & 0xff, segmentLength & 0xff], 0);
+  app1.set(payload, 4);
+
+  const app0Length = (jpeg[4] << 8) | jpeg[5];
+  const insertAt = 2 + 2 + app0Length;
+  const combined = new Uint8Array(jpeg.length + app1.length);
+  combined.set(jpeg.slice(0, insertAt), 0);
+  combined.set(app1, insertAt);
+  combined.set(jpeg.slice(insertAt), insertAt + app1.length);
+  return combined;
+}
+
 function postImage(bytes, mime) {
   return exports.default.fetch(
     new Request("https://nobi-staging.invalid/sanitize", {
@@ -48,7 +82,7 @@ describe("real SIP decode/re-encode inside Cloudflare workerd", () => {
   );
 
   it("removes EXIF metadata by decoding and re-encoding the original JPEG", async () => {
-    const response = await postImage(fixtureBytes("jpegExif"), "image/jpeg");
+    const response = await postImage(jpegWithExifMetadata(), "image/jpeg");
     const output = await expectSanitizedJpeg(response, "jpeg");
     const ascii = new TextDecoder("latin1").decode(output);
     expect(ascii.includes("Exif" + String.fromCharCode(0, 0))).toBe(false);
