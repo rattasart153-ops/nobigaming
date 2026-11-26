@@ -42,13 +42,18 @@ No Cloudflare resource, deployment, Apps Script project, Script Property, Sheet,
 
 ### 2. Top-up expiry worker scheduling
 
-**Status: SOURCE SUPPORT ADDED; NOT ENABLED.**
+**Status: SOURCE AND SYNTHETIC APPS SCRIPT VM TESTS PASS; NOT ACTIVATED.**
 
-- `runWalletTopupExpiry()` already expires only `AWAITING_PROOF` requests at or after 24 hours.
-- Added `ensureWalletTopupExpiryTrigger()` to the API-only bundle.
-- Installer requires the single-writer mutation gate, is idempotent, removes duplicate triggers, and configures a 15-minute schedule.
-- The installer is only a function definition. It has not been called; no trigger has been installed.
-- Only run it after the API-only project is approved as the sole financial writer and all gate properties are intentionally enabled.
+- `runWalletTopupExpiry()` expires only `AWAITING_PROOF` requests at or after 24 hours; `PENDING_REVIEW` is not auto-expired.
+- `ensureWalletTopupExpiryTrigger()` is a manual installer, not called at load time and not exposed through the signed gateway action allowlist.
+- Installer fails closed unless all three single-writer gates are enabled.
+- It creates an every-15-minute time-driven trigger and records the immutable trigger ID in `NOBI_WALLET_TOPUP_EXPIRY_TRIGGER_ID`.
+- On repeat calls it preserves the trigger whose ID matches the stored marker and removes extra handler duplicates.
+- If it finds handler triggers that are not marked as installer-managed, it removes them and creates a fresh 15-minute trigger because Apps Script does not expose the configured minute interval for an existing trigger.
+- Synthetic GAS VM tests verify: no automatic install on source load; a closed gate creates nothing; first install creates the 15-minute trigger; repeat install is idempotent; unknown schedules are replaced; and duplicate handler triggers are removed.
+- The Node regression suite passed **210/210 tests** and the Workerd image suite passed **9/9** on commit `70925e03eead823d099246859cd2b7a602b33ea1` in [GitHub Actions run 45849694382](https://github.com/rattasart153-ops/nobigaming/actions/runs/45849694382).
+
+**Not activated:** no real Apps Script trigger has been installed, the trigger marker property has not been set in any live project, and no single-writer gate has been enabled. Actual installation must wait until the legacy financial writer is disabled, the API-only project is approved as sole writer, and the owner separately approves activation.
 
 ### 3. Member/Admin API and UI integration
 
