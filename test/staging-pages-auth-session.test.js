@@ -204,7 +204,7 @@ test("D1 session store expires idle and absolute sessions and deletes corrupt ci
 
 test("D1 session store rejects missing or incorrectly sized encryption keys", async () => {
   assert.throws(() => createSessionStore({}), /D1 DB binding/);
-  const store = createSessionStore({ DB: new FakeD1(), SESSION_ENCRYPTION_KEY: Buffer.from("short").toString("base64") });
+  const store = createSessionStore({ DB: new FakeD1(), SESSION_ENCRYPTION_KEY: Buffer.from("short").toString("base64") }, { now: () => NOW });
   await assert.rejects(
     () => store.createSession("member", "token", new Date(NOW + 60_000).toISOString()),
     /exactly 32 bytes/,
