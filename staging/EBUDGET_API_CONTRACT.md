@@ -382,7 +382,11 @@ Add each of these names to both the allowlist and dispatcher only during an appr
 
 Every action must validate its own argument schema and call Member/Admin authorization inside Apps Script. Do not rely only on Cloudflare authorization.
 
-## 7. Contract questions still open
+## 7. Contract decision status
+
+The previously open API policy questions are closed by [E-Budget Decision Register](./EBUDGET_DECISIONS.md). The implementation must reflect: 24-hour expiry for requests still in `AWAITING_PROOF`; no auto-expiry for `PENDING_REVIEW`; finite Bonus expiry configured by duration or explicit timestamp; no non-expiring Bonus; purpose-built Admin refund operation with source-preserving compensating credits; no generic negative-adjustment endpoint; Bonus holds protected through order resolution; and API-only as the sole financial writer after a gated cutover.
+
+No code, deployment or live API action is authorized by this document.
 
 The API contract cannot be considered implementation-ready until the owner confirms:
 1. Exact top-up payment method choices.
