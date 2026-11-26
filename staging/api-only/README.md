@@ -17,7 +17,7 @@ This folder contains the isolated HTTP-only Apps Script source for the Cloudflar
 - Derived from `staging/browser-import/Code.gs` (the combined Schema v5 runtime bundle).
 - The older modular files under `google-apps-script/` are not the source for this package; their config currently declares Schema v4.
 - The Phase 1 gateway allowlist defect for `banners` is corrected here.
-- The API-only bundle now contains the additive Schema v5 → v6 migration and seven Wallet tabs. Wallet business operations are being implemented in the next P1 increments; this package is **not ready for Wallet traffic**.
+- The API-only bundle contains the additive Schema v5 → v6 migration and seven Wallet tabs. P1.1 adds guarded ledger/recovery primitives only; it does not expose Wallet gateway actions. Every mutation fails closed unless three explicit single-writer cutover properties are satisfied. The package remains **not ready for Wallet traffic**.
 
 ## Import
 
@@ -26,6 +26,13 @@ This folder contains the isolated HTTP-only Apps Script source for the Cloudflar
 3. Set the project timezone to Asia/Bangkok and runtime to V8.
 4. Do not configure Script Properties or deploy yet. The required API-only properties and migration sequence will be documented with the E-Budget P1 implementation.
 5. Stop here until the P1 Schema v6 package and its tests are complete.
+
+## P1.1 implementation status
+
+- Added strict integer-satang validation, ledger-derived balance checks, lazy wallet creation, and a write-ahead credit journal apply/prepare primitive.
+- Journal replay checks immutable transaction IDs before appending and verifies cached balances against ledger totals.
+- Mutation gate requires `NOBI_WALLET_WRITES_ENABLED=true`, `NOBI_FINANCIAL_WRITER_MODE=API_ONLY`, and `NOBI_LEGACY_WRITER_DISABLED=true`. Do not set these properties yet; the legacy writer cutover has not been performed.
+- No Wallet action is in the gateway allowlist, no top-up/order/refund workflow is enabled, and no UI is connected.
 
 ## Verification
 
