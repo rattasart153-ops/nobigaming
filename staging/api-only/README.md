@@ -17,7 +17,7 @@ This folder contains the isolated HTTP-only Apps Script source for the Cloudflar
 - Derived from `staging/browser-import/Code.gs` (the combined Schema v5 runtime bundle).
 - The older modular files under `google-apps-script/` are not the source for this package; their config currently declares Schema v4.
 - The Phase 1 gateway allowlist defect for `banners` is corrected here.
-- The API-only bundle contains the additive Schema v5 → v6 migration and seven Wallet tabs. P1.1 adds guarded ledger/recovery primitives only; it does not expose Wallet gateway actions. Every mutation fails closed unless three explicit single-writer cutover properties are satisfied. The package remains **not ready for Wallet traffic**.
+- The API-only bundle contains the additive Schema v5 → v6 migration and seven Wallet tabs. P1.1 added guarded ledger/recovery primitives. P1.2 adds member top-up requests/proof submission, Admin top-up review, direct Paid Credit and expiring Bonus grants. All write paths fail closed unless three explicit single-writer cutover properties are satisfied. The package remains **not ready for Wallet traffic**.
 
 ## Import
 
@@ -25,14 +25,18 @@ This folder contains the isolated HTTP-only Apps Script source for the Cloudflar
 2. Add one script file named `Code.gs` and paste the complete contents of [Code.gs](./Code.gs).
 3. Set the project timezone to Asia/Bangkok and runtime to V8.
 4. Do not configure Script Properties or deploy yet. The required API-only properties and migration sequence will be documented with the E-Budget P1 implementation.
-5. Stop here until the P1 Schema v6 package and its tests are complete.
+5. Stop here until the P1 Schema v6 package and its tests are complete. The current P1.2 bundle is still under development and must not be configured or deployed.
 
-## P1.1 implementation status
+## P1.1–P1.2 implementation status
 
-- Added strict integer-satang validation, ledger-derived balance checks, lazy wallet creation, and a write-ahead credit journal apply/prepare primitive.
-- Journal replay checks immutable transaction IDs before appending and verifies cached balances against ledger totals.
+- P1.1: integer-satang validation, ledger-derived balance checks, lazy wallet creation and write-ahead credit recovery.
+- P1.2: member creates top-up requests (minimum 5,000 satang), submits a bounded image proof, and views only their own top-ups; Admin can inspect the review queue and private proof, approve/reject requests, grant positive Paid Credit, and grant finite-expiry Bonus Credit.
+- Initial top-up method is `PROMPTPAY` only when the existing `NOBI_PROMPTPAY_ID` property is configured. No new payment provider is introduced.
+- `runWalletTopupExpiry()` is an idempotent 24-hour expiry worker; no time trigger is installed.
+- Credit, top-up decision, and audit writes use recovery journal/idempotency records. The recovery journal schema includes explicit idempotency and related-record payloads.
 - Mutation gate requires `NOBI_WALLET_WRITES_ENABLED=true`, `NOBI_FINANCIAL_WRITER_MODE=API_ONLY`, and `NOBI_LEGACY_WRITER_DISABLED=true`. Do not set these properties yet; the legacy writer cutover has not been performed.
-- No Wallet action is in the gateway allowlist, no top-up/order/refund workflow is enabled, and no UI is connected.
+- Wallet order checkout, hold capture/release, Bonus expiry ledger processing, refunds, Cloudflare Pages routes, and UI wiring remain unimplemented.
+- Image signature/structure and size are checked, but Apps Script-side decode/re-encode is not implemented yet; this remains a release blocker for proof uploads.
 
 ## Verification
 
