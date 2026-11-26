@@ -225,7 +225,8 @@ test("new login opportunistically prunes abandoned idle D1 sessions", async () =
   assert.equal(runtime.DB.rows.size, 1);
   assert.equal([...runtime.DB.rows.values()][0].role, "admin");
 });
-\ntest("D1 session store rejects missing or incorrectly sized encryption keys", async () => {
+
+test("D1 session store rejects missing or incorrectly sized encryption keys", async () => {
   assert.throws(() => createSessionStore({}), /D1 DB binding/);
   const store = createSessionStore({ DB: new FakeD1(), SESSION_ENCRYPTION_KEY: Buffer.from("short").toString("base64") }, { now: () => NOW });
   await assert.rejects(
