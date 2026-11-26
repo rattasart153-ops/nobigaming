@@ -9,27 +9,36 @@
 
 ### 1. Server-side image decode/re-encode for top-up proof
 
-**Status: PROTOTYPE IMPLEMENTED; RELEASE BLOCKED pending real workerd validation and Drive-path integration.**
+**Status: REAL JPEG/PNG/WEBP DECODE–RE-ENCODE VERIFIED IN LOCAL WORKERD; PAGES ROUTE AND DRIVE INTEGRATION REMAIN.**
 
-The API-only Apps Script currently checks the declared MIME type, byte limit, and PNG/JPEG/WebP structure before storing the original bytes. These checks are useful validation, but they do not decode pixels and re-encode a fresh image. Re-wrapping bytes in a new Blob is not sanitization.
+The API-only Apps Script still does not decode pixels. The trusted sanitizer is now implemented as a Cloudflare workerd-compatible module and has been exercised with the real SIP/WebP WASM codecs inside the local workerd runtime.
 
-Apps Script's built-in services do not provide a general-purpose image decoder/encoder. Do not claim that a browser Canvas conversion is a security boundary: a client can bypass it and call the API directly.
+Implementation:
+- `functions/_shared/slip-image-sanitizer.mjs`: full envelope checks, request body cap, pixel/dimension limits, decode/re-encode factory, output JPEG verification.
+- `functions/_shared/sip-adapter.ts`: SIP workerd adapter and separately loaded WebP codec WASM.
+- `workerd-test/worker.ts`: isolated Worker harness, not a Pages route or deploy target.
+- `workerd-test/slip-image-sanitizer.workerd.mjs` and `workerd-test/fixtures.mjs`: actual runtime fixtures and integration tests.
+- `vitest.image-sanitizer.config.mjs` and `wrangler.image-sanitizer-test.jsonc`: local workerd test configuration.
+- `staging/CLOUDFLARE_IMAGE_SANITIZER.md`: detailed limits, dependency and verification notes.
 
-The prototype is implemented in [the sanitizer module](../functions/_shared/slip-image-sanitizer.mjs), [the workerd SIP adapter](../functions/_shared/sip-adapter.ts), [synthetic tests](../test/staging-slip-image-sanitizer.test.js), and [the prototype guide](./CLOUDFLARE_IMAGE_SANITIZER.md). It pins @standardagents/sip 1.0.1 and accepts JPEG/PNG/static WebP; input is capped at 3 MiB, dimensions at 4,096 px and 4 megapixels, animated APNG/WebP and trailing payloads are rejected, and output must be a fresh JPEG no larger than 2,500,000 bytes. WebP's separate decoder WASM is loaded through the SIP adapter.
+The root package pins `@standardagents/sip@1.0.1` and `@jsquash/webp@1.5.0`. The sanitizer accepts JPEG, PNG and static WebP, caps input at 3 MiB, each dimension at 4,096 px and total pixels at 4 megapixels, rejects APNG/animated WebP and trailing payloads, and emits a fresh JPEG no larger than 2,500,000 bytes with dimensions no larger than 2,048 px.
 
-The synthetic Node suite passed **208/208 tests** on commit `6da3a3f653baa3815ac3abae17e7ec5112f283d8` in [GitHub Actions run 45845521286](https://github.com/rattasart153-ops/nobigaming/actions/runs/45845521286) and [run 45845536042](https://github.com/rattasart153-ops/nobigaming/actions/runs/45845536042).
+**Verified on commit `1ef9a1b97825a49a7df109024f4b5de332962a8e`:**
+- Node/VM regression suite: **208/208 passed**.
+- Real Cloudflare workerd sanitizer suite: **9/9 passed**.
+- Real JPEG, PNG and WebP inputs were decoded and re-encoded; generated JPEGs were decoded again.
+- EXIF metadata was removed from a JPEG fixture.
+- Real APNG and animated WebP fixtures were rejected.
+- MIME mismatch, appended JPEG payload, 5-megapixel input header (rejected before decode), and streamed body over 3 MiB were rejected.
+- [GitHub Actions run 45849308801](https://github.com/rattasart153-ops/nobigaming/actions/runs/45849308801) completed successfully.
 
-**Not yet proven:** tests inject a fake SIP adapter. They do not execute the real WASM decoder under Cloudflare workerd, measure Worker memory/CPU, verify Pages WASM bundling, or verify that only sanitized bytes reach private Drive. No Pages proof-upload route exists yet; Apps Script remains unchanged and this prototype is inactive. The upstream documentation confirms WebP requires full-image decode and higher memory, so the pixel ceiling must remain enforced.
+**Still not proven / release blockers:**
+1. The isolated test proves local workerd and compiled-WASM compatibility, not a deployed Cloudflare Pages Function.
+2. Peak memory/CPU at the maximum 4-megapixel WebP size has not been benchmarked under deployed Cloudflare limits; keep the pixel cap.
+3. The authenticated Member upload route, CSRF/origin checks, signed Apps Script handoff and actual private Drive write path are not integrated.
+4. Live Drive ACLs, Apps Script V8 behavior, deployed quotas and end-to-end proof retrieval remain unverified.
 
-Required before enabling proof uploads:
-1. Select an approved server-side image-processing runtime compatible with the free-first architecture (candidate: a Cloudflare Pages Function using a reviewed WebAssembly image codec).
-2. Decode the uploaded image in that trusted runtime; enforce pixel/dimension limits and reject malformed or decompression-bomb inputs.
-3. Re-encode to a fresh PNG/JPEG/WebP output, strip metadata, and verify output format and size.
-4. Ensure only sanitized bytes are forwarded to the private Drive storage path; never retain the untrusted original as the review artifact.
-5. Add malformed image, truncated file, polyglot/trailing payload, oversized dimensions, animation and metadata tests.
-6. Verify the deployed runtime with synthetic images before enabling proof uploads.
-
-No external image-processing service or paid provider is authorized by this task. Until this is completed, proof upload remains a release blocker.
+No Cloudflare resource, deployment, Apps Script project, Script Property, Sheet, Drive file, trigger or financial writer gate was changed by this work. Proof uploads remain disabled until the real Pages route and private Drive path are integrated and verified.
 
 ### 2. Top-up expiry worker scheduling
 
