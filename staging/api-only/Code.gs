@@ -23,7 +23,7 @@ const NOBI = {
     wallet_holds: ['hold_id','order_id','member_id','status','total_satang','paid_reserved_satang','bonus_reserved_satang','created_at','expires_at','captured_at','released_at'],
     wallet_hold_allocations: ['allocation_id','hold_id','credit_type','bonus_grant_id','amount_satang','allocation_order','created_at'],
     wallet_bonus_grants: ['bonus_grant_id','member_id','granted_satang','remaining_satang','source_type','source_id','reason','starts_at','expires_at','status','created_by_admin_id','created_at','updated_at'],
-    wallet_recovery_journal: ['journal_id','operation','transaction_id','member_id','hold_id','topup_id','step_state','ledger_payload_json','wallet_patch_json','bonus_patch_json','order_patch_json','topup_patch_json','audit_patch_json','attempts','last_error_code','created_at','updated_at'],
+    wallet_recovery_journal: ['journal_id','operation','transaction_id','idempotency_key','payload_hash','member_id','hold_id','topup_id','step_state','ledger_payload_json','wallet_patch_json','bonus_patch_json','order_patch_json','topup_patch_json','audit_patch_json','attempts','last_error_code','created_at','updated_at'],
     orders: ['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at','payment_method','wallet_hold_id'],
     idempotency_records: ['idempotency_id','scope','request_key','payload_hash','resource_id','state','created_at','expires_at'],
     order_recovery_journal: ['journal_id','order_id','operation','order_record_json','idempotency_record_json','redemption_record_json','order_patch_json','redemption_id','redemption_patch_json','state','attempts','last_error_code','created_at','updated_at'],
@@ -3712,6 +3712,8 @@ function walletApplyCreditJournalLocked_(journal) {
       throw new Error('WALLET_JOURNAL_CACHE_INVALID');
     }
 
+    const idemLedger = repositoryFindByField_('wallet_ledger','idempotency_key',ledger.idempotency_key);
+    if(idemLedger.some(function(row){return String(row.transaction_id)!==String(ledger.transaction_id);})) throw new Error('WALLET_IDEMPOTENCY_CONFLICT');
     const existingLedger = repositoryFindByField_('wallet_ledger','transaction_id',ledger.transaction_id);
     if (existingLedger.length > 1) throw new Error('WALLET_DUPLICATE_TRANSACTION');
     if (existingLedger.length) {
@@ -3816,6 +3818,14 @@ function walletPrepareCreditJournalLocked_(input) {
       !/^[A-Za-z0-9._:-]{16,128}$/.test(idempotencyKey) ||
       !reason || reason.length > 500) throw new Error('WALLET_CREDIT_INPUT_INVALID');
 
+  const payloadHash=String(input.payload_hash || '');
+  if(!/^[a-f0-9]{64}$/.test(payloadHash)) throw new Error('WALLET_CREDIT_PAYLOAD_HASH_REQUIRED');
+  const priorJournals=repositoryFindByField_('wallet_recovery_journal','idempotency_key',idempotencyKey);
+  if(priorJournals.length>1) throw new Error('WALLET_DUPLICATE_RECOVERY_JOURNAL');
+  if(priorJournals.length) {
+    if(String(priorJournals[0].payload_hash)!==payloadHash) throw new Error('WALLET_IDEMPOTENCY_CONFLICT');
+    return priorJournals[0];
+  }
   const duplicate = repositoryFindByField_('wallet_ledger','idempotency_key',idempotencyKey);
   if (duplicate.length) throw new Error('WALLET_IDEMPOTENCY_CONFLICT');
   const now = new Date().toISOString();
@@ -3850,11 +3860,14 @@ function walletPrepareCreditJournalLocked_(input) {
     ? {operation:'INSERT',record:input.bonus_grant} : null;
   const journal = {
     journal_id:Utilities.getUuid(),operation:'CREDIT',transaction_id:transactionId,
+    idempotency_key:idempotencyKey,payload_hash:payloadHash,
     member_id:memberId,hold_id:'',topup_id:String(input.topup_id || ''),
     step_state:'PREPARED',ledger_payload_json:JSON.stringify(ledger),
     wallet_patch_json:JSON.stringify(walletPatch),
     bonus_patch_json:bonusPatch ? JSON.stringify(bonusPatch) : '',
-    order_patch_json:'',attempts:0,last_error_code:'',
+    order_patch_json:'',topup_patch_json:input.topup_patch ? JSON.stringify(input.topup_patch) : '',
+    audit_patch_json:input.audit_patch ? JSON.stringify(input.audit_patch) : '',
+    attempts:0,last_error_code:'',
     created_at:now,updated_at:now
   };
   repositoryInsertLocked_('wallet_recovery_journal',journal);
@@ -3904,6 +3917,7 @@ function memberCreateWalletTopup(token,args) {
   const payloadHash=walletRequestHash_({amountSatang:amount,paymentMethod:method,paymentReference:reference});
   const lock=LockService.getScriptLock();lock.waitLock(15000);
   try {
+    walletAssertWriteGateLocked_();
     const member=requireMemberLocked_(token,Date.now());
     const existing=repositoryFindByField_('wallet_topups','idempotency_key',key);
     if(existing.length){
@@ -3939,6 +3953,7 @@ function memberSubmitWalletTopupProof(token,args) {
   const lock=LockService.getScriptLock();lock.waitLock(20000);
   let file=null;
   try {
+    walletAssertWriteGateLocked_();
     const member=requireMemberLocked_(token,Date.now());
     const topup=repositoryGetById_('wallet_topups',topupId);
     if(!topup || String(topup.member_id)!==String(member.member_id)) throw new Error('WALLET_TOPUP_NOT_FOUND');
@@ -4029,17 +4044,15 @@ function adminApproveWalletTopup(token,args) {
       member_id:topup.member_id,credit_type:'PAID',amount_satang:Number(topup.amount_satang),
       idempotency_key:'TOPUP:'+topup.topup_id,entry_type:'TOPUP_APPROVAL',
       reference_type:'TOPUP',reference_id:topup.topup_id,actor_type:'ADMIN',
-      actor_id:admin.admin_id,reason:reason,topup_id:topup.topup_id
-    });
-    journal.topup_patch_json=JSON.stringify({topup_id:topup.topup_id,expected_status:'PENDING_REVIEW',
-      patch:{status:'APPROVED',reviewed_by_admin_id:admin.admin_id,reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString()}});
-    journal.audit_patch_json=JSON.stringify({
-      audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_TOPUP_APPROVED',
-      target_type:'wallet_topup',target_id:topup.topup_id,request_id:requestKey,ip_address:'',
-      details_json:JSON.stringify({amount_satang:Number(topup.amount_satang),reason:reason}),created_at:new Date().toISOString()
-    });
-    repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{
-      topup_patch_json:journal.topup_patch_json,audit_patch_json:journal.audit_patch_json
+      actor_id:admin.admin_id,reason:reason,topup_id:topup.topup_id,
+      payload_hash:walletRequestHash_({topupId:topup.topup_id,amountSatang:Number(topup.amount_satang),reason:reason}),
+      topup_patch:{topup_id:topup.topup_id,expected_status:'PENDING_REVIEW',
+        patch:{status:'APPROVED',reviewed_by_admin_id:admin.admin_id,reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString()}},
+      audit_patch:{
+        audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_TOPUP_APPROVED',
+        target_type:'wallet_topup',target_id:topup.topup_id,request_id:requestKey,ip_address:'',
+        details_json:JSON.stringify({amount_satang:Number(topup.amount_satang),reason:reason}),created_at:new Date().toISOString()
+      }
     });
     const ready=repositoryGetById_('wallet_recovery_journal',journal.journal_id);
     walletApplyCreditJournalLocked_(ready);
@@ -4054,6 +4067,7 @@ function adminRejectWalletTopup(token,args) {
   if(!reason || reason.length>500) throw new Error('WALLET_REJECTION_REASON_REQUIRED');
   const lock=LockService.getScriptLock();lock.waitLock(15000);
   try {
+    walletAssertWriteGateLocked_();
     const admin=requireAdminLocked_(token,Date.now());
     const topup=repositoryGetById_('wallet_topups',String(args.topupId || ''));
     if(!topup) throw new Error('WALLET_TOPUP_NOT_FOUND');
@@ -4091,14 +4105,14 @@ function adminGrantPaidCredit(token,args) {
     const journal=walletPrepareCreditJournalLocked_({
       member_id:memberId,credit_type:'PAID',amount_satang:amount,idempotency_key:idem,
       entry_type:'ADMIN_CREDIT',reference_type:'ADMIN_CREDIT',reference_id:key,
-      actor_type:'ADMIN',actor_id:admin.admin_id,reason:reason
+      actor_type:'ADMIN',actor_id:admin.admin_id,reason:reason,
+      payload_hash:walletRequestHash_({memberId:memberId,amountSatang:amount,reason:reason}),
+      audit_patch:{
+        audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_PAID_CREDIT_GRANTED',
+        target_type:'member',target_id:memberId,request_id:key,ip_address:'',
+        details_json:JSON.stringify({amount_satang:amount,reason:reason}),created_at:new Date().toISOString()
+      }
     });
-    journal.audit_patch_json=JSON.stringify({
-      audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_PAID_CREDIT_GRANTED',
-      target_type:'member',target_id:memberId,request_id:key,ip_address:'',
-      details_json:JSON.stringify({amount_satang:amount,reason:reason}),created_at:new Date().toISOString()
-    });
-    repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{audit_patch_json:journal.audit_patch_json});
     walletApplyCreditJournalLocked_(repositoryGetById_('wallet_recovery_journal',journal.journal_id));
     return {ok:true,memberId:memberId,amountSatang:amount};
   } finally {lock.releaseLock();}
@@ -4154,15 +4168,16 @@ function adminCreateBonusGrant(token,args) {
     const journal=walletPrepareCreditJournalLocked_({
       member_id:memberId,credit_type:'BONUS',amount_satang:amount,idempotency_key:idem,
       entry_type:'BONUS_GRANT',reference_type:'BONUS_GRANT',reference_id:grant.bonus_grant_id,
-      actor_type:'ADMIN',actor_id:admin.admin_id,reason:reason,bonus_grant:grant
+      actor_type:'ADMIN',actor_id:admin.admin_id,reason:reason,bonus_grant:grant,
+      payload_hash:walletRequestHash_({memberId:memberId,amountSatang:amount,reason:reason,
+        sourceType:sourceType,sourceId:sourceId,startsAt:grant.starts_at,expiresAt:grant.expires_at}),
+      audit_patch:{
+        audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_BONUS_GRANTED',
+        target_type:'member',target_id:memberId,request_id:key,ip_address:'',
+        details_json:JSON.stringify({amount_satang:amount,source_type:sourceType,source_id:sourceId,
+          starts_at:grant.starts_at,expires_at:grant.expires_at,reason:reason}),created_at:now.toISOString()
+      }
     });
-    journal.audit_patch_json=JSON.stringify({
-      audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_BONUS_GRANTED',
-      target_type:'member',target_id:memberId,request_id:key,ip_address:'',
-      details_json:JSON.stringify({amount_satang:amount,source_type:sourceType,source_id:sourceId,
-        starts_at:grant.starts_at,expires_at:grant.expires_at,reason:reason}),created_at:now.toISOString()
-    });
-    repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{audit_patch_json:journal.audit_patch_json});
     walletApplyCreditJournalLocked_(repositoryGetById_('wallet_recovery_journal',journal.journal_id));
     return {ok:true,memberId:memberId,amountSatang:amount,expiresAt:grant.expires_at};
   } finally {lock.releaseLock();}
