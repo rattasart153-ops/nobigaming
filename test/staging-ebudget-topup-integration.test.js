@@ -66,6 +66,7 @@ function createRuntime() {
   };
   let uuid=0;
   const files=new Map();
+  const triggers=[];
   const folder={
     getSharingAccess:()=> 'PRIVATE',
     getEditors:()=>[],
@@ -98,6 +99,30 @@ function createRuntime() {
       Charset:{UTF_8:'UTF_8'},
       DigestAlgorithm:{SHA_256:'SHA_256'}
     },
+    ScriptApp:{
+      getProjectTriggers:()=>triggers.slice(),
+      deleteTrigger(trigger){
+        const index=triggers.indexOf(trigger);
+        if(index>=0)triggers.splice(index,1);
+      },
+      newTrigger(handler){
+        return {
+          timeBased(){
+            return {
+              everyMinutes(minutes){
+                return {
+                  create(){
+                    const trigger={handler,minutes,getHandlerFunction(){return this.handler;}};
+                    triggers.push(trigger);
+                    return trigger;
+                  }
+                };
+              }
+            };
+          }
+        };
+      }
+    },
     DriveApp:{
       Access:{PRIVATE:'PRIVATE'},
       Permission:{VIEW:'VIEW'},
@@ -127,7 +152,7 @@ function createRuntime() {
   context.validImageSignature_=()=>true;
   context.assertDriveFolderPrivate_=()=>true;
   context.assertDriveFileInPrivateFolder_=()=>true;
-  return {context,spreadsheet,files,props,member};
+  return {context,spreadsheet,files,props,member,triggers};
 }
 
 test('Member top-up request is idempotent, proof is private, and Admin approval posts exactly one Paid credit',()=>{
@@ -245,4 +270,39 @@ test('Admin direct Paid Credit and finite Bonus grants are separately ledgered a
   });
   assert.equal(bonusReplay.replayed,true);
   assert.equal(context.__rows('wallet_bonus_grants').length,1);
+});
+
+
+test('top-up expiry trigger installer is manual, gated, idempotent and uses a 15-minute schedule',()=>{
+  const {context,props,triggers}=createRuntime();
+  assert.equal(triggers.length,0,'loading the API-only bundle must not install a trigger');
+
+  props.NOBI_WALLET_WRITES_ENABLED='false';
+  assert.throws(()=>context.ensureWalletTopupExpiryTrigger(),/WALLET_WRITES_BLOCKED/);
+  assert.equal(triggers.length,0,'failed writer gate must not create a trigger');
+
+  props.NOBI_WALLET_WRITES_ENABLED='true';
+  const first=context.ensureWalletTopupExpiryTrigger();
+  assert.equal(first.created,true);
+  assert.equal(first.duplicatesRemoved,0);
+  assert.equal(triggers.length,1);
+  assert.equal(triggers[0].getHandlerFunction(),'runWalletTopupExpiry');
+  assert.equal(triggers[0].minutes,15);
+
+  const replay=context.ensureWalletTopupExpiryTrigger();
+  assert.equal(replay.created,false);
+  assert.equal(replay.duplicatesRemoved,0);
+  assert.equal(triggers.length,1,'repeat installation must not create duplicates');
+});
+
+test('top-up expiry trigger installer removes duplicate handler triggers without adding another',()=>{
+  const {context,triggers}=createRuntime();
+  const existing=(minutes)=>({handler:'runWalletTopupExpiry',minutes,getHandlerFunction(){return this.handler;}});
+  triggers.push(existing(5),existing(15),existing(60));
+
+  const result=context.ensureWalletTopupExpiryTrigger();
+  assert.equal(result.created,false);
+  assert.equal(result.duplicatesRemoved,2);
+  assert.equal(triggers.length,1);
+  assert.equal(triggers[0].minutes,5,'installer retains the first existing handler trigger');
 });
