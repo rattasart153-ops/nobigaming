@@ -193,14 +193,6 @@ Validation:
 - Successful proof storage transitions to `PENDING_REVIEW`.
 - Repeated proof submission after state transition is rejected or returns the original accepted result; it must not create multiple files.
 
-### 3.5.1 Admin proof review
-
-Gateway action: `adminWalletTopupProof`
-
-- Admin-only; verifies the file remains inside the private STAGING Slips folder.
-- Returns bounded image bytes to the authenticated Admin route only; never a Drive share URL.
-- Logs proof access in `admin_audit_logs`.
-
 ### 3.6 Create Wallet order
 
 `POST /api/member/wallet/orders`
@@ -275,6 +267,11 @@ Admin-only. Return source-specific balances, holds, grant status, ledger history
 Gateway action: `adminWalletTopups`
 
 Admin-only. List top-up ID, member, amount, payment method, reference, submission time and proof availability. Proof bytes are served only through a separate Admin-authorized same-origin route.
+
+
+Proof route: `GET /api/admin/wallet/topups/:topupId/proof`
+
+Gateway action: `adminWalletTopupProof`. Admin-only; verifies the file remains inside the private STAGING Slips folder, returns bounded image bytes to the authenticated Admin route only (never a Drive share URL), and logs proof access in `admin_audit_logs`.
 
 ### 4.4 Approve top-up
 
