@@ -33,10 +33,11 @@ This folder contains the isolated HTTP-only Apps Script source for the Cloudflar
 - P1.2: member creates top-up requests (minimum 5,000 satang), submits a bounded image proof, and views only their own top-ups; Admin can inspect the review queue and private proof, approve/reject requests, grant positive Paid Credit, and grant finite-expiry Bonus Credit.
 - Initial top-up method is `PROMPTPAY` only when the existing `NOBI_PROMPTPAY_ID` property is configured. No new payment provider is introduced.
 - `runWalletTopupExpiry()` is an idempotent 24-hour expiry worker; no time trigger is installed.
+- `ensureWalletTopupExpiryTrigger()` is a manual, owner-run installer and is not in the public gateway action allowlist. It requires all three single-writer gates, creates a 15-minute time-driven trigger, records its immutable ID in `NOBI_WALLET_TOPUP_EXPIRY_TRIGGER_ID`, preserves that managed trigger on repeat calls, and replaces unknown/manual handler triggers whose schedule cannot be verified. It has only been exercised in a synthetic Apps Script VM; **do not call it or set the marker property yet**. Actual installation must wait for legacy-writer cutover and separate owner approval.
 - Credit, top-up decision, and audit writes use recovery journal/idempotency records. The recovery journal schema includes explicit idempotency and related-record payloads.
 - Mutation gate requires `NOBI_WALLET_WRITES_ENABLED=true`, `NOBI_FINANCIAL_WRITER_MODE=API_ONLY`, and `NOBI_LEGACY_WRITER_DISABLED=true`. Do not set these properties yet; the legacy writer cutover has not been performed.
 - Wallet order checkout, hold capture/release, Bonus expiry ledger processing, refunds, Cloudflare Pages routes, and UI wiring remain unimplemented.
-- Image signature/structure and size are checked, but Apps Script-side decode/re-encode is not implemented yet; this remains a release blocker for proof uploads.
+- Apps Script itself does not decode/re-encode image pixels. The separate Cloudflare workerd sanitizer now passes real JPEG/PNG/WebP decode–re-encode tests, but the authenticated Pages upload route and sanitized-byte handoff to private Drive are not integrated; proof uploads remain disabled.
 
 ## Verification
 
