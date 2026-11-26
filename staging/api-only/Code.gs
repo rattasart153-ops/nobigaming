@@ -4239,6 +4239,30 @@ function adminWalletTopupProof(token,topupId) {
   } finally {lock.releaseLock();}
 }
 
+/** Install one 15-minute top-up expiry trigger.
+ * Manual owner action only. Requires the API-only financial-writer gate to be active.
+ * Defining this function does not install or enable a trigger.
+ */
+function ensureWalletTopupExpiryTrigger() {
+  const lock=LockService.getScriptLock();lock.waitLock(20000);
+  try {
+    walletAssertWriteGateLocked_();
+    const handler='runWalletTopupExpiry';
+    const existing=ScriptApp.getProjectTriggers().filter(function(trigger) {
+      return trigger.getHandlerFunction()===handler;
+    });
+    if(existing.length===1) {
+      return {ok:true,created:false,duplicatesRemoved:0,message:'Top-up expiry trigger already exists.'};
+    }
+    if(existing.length>1) {
+      existing.slice(1).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+      return {ok:true,created:false,duplicatesRemoved:existing.length-1,message:'Duplicate top-up expiry triggers removed.'};
+    }
+    ScriptApp.newTrigger(handler).timeBased().everyMinutes(15).create();
+    return {ok:true,created:true,duplicatesRemoved:0,message:'Top-up expiry trigger created; runs every 15 minutes.'};
+  } finally {lock.releaseLock();}
+}
+
 /** Idempotent expiry worker; install a scheduled trigger only after release approval. */
 function runWalletTopupExpiry() {
   const lock=LockService.getScriptLock();lock.waitLock(20000);
