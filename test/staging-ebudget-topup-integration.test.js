@@ -166,7 +166,7 @@ test('Member top-up request is idempotent, proof is private, and Admin approval 
   assert.equal(approved.status,'APPROVED');
   assert.equal(context.__get('wallets','member-001').paid_balance_satang,5000);
   assert.equal(context.__rows('wallet_ledger').filter(x=>x.reference_id===first.topup.topupId).length,1);
-  assert.equal(context.__rows('admin_audit_logs').filter(x=>x.target_id===first.topup.topupId).length,1);
+  assert.equal(context.__rows('admin_audit_logs').filter(x=>x.target_id===first.topup.topupId && x.action==='WALLET_TOPUP_APPROVED').length,1);
   assert.equal(context.adminApproveWalletTopup('admin-token',{
     topupId:first.topup.topupId,requestKey:'admin-approve-0002',
     confirmation:true,reason:'Retry'
