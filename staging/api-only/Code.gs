@@ -3853,7 +3853,7 @@ function walletPrepareCreditJournalLocked_(input) {
   }
   const walletPatch = {
     member_id:memberId,
-    paid_balance_satang:currentBalance + (creditType === 'PAID' ? amount : 0),
+    paid_balance_satang:Number(wallet.paid_balance_satang) + (creditType === 'PAID' ? amount : 0),
     bonus_balance_satang:Number(wallet.bonus_balance_satang) + (creditType === 'BONUS' ? amount : 0),
     wallet_version:Number(wallet.wallet_version) + 1,
     created_at:wallet.created_at,updated_at:now
