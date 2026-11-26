@@ -4248,18 +4248,37 @@ function ensureWalletTopupExpiryTrigger() {
   try {
     walletAssertWriteGateLocked_();
     const handler='runWalletTopupExpiry';
+    const triggerProperty='NOBI_WALLET_TOPUP_EXPIRY_TRIGGER_ID';
+    const props=PropertiesService.getScriptProperties();
+    const knownId=String(props.getProperty(triggerProperty) || '');
     const existing=ScriptApp.getProjectTriggers().filter(function(trigger) {
       return trigger.getHandlerFunction()===handler;
     });
-    if(existing.length===1) {
-      return {ok:true,created:false,duplicatesRemoved:0,message:'Top-up expiry trigger already exists.'};
+    const managed=knownId ? existing.find(function(trigger) {
+      return typeof trigger.getUniqueId==='function' &&
+        String(trigger.getUniqueId())===knownId;
+    }) : null;
+
+    // A trigger created by this installer is identified by its immutable ID.
+    // Remove any extra handler triggers, but never recreate the managed trigger.
+    if(managed) {
+      const duplicates=existing.filter(function(trigger) { return trigger!==managed; });
+      duplicates.forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+      return {ok:true,created:false,duplicatesRemoved:duplicates.length,
+        message:'Managed top-up expiry trigger is already installed.'};
     }
-    if(existing.length>1) {
-      existing.slice(1).forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
-      return {ok:true,created:false,duplicatesRemoved:existing.length-1,message:'Duplicate top-up expiry triggers removed.'};
-    }
-    ScriptApp.newTrigger(handler).timeBased().everyMinutes(15).create();
-    return {ok:true,created:true,duplicatesRemoved:0,message:'Top-up expiry trigger created; runs every 15 minutes.'};
+
+    // Unknown/manual triggers cannot prove their interval. Replace them so the
+    // resulting schedule is guaranteed to be every 15 minutes.
+    existing.forEach(function(trigger) { ScriptApp.deleteTrigger(trigger); });
+    const created=ScriptApp.newTrigger(handler).timeBased().everyMinutes(15).create();
+    const createdId=created && typeof created.getUniqueId==='function'
+      ? String(created.getUniqueId() || '') : '';
+    if(createdId) props.setProperty(triggerProperty,createdId);
+    else props.deleteProperty(triggerProperty);
+
+    return {ok:true,created:true,duplicatesRemoved:existing.length,
+      message:'Top-up expiry trigger created; runs every 15 minutes.'};
   } finally {lock.releaseLock();}
 }
 
