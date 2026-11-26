@@ -2508,7 +2508,7 @@ const NOBI_REPOSITORY_UNIQUE_FIELDS = {
   wallet_ledger: ['transaction_id','idempotency_key'],
   wallet_topups: ['idempotency_key'],
   wallet_holds: ['order_id'],
-  wallet_recovery_journal: ['transaction_id'],
+  wallet_recovery_journal: ['transaction_id','idempotency_key'],
   member_coupon_alerts: ['member_coupon_key']
 };
 
