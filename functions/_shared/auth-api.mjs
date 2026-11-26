@@ -50,7 +50,7 @@ function assertSameOriginPost(request, env) {
 
 async function readJson(request) {
   const contentType = String(request.headers.get("content-type") || "").toLowerCase();
-  if (!contentType.startsWith("application/json")) {
+  if (contentType.split(";")[0].trim() !== "application/json") {
     throw new HttpError(415, "UNSUPPORTED_CONTENT_TYPE", "Content-Type must be application/json");
   }
   const declared = Number(request.headers.get("content-length") || 0);
@@ -89,6 +89,7 @@ function errorStatus(error, fallback = 400) {
   if (error instanceof HttpError) return error.status;
   if (error instanceof GatewayError) {
     if (/RATE|BLOCK|TOO_MANY/.test(error.code)) return 429;
+    if (/AUTHENTICATION_FAILED|INVALID_CREDENTIALS/.test(error.code)) return 401;
     if (/DUPLICATE|ALREADY_EXISTS|CONFLICT/.test(error.code)) return 409;
     if (/GATEWAY_NOT_CONFIGURED|GAS_UPSTREAM|GAS_HTTP|GAS_INVALID|GAS_RESPONSE|GAS_VERSION/.test(error.code)) return 502;
     return error.status || fallback;
@@ -96,12 +97,11 @@ function errorStatus(error, fallback = 400) {
   return fallback;
 }
 
-function errorResponse(error, role) {
+function errorResponse(error) {
   const status = errorStatus(error, 500);
   const code = error.code || (error instanceof GatewayError ? error.code : "INTERNAL_ERROR");
   const message = status >= 500 ? "Service is temporarily unavailable" : String(error.message || "Request failed");
-  const headers = role ? { "set-cookie": clearSessionCookie(role) } : {};
-  return responseJson({ ok: false, error: { code, message } }, status, headers);
+  return responseJson({ ok: false, error: { code, message } }, status);
 }
 
 function gateway(deps, env, action, args) {
@@ -117,7 +117,14 @@ async function createLoginResponse(env, role, result, deps, publicData) {
     throw new GatewayError("BACKEND_SESSION_MISSING", "Backend did not create a session", 502);
   }
   const displayName = role === "admin" ? result.username : result.member && result.member.full_name;
-  const created = await store(deps, env).createSession(role, result.token, result.expires_at, displayName);
+  let created;
+  try {
+    created = await store(deps, env).createSession(role, result.token, result.expires_at, displayName);
+  } catch (error) {
+    const logoutAction = role === "member" ? "memberLogout" : "adminLogout";
+    try { await gateway(deps, env, logoutAction, { token: result.token }); } catch { /* best-effort backend revocation */ }
+    throw error;
+  }
   return responseJson(
     { ok: true, data: publicData },
     200,
@@ -195,7 +202,7 @@ async function handleMe(request, env, role, deps) {
       : { authenticated: true, username: session.displayName };
     return responseJson({ ok: true, data });
   } catch (error) {
-    return errorResponse(error, role);
+    return errorResponse(error);
   }
 }
 
@@ -213,15 +220,13 @@ async function handleLogout(request, env, role, deps) {
     const session = await store(deps, env).getSession(request, role);
     if (session) {
       const action = role === "member" ? "memberLogout" : "adminLogout";
-      try {
-        await gateway(deps, env, action, { token: session.backendToken });
-      } finally {
-        await store(deps, env).deleteSession(session.sessionHash, role);
-      }
+      try { await gateway(deps, env, action, { token: session.backendToken }); }
+      catch { /* local deletion still revokes the browser session */ }
+      await store(deps, env).deleteSession(session.sessionHash, role);
     }
     return responseJson({ ok: true }, 200, { "set-cookie": clearSessionCookie(role) });
   } catch (error) {
-    return errorResponse(error, role);
+    return errorResponse(error);
   }
 }
 
