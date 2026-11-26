@@ -89,8 +89,11 @@ function validatePngEnvelope(bytes) {
   let sawEnd = false;
 
   while (offset < bytes.length) {
-    if (++chunkCount > 512 || offset + 12 > bytes.length) {
+    if (++chunkCount > 512) {
       throw new SlipImageError('PROOF_IMAGE_INVALID_PNG');
+    }
+    if (offset + 12 > bytes.length) {
+      throw new SlipImageError('PROOF_IMAGE_TRUNCATED');
     }
 
     const chunkLength = readU32BE(bytes, offset);
