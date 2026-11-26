@@ -1,7 +1,7 @@
 // ===== SOURCE: google-apps-script/00_Config.gs =====
 /** Nobi Topup Apps Script configuration and versioned Sheets schema. */
 const NOBI = {
-  SCHEMA_VERSION: 5,
+  SCHEMA_VERSION: 6,
   SCHEMA_VERSION_KEY: 'schema_version',
   SHEETS: {
     admins: ['admin_id','username_normalized','username_display','password_hash','password_salt','password_algorithm','status','auth_version','created_at','updated_at','last_login_at'],
@@ -17,7 +17,14 @@ const NOBI = {
     member_coupon_alerts: ['alert_id','member_coupon_key','member_id','coupon_id','last_stage','notified_at','created_at','updated_at'],
     promotions: ['promotion_id','title','subtitle','image_file_id','image_url','link_url','active','sort_order','starts_at','ends_at','created_at','updated_at'],
     banners: ['banner_id','title','subtitle','image_file_id','image_url','link_url','active','sort_order','starts_at','ends_at','created_at','updated_at'],
-    orders: ['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at'],
+    wallets: ['member_id','paid_balance_satang','bonus_balance_satang','wallet_version','created_at','updated_at'],
+    wallet_ledger: ['ledger_id','transaction_id','member_id','credit_type','entry_type','delta_satang','balance_after_satang','reference_type','reference_id','idempotency_key','actor_type','actor_id','reason','created_at'],
+    wallet_topups: ['topup_id','member_id','amount_satang','status','payment_method','payment_reference','slip_file_id','slip_mime_type','slip_size_bytes','submitted_at','reviewed_by_admin_id','reviewed_at','rejection_reason','idempotency_key','payload_hash','created_at','updated_at'],
+    wallet_holds: ['hold_id','order_id','member_id','status','total_satang','paid_reserved_satang','bonus_reserved_satang','created_at','expires_at','captured_at','released_at'],
+    wallet_hold_allocations: ['allocation_id','hold_id','credit_type','bonus_grant_id','amount_satang','allocation_order','created_at'],
+    wallet_bonus_grants: ['bonus_grant_id','member_id','granted_satang','remaining_satang','source_type','source_id','reason','starts_at','expires_at','status','created_by_admin_id','created_at','updated_at'],
+    wallet_recovery_journal: ['journal_id','operation','transaction_id','member_id','hold_id','topup_id','step_state','ledger_payload_json','wallet_patch_json','bonus_patch_json','order_patch_json','attempts','last_error_code','created_at','updated_at'],
+    orders: ['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at','payment_method','wallet_hold_id'],
     idempotency_records: ['idempotency_id','scope','request_key','payload_hash','resource_id','state','created_at','expires_at'],
     order_recovery_journal: ['journal_id','order_id','operation','order_record_json','idempotency_record_json','redemption_record_json','order_patch_json','redemption_id','redemption_patch_json','state','attempts','last_error_code','created_at','updated_at'],
     system_metadata: ['key','value','updated_at'],
@@ -128,7 +135,7 @@ function setupNobiDatabase() {
       }
     }
 
-    const supportedUpgrade = ['1', '2', '3', '4'].includes(currentVersion) && Number(NOBI.SCHEMA_VERSION) === 5;
+    const supportedUpgrade = currentVersion === '5' && Number(NOBI.SCHEMA_VERSION) === 6;
     if (currentVersion && currentVersion !== String(NOBI.SCHEMA_VERSION) && !supportedUpgrade) {
       throw new Error('SCHEMA_VERSION_UNSUPPORTED: expected version ' + NOBI.SCHEMA_VERSION + ' but found ' + currentVersion + '.');
     }
@@ -137,8 +144,16 @@ function setupNobiDatabase() {
       const sheet = ss.getSheetByName(name);
       if (!sheet) return;
       const headers = databaseHeaders_(sheet);
-      if (headers.length && !databaseHeadersMatch_(headers, NOBI.SHEETS[name])) {
+      const expectedHeaders = name === 'orders' && currentVersion === '5'
+        ? NOBI.SHEETS.orders.slice(0, -2)
+        : NOBI.SHEETS[name];
+      const alreadyUpgradedOrders = name === 'orders' && currentVersion === '5' &&
+        databaseHeadersMatch_(headers, NOBI.SHEETS.orders);
+      if (headers.length && !databaseHeadersMatch_(headers, expectedHeaders) && !alreadyUpgradedOrders) {
         throw new Error('SCHEMA_INCOMPATIBLE: ' + name + ' headers do not match the expected schema. No data was changed.');
+      }
+      if (sheet.getLastRow() > 0 && !headers.length) {
+        throw new Error('SCHEMA_INCOMPATIBLE: ' + name + ' contains rows without a header row. No data was changed.');
       }
       if (sheet.getLastRow() > 1 && !currentVersion) {
         throw new Error('SCHEMA_VERSION_MISSING: ' + name + ' contains rows but the database has no schema version. No data was changed.');
@@ -151,6 +166,10 @@ function setupNobiDatabase() {
       if (!sheet) sheet = ss.insertSheet(name);
       if (sheet.getLastRow() === 0) {
         sheet.getRange(1, 1, 1, NOBI.SHEETS[name].length).setValues([NOBI.SHEETS[name]]);
+      } else if (name === 'orders' && currentVersion === '5' &&
+          databaseHeadersMatch_(databaseHeaders_(sheet), NOBI.SHEETS.orders.slice(0, -2))) {
+        // Additive v5 -> v6 migration: preserve every existing order row and append two blank columns.
+        sheet.getRange(1, NOBI.SHEETS.orders.length - 1, 1, 2).setValues([['payment_method','wallet_hold_id']]);
       }
       sheet.setFrozenRows(1);
     });
@@ -2476,6 +2495,11 @@ const NOBI_REPOSITORY_UNIQUE_FIELDS = {
   idempotency_records: [['scope', 'request_key']],
   system_metadata: ['key'],
   gateway_nonces: ['nonce_hash'],
+  wallets: ['member_id'],
+  wallet_ledger: ['transaction_id','idempotency_key'],
+  wallet_topups: ['idempotency_key'],
+  wallet_holds: ['order_id'],
+  wallet_recovery_journal: ['transaction_id'],
   member_coupon_alerts: ['member_coupon_key']
 };
 
