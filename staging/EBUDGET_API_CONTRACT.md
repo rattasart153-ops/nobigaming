@@ -1,6 +1,6 @@
 # Nobi Gaming — E-Budget API Contract
 
-- **Status:** Contract baseline; P1.2 Apps Script actions are implemented on the STAGING branch only; Pages routes/UI and live runtime validation remain pending
+- **Status:** P1.2 Apps Script actions and auth/session Pages source are implemented on the STAGING branch only; wallet business routes, UI and live runtime validation remain pending
 - **Branch:** `staging-runtime-test-kit`
 - **Depends on:** `staging/EBUDGET_TECHNICAL_DESIGN.md`
 - **Scope:** STAGING only
@@ -15,7 +15,7 @@ Browser -> Cloudflare Pages Function -> API-only Apps Script `doPost(e)` -> Wall
 - Browser never receives the Apps Script token or HMAC secret.
 - Apps Script independently verifies HMAC, nonce, timestamp, action allowlist, Member/Admin session and all business rules.
 - The current gateway is POST-only and returns a JSON envelope `{ok,version,result|error}`. Caller must inspect `ok`, not infer success from HTTP transport alone.
-- The P1.2 Apps Script action subset is implemented in `staging/api-only/Code.gs`; routes still require explicit Cloudflare Pages Function wiring. Do not treat the Apps Script actions as deployed or publicly reachable.
+- The P1.2 Apps Script action subset is implemented in `staging/api-only/Code.gs`. Explicit Member/Admin auth/session Pages routes now exist, but wallet business routes and UI wiring remain incomplete. Do not treat any Apps Script action as deployed or publicly reachable.
 
 ## 2. Shared conventions
 
@@ -188,7 +188,7 @@ Validation:
 - Authenticated Member owns the top-up.
 - Top-up state is `AWAITING_PROOF`.
 - PNG/JPEG/WebP only; maximum 3 MiB.
-- Store in the private STAGING Slips folder after file-size and PNG/JPEG/WebP structure/signature checks. Apps Script-side image decode/re-encode is not yet implemented and remains a release blocker; do not claim this proof path is production-ready.
+- Store in the private STAGING Slips folder only after the Cloudflare workerd sanitizer has decoded and re-encoded the image. Real JPEG/PNG/WebP decode–re-encode tests pass locally, but the authenticated Pages proof-upload route and sanitized-byte handoff to private Drive are not yet integrated; this remains a release blocker.
 - No public Drive URL.
 - Successful proof storage transitions to `PENDING_REVIEW`.
 - Repeated proof submission after state transition is rejected or returns the original accepted result; it must not create multiple files.
@@ -403,7 +403,7 @@ Implemented in `staging/api-only/Code.gs`:
 Important implementation constraints:
 - Only the existing PromptPay configuration is accepted for top-ups, via `NOBI_PROMPTPAY_ID`; no other payment method is assumed.
 - Top-up minimum is 5,000 satang. `AWAITING_PROOF` expires after 24 hours; `PENDING_REVIEW` has no automatic expiry.
-- Proof is private and Admin-only. Image signature/structure and 3 MiB size are checked; server-side decode/re-encode remains outstanding.
+- Proof is private and Admin-only. The Cloudflare workerd sanitizer enforces the 3 MiB input cap, dimensions/pixel ceiling and static-image policy, then emits a fresh JPEG. The Member Pages upload route and private Drive handoff remain outstanding.
 - Bonus grants require either whole-number `durationDays` (1–3650) or an explicit future ISO timestamp with `+07:00` or `Z`; non-expiring Bonus is rejected.
 - Mutations require the single-writer gate and remain disabled until cutover is separately authorized.
 - No Cloudflare route, Member/Admin UI, live Apps Script test, trigger installation or deployment is included in P1.2.
