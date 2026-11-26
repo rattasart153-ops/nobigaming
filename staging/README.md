@@ -179,3 +179,12 @@ When tests are complete, do not delete anything until the results are recorded. 
 ## Current status
 
 This kit is documentation and setup guidance only. No Google project, spreadsheet, Drive folder, Script Property, web-app deployment, or live test has been created by this commit.
+
+## E-Budget design documents (design only)
+
+The following documents define the proposed Prepaid Credit Wallet for this STAGING branch. They are specifications only: **do not create Sheets tabs, run a migration, edit Apps Script, or deploy based on these documents until separately approved**.
+
+- [E-Budget Technical Design](./EBUDGET_TECHNICAL_DESIGN.md) — approved policies, Schema v6 proposal, ledger/holds, single-writer constraint, recovery and open decisions.
+- [E-Budget API Contract](./EBUDGET_API_CONTRACT.md) — proposed Member/Admin routes, gateway actions, payloads, validation and idempotency.
+- [E-Budget Test Plan](./EBUDGET_TEST_PLAN.md) — functional, security, concurrency and recovery acceptance tests.
+
