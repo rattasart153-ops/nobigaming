@@ -82,4 +82,5 @@ test('Schema v6 recovery journal carries idempotency, top-up and audit recovery 
   assert.match(source,/wallet_recovery_journal: \[[^\]]*'idempotency_key'[^\]]*'payload_hash'[^\]]*'topup_patch_json'[^\]]*'audit_patch_json'/);
   assert.match(source,/function walletPrepareCreditJournalLocked_\(input\)[\s\S]*?priorJournals=repositoryFindByField_\('wallet_recovery_journal','idempotency_key',idempotencyKey\)/);
   assert.match(source,/WALLET_IDEMPOTENCY_CONFLICT/);
+  assert.match(source,/wallet_recovery_journal: \['transaction_id','idempotency_key'\]/);
 });
