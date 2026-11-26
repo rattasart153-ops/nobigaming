@@ -47,6 +47,36 @@ describe("real SIP decode/re-encode inside Cloudflare workerd", () => {
     },
   );
 
+  it("removes EXIF metadata by decoding and re-encoding the original JPEG", async () => {
+    const response = await postImage(fixtureBytes("jpegExif"), "image/jpeg");
+    const output = await expectSanitizedJpeg(response, "jpeg");
+    const ascii = new TextDecoder("latin1").decode(output);
+    expect(ascii.includes("Exif\\u0000\\u0000")).toBe(false);
+    expect(ascii.includes("NOBI-PRIVATE-TEST-METADATA")).toBe(false);
+    expect(ascii.includes("NOBI-CAMERA")).toBe(false);
+  });
+
+  it("rejects real APNG and animated WebP inputs before decoding", async () => {
+    const apng = await postImage(fixtureBytes("apng"), "image/png");
+    expect(apng.status).toBe(422);
+    expect(await apng.json()).toEqual({ error: "PROOF_IMAGE_ANIMATED" });
+
+    const animatedWebp = await postImage(fixtureBytes("animatedWebp"), "image/webp");
+    expect(animatedWebp.status).toBe(422);
+    expect(await animatedWebp.json()).toEqual({ error: "PROOF_IMAGE_ANIMATED" });
+  });
+
+  it("rejects a JPEG with an appended payload", async () => {
+    const original = fixtureBytes("jpeg");
+    const payload = new TextEncoder().encode("NOBI-POLYGLOT-PAYLOAD");
+    const combined = new Uint8Array(original.length + payload.length);
+    combined.set(original);
+    combined.set(payload, original.length);
+    const response = await postImage(combined, "image/jpeg");
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "PROOF_IMAGE_TRAILING_DATA" });
+  });
+
   it("rejects a claimed MIME type that does not match the file signature", async () => {
     const response = await postImage(fixtureBytes("jpeg"), "image/png");
     expect(response.status).toBe(415);
