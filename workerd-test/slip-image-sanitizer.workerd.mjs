@@ -51,7 +51,7 @@ describe("real SIP decode/re-encode inside Cloudflare workerd", () => {
     const response = await postImage(fixtureBytes("jpegExif"), "image/jpeg");
     const output = await expectSanitizedJpeg(response, "jpeg");
     const ascii = new TextDecoder("latin1").decode(output);
-    expect(ascii.includes("Exif\\u0000\\u0000")).toBe(false);
+    expect(ascii.includes("Exif" + String.fromCharCode(0, 0))).toBe(false);
     expect(ascii.includes("NOBI-PRIVATE-TEST-METADATA")).toBe(false);
     expect(ascii.includes("NOBI-CAMERA")).toBe(false);
   });
