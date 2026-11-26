@@ -185,7 +185,7 @@ This kit is documentation and setup guidance only. No Google project, spreadshee
 - [API-only setup and safety guide](./api-only/README.md)
 - [API-only Code.gs](./api-only/Code.gs)
 
-This is a separate project baseline. It is not deployed, and E-Budget Schema v6 is not included yet.
+This is a separate project under construction. It is not deployed. The additive Schema v5 → v6 migration is included, but Wallet operations are not yet complete.
 
 ## E-Budget design documents (design only)
 
