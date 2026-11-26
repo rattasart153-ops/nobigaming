@@ -55,7 +55,7 @@ test('P1.2 exposes only the implemented top-up and Admin credit actions; checkou
   ]) assert.doesNotMatch(allowlist[1], new RegExp("['\\\"]"+action+"['\\\"]"));
   for (const action of [
     'memberCreateWalletTopup','memberSubmitWalletTopupProof','memberWalletTopups',
-    'adminWalletTopups','adminApproveWalletTopup','adminRejectWalletTopup',
+    'adminWalletTopups','adminWalletTopupProof','adminApproveWalletTopup','adminRejectWalletTopup',
     'adminGrantPaidCredit','adminCreateBonusGrant'
   ]) assert.match(allowlist[1], new RegExp("['\\\"]"+action+"['\\\"]"));
 });
