@@ -1,6 +1,6 @@
 # Nobi Gaming — Cloudflare Pages STAGING Migration Plan
 
-- **Status:** Draft — Read-only audit completed; implementation not authorized
+- **Status:** Source-only STAGING implementation in progress; live Cloudflare resources and deployment are not authorized
 - **Repository:** rattasart153-ops/nobigaming
 - **Allowed branch:** staging-runtime-test-kit only
 - **Target:** Private Cloudflare Pages STAGING site deployed by GitHub Actions
@@ -8,7 +8,7 @@
 - **Backend/data:** Existing Google Apps Script STAGING, Google Sheets STAGING and private Google Drive STAGING
 - **Production:** Out of scope and must remain untouched
 
-> This document records the plan and audit findings. It does not authorize application-code changes, Cloudflare resource creation, Apps Script configuration/deployment changes, or Production activity.
+> This document records the plan, audit findings and approved source-only work on `staging-runtime-test-kit`. It does not authorize Cloudflare resource creation, Apps Script configuration/deployment changes, trigger installation, writer-gate activation, or Production activity.
 
 ---
 
