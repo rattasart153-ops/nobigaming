@@ -58,6 +58,17 @@ class FakeD1 {
           }
           return { meta: { changes: 0 } };
         }
+        if (normalized.startsWith("DELETE") && normalized.includes("EXPIRES_AT")) {
+          const [expiryCutoff, idleCutoff] = args;
+          let changes = 0;
+          for (const [hash, row] of db.rows) {
+            if (row.expires_at <= expiryCutoff || row.last_seen_at <= idleCutoff) {
+              db.rows.delete(hash);
+              changes += 1;
+            }
+          }
+          return { meta: { changes } };
+        }
         if (normalized.startsWith("DELETE")) {
           const [hash, role] = args;
           const row = db.rows.get(hash);
@@ -202,7 +213,19 @@ test("D1 session store expires idle and absolute sessions and deletes corrupt ci
   assert.equal(runtime.DB.rows.size, 0);
 });
 
-test("D1 session store rejects missing or incorrectly sized encryption keys", async () => {
+
+test("new login opportunistically prunes abandoned idle D1 sessions", async () => {
+  let now = NOW;
+  const runtime = env();
+  const store = createSessionStore(runtime, { now: () => now });
+  await store.createSession("member", "old-token", new Date(NOW + 8 * 60 * 60 * 1000).toISOString());
+  assert.equal(runtime.DB.rows.size, 1);
+  now += 30 * 60 * 1000;
+  await store.createSession("admin", "new-token", new Date(now + 8 * 60 * 60 * 1000).toISOString());
+  assert.equal(runtime.DB.rows.size, 1);
+  assert.equal([...runtime.DB.rows.values()][0].role, "admin");
+});
+\ntest("D1 session store rejects missing or incorrectly sized encryption keys", async () => {
   assert.throws(() => createSessionStore({}), /D1 DB binding/);
   const store = createSessionStore({ DB: new FakeD1(), SESSION_ENCRYPTION_KEY: Buffer.from("short").toString("base64") }, { now: () => NOW });
   await assert.rejects(
