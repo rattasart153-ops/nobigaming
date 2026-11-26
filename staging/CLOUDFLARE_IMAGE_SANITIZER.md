@@ -31,7 +31,7 @@ WebP decoding uses a full-image decoder in the current SIP implementation, unlik
 
 - `functions/_shared/slip-image-sanitizer.mjs`: format/container checks, bounded request reader, pixel limits, SIP adapter factory and JPEG output verification.
 - `functions/_shared/sip-adapter.ts`: Cloudflare workerd SIP adapter, including the separate WebP decoder WASM import.
-- `test/staging-slip-image-sanitizer.test.js`: 15+ synthetic unit checks for validation, animation, trailing payloads, size/dimension limits and mocked codec output.
+- `test/staging-slip-image-sanitizer.test.js`: 11 synthetic unit checks for validation, animation, trailing payloads, size/dimension limits and mocked codec output.
 - `workerd-test/worker.ts` and `workerd-test/slip-image-sanitizer.workerd.mjs`: isolated Worker entry and real runtime integration tests.
 - `workerd-test/fixtures.mjs`: real JPEG, PNG, WebP, APNG and animated WebP fixtures.
 - `vitest.image-sanitizer.config.mjs` and `wrangler.image-sanitizer-test.jsonc`: local workerd/Vitest configuration; not a deploy configuration.
