@@ -122,8 +122,8 @@ test('Schema v5 to v6 upgrade appends only the two approved order columns and pr
   const orders = spreadsheet.getSheetByName('orders');
   assert.deepEqual(Array.from(orders.rows[1].slice(0, oldOrder.length)), oldOrder);
   assert.deepEqual(Array.from(orders.rows[0].slice(-2)), ['payment_method','wallet_hold_id']);
-  assert.equal(orders.rows[1][oldOrder.length], '');
-  assert.equal(orders.rows[1][oldOrder.length + 1], '');
+  assert.equal(orders.rows[1][oldOrder.length] ?? '', '');
+  assert.equal(orders.rows[1][oldOrder.length + 1] ?? '', '');
   assert.equal(spreadsheet.getSheetByName('system_metadata').rows[1][1], '6');
 });
 
