@@ -180,6 +180,13 @@ When tests are complete, do not delete anything until the results are recorded. 
 
 This kit is documentation and setup guidance only. No Google project, spreadsheet, Drive folder, Script Property, web-app deployment, or live test has been created by this commit.
 
+## API-only Apps Script STAGING package
+
+- [API-only setup and safety guide](./api-only/README.md)
+- [API-only Code.gs](./api-only/Code.gs)
+
+This is a separate project baseline. It is not deployed, and E-Budget Schema v6 is not included yet.
+
 ## E-Budget design documents (design only)
 
 The following documents define the proposed Prepaid Credit Wallet for this STAGING branch. They are specifications only: **do not create Sheets tabs, run a migration, edit Apps Script, or deploy based on these documents until separately approved**.
