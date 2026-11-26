@@ -3,6 +3,7 @@
 > This guide supersedes older setup notes that mention Schema v3/v4. The current STAGING source uses **Schema v5** and upgrades an existing Schema v4 STAGING database non-destructively.
 
 - [Pre-P1.3 Completion Register](./PRE_P1_3_COMPLETION_REGISTER.md) — ordered blockers and release gates for unfinished P1.1/P1.2 work.
+- [Cloudflare Image Sanitizer Prototype](./CLOUDFLARE_IMAGE_SANITIZER.md) — server-side proof-image sanitization design and verification boundary.
 
 ## Purpose and safety boundary
 
