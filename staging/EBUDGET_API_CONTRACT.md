@@ -346,7 +346,31 @@ Request:
 
 Validate dates, timezone, amount, source and configured expiry policy. The non-expiring Bonus option remains unapproved until the owner decides.
 
-### 4.8 Reconciliation
+### 4.8 Wallet order refund
+
+`POST /api/admin/wallet/orders/:orderId/refund`
+
+Gateway action: `adminRefundWalletOrder`
+
+Request:
+```json
+{
+  "requestKey": "random-unique-key",
+  "amountSatang": 10000,
+  "reason": "Order fulfillment failed; partial refund approved"
+}
+```
+
+Rules:
+- Admin-only; order must have a captured Wallet payment and refundable remainder.
+- Require reason and explicit confirmation in the Admin UI.
+- Full refund restores the original Paid/Bonus composition exactly.
+- Partial refund uses deterministic largest-remainder allocation in integer satang, bounded by the unrefunded amount per source.
+- Refund never converts Bonus Credit to Paid Credit. A Bonus portion whose original expiry has passed is immediately expired.
+- Post compensating ledger entries and an audit event; never edit or delete original ledger rows.
+- Same request key returns the original result; a different key cannot exceed the remaining refundable amount.
+
+### 4.9 Reconciliation
 
 `GET /api/admin/wallet/reconciliation`
 
@@ -378,7 +402,7 @@ This route must not silently repair balances. Repairs require a separately autho
 ## 6. Gateway action allowlist additions (proposed)
 
 Add each of these names to both the allowlist and dispatcher only during an approved implementation:
-`memberWalletSummary`, `memberWalletLedger`, `memberWalletTopups`, `memberCreateWalletTopup`, `memberSubmitWalletTopupProof`, `memberCreateWalletOrder`, `adminWalletSearch`, `adminWalletDetail`, `adminWalletLedger`, `adminWalletTopups`, `adminApproveWalletTopup`, `adminRejectWalletTopup`, `adminGrantPaidCredit`, `adminCreateBonusGrant`, `adminWalletReconciliation`.
+`memberWalletSummary`, `memberWalletLedger`, `memberWalletTopups`, `memberCreateWalletTopup`, `memberSubmitWalletTopupProof`, `memberCreateWalletOrder`, `adminWalletSearch`, `adminWalletDetail`, `adminWalletLedger`, `adminWalletTopups`, `adminApproveWalletTopup`, `adminRejectWalletTopup`, `adminGrantPaidCredit`, `adminCreateBonusGrant`, `adminRefundWalletOrder`, `adminWalletReconciliation`.
 
 Every action must validate its own argument schema and call Member/Admin authorization inside Apps Script. Do not rely only on Cloudflare authorization.
 
