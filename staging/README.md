@@ -196,3 +196,10 @@ The following documents define the proposed Prepaid Credit Wallet for this STAGI
 - [E-Budget Test Plan](./EBUDGET_TEST_PLAN.md) — functional, security, concurrency and recovery acceptance tests.
 - [E-Budget Decision Register](./EBUDGET_DECISIONS.md) — closed owner decisions and final policies for all eight previously open issues.
 
+
+## Separate API-only STAGING and E-Budget status
+
+The new API-only Apps Script project is a separate project from the private HtmlService app. Its source is maintained under [`staging/api-only/`](./api-only/README.md); do not replace the existing browser-import source with it.
+
+E-Budget P1.1–P1.2 code is under development in that API-only bundle. P1.2 includes member top-up request/proof flows, Admin review/approval/rejection, Admin Paid Credit grants and expiring Bonus grants. It is still **not ready to configure, initialize, or deploy**. The single-writer cutover gate must remain closed, and image decode/re-encode, Wallet order/hold processing, Bonus expiry posting, refunds, Cloudflare session routes, UI integration and live Apps Script tests remain outstanding.
+
