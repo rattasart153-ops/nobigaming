@@ -60,7 +60,7 @@ class FakeD1 {
         }
         if (normalized.startsWith("DELETE")) {
           const [hash, role] = args;
-          const row = thisDb.rows.get(hash);
+          const row = db.rows.get(hash);
           const changes = row && row.role === role ? 1 : 0;
           if (changes) db.rows.delete(hash);
           return { meta: { changes } };
