@@ -17,7 +17,7 @@ This folder contains the isolated HTTP-only Apps Script source for the Cloudflar
 - Derived from `staging/browser-import/Code.gs` (the combined Schema v5 runtime bundle).
 - The older modular files under `google-apps-script/` are not the source for this package; their config currently declares Schema v4.
 - The Phase 1 gateway allowlist defect for `banners` is corrected here.
-- This commit establishes the API-only baseline only. **E-Budget Schema v6 and Wallet operations are not yet included.** Do not treat this baseline as ready for E-Budget traffic.
+- The API-only bundle now contains the additive Schema v5 → v6 migration and seven Wallet tabs. Wallet business operations are being implemented in the next P1 increments; this package is **not ready for Wallet traffic**.
 
 ## Import
 
@@ -29,4 +29,4 @@ This folder contains the isolated HTTP-only Apps Script source for the Cloudflar
 
 ## Verification
 
-The repository test suite includes a static boundary test ensuring this bundle has no HtmlService page entry point and that the banner gateway action is allowlisted. Passing that test does not replace a live Apps Script runtime test.
+The repository test suite includes static API-boundary checks and Schema v6 tests for fresh initialization, additive v5 migration and fail-closed preflight. Passing Node tests does not replace a live Apps Script runtime test.
