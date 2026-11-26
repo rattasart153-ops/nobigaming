@@ -187,4 +187,5 @@ The following documents define the proposed Prepaid Credit Wallet for this STAGI
 - [E-Budget Technical Design](./EBUDGET_TECHNICAL_DESIGN.md) — approved policies, Schema v6 proposal, ledger/holds, single-writer constraint, recovery and open decisions.
 - [E-Budget API Contract](./EBUDGET_API_CONTRACT.md) — proposed Member/Admin routes, gateway actions, payloads, validation and idempotency.
 - [E-Budget Test Plan](./EBUDGET_TEST_PLAN.md) — functional, security, concurrency and recovery acceptance tests.
+- [E-Budget Decision Register](./EBUDGET_DECISIONS.md) — closed owner decisions and final policies for all eight previously open issues.
 
