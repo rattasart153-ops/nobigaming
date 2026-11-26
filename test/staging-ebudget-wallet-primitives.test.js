@@ -46,14 +46,18 @@ test('Wallet amounts accept only safe integer satang and reject zero for credit 
   assert.equal(context.__amount(0,true),0);
 });
 
-test('P1.1 exposes no Wallet gateway actions before the full transaction workflows exist', () => {
+test('P1.2 exposes only the implemented top-up and Admin credit actions; checkout and refunds remain disabled', () => {
   const allowlist = source.match(/ALLOWED_ACTIONS:\s*\[([\s\S]*?)\]/);
   assert.ok(allowlist);
   for (const action of [
-    'memberWalletSummary','memberCreateWalletTopup','memberCreateWalletOrder',
-    'adminApproveWalletTopup','adminGrantPaidCredit','adminCreateBonusGrant',
-    'adminRefundWalletOrder'
+    'memberWalletSummary','memberCreateWalletOrder','adminRefundWalletOrder',
+    'adminCreateWalletOrder','adminWalletReconciliation'
   ]) assert.doesNotMatch(allowlist[1], new RegExp("['\\\"]"+action+"['\\\"]"));
+  for (const action of [
+    'memberCreateWalletTopup','memberSubmitWalletTopupProof','memberWalletTopups',
+    'adminWalletTopups','adminApproveWalletTopup','adminRejectWalletTopup',
+    'adminGrantPaidCredit','adminCreateBonusGrant'
+  ]) assert.match(allowlist[1], new RegExp("['\\\"]"+action+"['\\\"]"));
 });
 
 test('Credit journal application is gated and uses immutable transaction lookup before appending', () => {
