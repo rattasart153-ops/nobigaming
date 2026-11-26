@@ -26,6 +26,7 @@ const ORIGIN = "https://nobi-staging.example";
 class FakeD1 {
   constructor() { this.rows = new Map(); }
   prepare(sql) {
+    const db = this;
     let args = [];
     const normalized = sql.replace(/\s+/g, " ").trim().toUpperCase();
     return {
@@ -33,7 +34,7 @@ class FakeD1 {
       async first() {
         if (normalized.startsWith("SELECT")) {
           const [hash, role] = args;
-          const row = thisDb.rows.get(hash);
+          const row = db.rows.get(hash);
           return row && row.role === role ? { ...row } : null;
         }
         throw new Error("Unexpected first() query: " + normalized);
@@ -41,8 +42,8 @@ class FakeD1 {
       async run() {
         if (normalized.startsWith("INSERT")) {
           const [session_hash, role, token_ciphertext, token_iv, display_name, created_at, expires_at, last_seen_at] = args;
-          if (thisDb.rows.has(session_hash)) throw new Error("duplicate session");
-          thisDb.rows.set(session_hash, {
+          if (db.rows.has(session_hash)) throw new Error("duplicate session");
+          db.rows.set(session_hash, {
             session_hash, role, token_ciphertext, token_iv, display_name,
             created_at, expires_at, last_seen_at,
           });
@@ -50,7 +51,7 @@ class FakeD1 {
         }
         if (normalized.startsWith("UPDATE")) {
           const [last_seen_at, hash, role, expires_at, idleCutoff] = args;
-          const row = thisDb.rows.get(hash);
+          const row = db.rows.get(hash);
           if (row && row.role === role && row.expires_at > expires_at && row.last_seen_at > idleCutoff) {
             row.last_seen_at = last_seen_at;
             return { meta: { changes: 1 } };
@@ -61,13 +62,12 @@ class FakeD1 {
           const [hash, role] = args;
           const row = thisDb.rows.get(hash);
           const changes = row && row.role === role ? 1 : 0;
-          if (changes) thisDb.rows.delete(hash);
+          if (changes) db.rows.delete(hash);
           return { meta: { changes } };
         }
         throw new Error("Unexpected run() query: " + normalized);
       },
     };
-    var thisDb = this;
   }
 }
 
