@@ -3663,6 +3663,7 @@ function walletAssertCacheMatchesLedgerLocked_(memberId) {
  * Caller must hold ScriptLock and pass a journal already persisted as PREPARED.
  */
 function walletApplyCreditJournalLocked_(journal) {
+  walletAssertWriteGateLocked_();
   if (!journal || !journal.journal_id || !journal.transaction_id ||
       journal.step_state === 'COMPLETED') return {ok:true,already_completed:true};
   const now = new Date().toISOString();
@@ -3760,4 +3761,62 @@ function walletApplyCreditJournalLocked_(journal) {
     } catch (ignored) {}
     throw error;
   }
+}
+
+/** Prepare a positive Paid/Bonus credit as a write-ahead journal. Caller holds ScriptLock. */
+function walletPrepareCreditJournalLocked_(input) {
+  walletAssertWriteGateLocked_();
+  input = input || {};
+  const memberId = String(input.member_id || '');
+  const creditType = String(input.credit_type || '');
+  const amount = walletAssertSatang_(input.amount_satang, false);
+  const idempotencyKey = String(input.idempotency_key || '');
+  const reason = String(input.reason || '').trim();
+  if (!['PAID','BONUS'].includes(creditType) ||
+      !/^[A-Za-z0-9._:-]{16,128}$/.test(idempotencyKey) ||
+      !reason || reason.length > 500) throw new Error('WALLET_CREDIT_INPUT_INVALID');
+
+  const duplicate = repositoryFindByField_('wallet_ledger','idempotency_key',idempotencyKey);
+  if (duplicate.length) throw new Error('WALLET_IDEMPOTENCY_CONFLICT');
+  const now = new Date().toISOString();
+  const wallet = walletFindOrCreateLocked_(memberId,now);
+  walletAssertCacheMatchesLedgerLocked_(memberId);
+  const currentBalance = creditType === 'PAID'
+    ? Number(wallet.paid_balance_satang) : Number(wallet.bonus_balance_satang);
+  const nextBalance = currentBalance + amount;
+  if (!Number.isSafeInteger(nextBalance)) throw new Error('WALLET_BALANCE_OVERFLOW');
+
+  const transactionId = Utilities.getUuid();
+  const ledger = {
+    ledger_id:Utilities.getUuid(),transaction_id:transactionId,member_id:memberId,
+    credit_type:creditType,entry_type:String(input.entry_type || ''),
+    delta_satang:amount,balance_after_satang:nextBalance,
+    reference_type:String(input.reference_type || 'ADMIN'),
+    reference_id:String(input.reference_id || ''),
+    idempotency_key:idempotencyKey,actor_type:String(input.actor_type || 'ADMIN'),
+    actor_id:String(input.actor_id || ''),reason:reason,created_at:now
+  };
+  if (!['TOPUP_APPROVAL','ADMIN_CREDIT','BONUS_GRANT'].includes(ledger.entry_type)) {
+    throw new Error('WALLET_ENTRY_TYPE_INVALID');
+  }
+  const walletPatch = {
+    member_id:memberId,
+    paid_balance_satang:currentBalance + (creditType === 'PAID' ? amount : 0),
+    bonus_balance_satang:Number(wallet.bonus_balance_satang) + (creditType === 'BONUS' ? amount : 0),
+    wallet_version:Number(wallet.wallet_version) + 1,
+    created_at:wallet.created_at,updated_at:now
+  };
+  const bonusPatch = input.bonus_grant
+    ? {operation:'INSERT',record:input.bonus_grant} : null;
+  const journal = {
+    journal_id:Utilities.getUuid(),operation:'CREDIT',transaction_id:transactionId,
+    member_id:memberId,hold_id:'',topup_id:String(input.topup_id || ''),
+    step_state:'PREPARED',ledger_payload_json:JSON.stringify(ledger),
+    wallet_patch_json:JSON.stringify(walletPatch),
+    bonus_patch_json:bonusPatch ? JSON.stringify(bonusPatch) : '',
+    order_patch_json:'',attempts:0,last_error_code:'',
+    created_at:now,updated_at:now
+  };
+  repositoryInsertLocked_('wallet_recovery_journal',journal);
+  return journal;
 }
