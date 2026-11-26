@@ -24,3 +24,5 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Run API characterization tests
         run: npm test
+      - name: Run real image decode/re-encode tests in workerd
+        run: npm run test:workerd
