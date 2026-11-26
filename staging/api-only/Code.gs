@@ -4071,18 +4071,29 @@ function adminRejectWalletTopup(token,args) {
     const admin=requireAdminLocked_(token,Date.now());
     const topup=repositoryGetById_('wallet_topups',String(args.topupId || ''));
     if(!topup) throw new Error('WALLET_TOPUP_NOT_FOUND');
+    const idem='TOPUP_REJECT:'+topup.topup_id;
+    const payloadHash=walletRequestHash_({topupId:topup.topup_id,reason:reason});
+    const prior=repositoryFindByField_('wallet_recovery_journal','idempotency_key',idem);
+    if(prior.length) {
+      if(String(prior[0].payload_hash)!==payloadHash) throw new Error('WALLET_IDEMPOTENCY_CONFLICT');
+      walletApplyTopupDecisionJournalLocked_(prior[0]);
+      return {ok:true,topupId:topup.topup_id,status:'REJECTED',replayed:true};
+    }
     if(topup.status==='REJECTED') return {ok:true,unchanged:true,status:'REJECTED'};
     if(topup.status!=='PENDING_REVIEW') throw new Error('WALLET_TOPUP_NOT_PENDING_REVIEW');
     const now=new Date().toISOString();
-    repositoryUpdateLocked_('wallet_topups',topup.topup_id,{
-      status:'REJECTED',reviewed_by_admin_id:admin.admin_id,reviewed_at:now,
-      rejection_reason:reason,updated_at:now
+    const journal=walletPrepareTopupDecisionJournalLocked_({
+      topup_id:topup.topup_id,member_id:topup.member_id,idempotency_key:idem,
+      payload_hash:payloadHash,expected_status:'PENDING_REVIEW',
+      patch:{status:'REJECTED',reviewed_by_admin_id:admin.admin_id,reviewed_at:now,
+        rejection_reason:reason,updated_at:now},
+      audit_patch:{
+        audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_TOPUP_REJECTED',
+        target_type:'wallet_topup',target_id:topup.topup_id,request_id:requestKey,ip_address:'',
+        details_json:JSON.stringify({reason:reason}),created_at:now
+      }
     });
-    appendAdminAuditLogLocked_({
-      audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_TOPUP_REJECTED',
-      target_type:'wallet_topup',target_id:topup.topup_id,request_id:requestKey,ip_address:'',
-      details_json:JSON.stringify({reason:reason}),created_at:now
-    });
+    walletApplyTopupDecisionJournalLocked_(journal);
     return {ok:true,topupId:topup.topup_id,status:'REJECTED'};
   } finally {lock.releaseLock();}
 }
@@ -4243,4 +4254,67 @@ function runWalletTopupExpiry() {
     });
     return {ok:true,expired:expired,checkedAt:nowIso};
   } finally {lock.releaseLock();}
+}
+
+
+function walletPrepareTopupDecisionJournalLocked_(input) {
+  walletAssertWriteGateLocked_();
+  const key=String(input.idempotency_key || '');
+  const hash=String(input.payload_hash || '');
+  if(!/^[A-Za-z0-9._:-]{16,128}$/.test(key) || !/^[a-f0-9]{64}$/.test(hash)) {
+    throw new Error('WALLET_TOPUP_DECISION_INVALID');
+  }
+  const prior=repositoryFindByField_('wallet_recovery_journal','idempotency_key',key);
+  if(prior.length) {
+    if(String(prior[0].payload_hash)!==hash) throw new Error('WALLET_IDEMPOTENCY_CONFLICT');
+    return prior[0];
+  }
+  const now=new Date().toISOString();
+  const row={
+    journal_id:Utilities.getUuid(),operation:'TOPUP_DECISION',transaction_id:Utilities.getUuid(),
+    idempotency_key:key,payload_hash:hash,member_id:String(input.member_id),
+    hold_id:'',topup_id:String(input.topup_id),step_state:'PREPARED',
+    ledger_payload_json:'',wallet_patch_json:'',bonus_patch_json:'',order_patch_json:'',
+    topup_patch_json:JSON.stringify({topup_id:String(input.topup_id),
+      expected_status:String(input.expected_status),patch:input.patch}),
+    audit_patch_json:JSON.stringify(input.audit_patch),attempts:0,last_error_code:'',
+    created_at:now,updated_at:now
+  };
+  repositoryInsertLocked_('wallet_recovery_journal',row);
+  return row;
+}
+
+function walletApplyTopupDecisionJournalLocked_(journal) {
+  walletAssertWriteGateLocked_();
+  if(!journal || journal.operation!=='TOPUP_DECISION') throw new Error('WALLET_TOPUP_JOURNAL_INVALID');
+  if(journal.step_state==='COMPLETED') return {ok:true,alreadyCompleted:true};
+  const now=new Date().toISOString();
+  try {
+    const patch=JSON.parse(String(journal.topup_patch_json || '{}'));
+    const topup=repositoryGetById_('wallet_topups',String(patch.topup_id || ''));
+    if(!topup || String(topup.member_id)!==String(journal.member_id)) throw new Error('WALLET_TOPUP_NOT_FOUND');
+    if(String(topup.status)===String(patch.expected_status)) {
+      repositoryUpdateLocked_('wallet_topups',patch.topup_id,patch.patch);
+    } else if(String(topup.status)!==String(patch.patch.status)) {
+      throw new Error('WALLET_TOPUP_STATE_CONFLICT');
+    }
+    const audit=JSON.parse(String(journal.audit_patch_json || '{}'));
+    const existing=repositoryGetById_('admin_audit_logs',audit.audit_id);
+    if(!existing) repositoryInsertLocked_('admin_audit_logs',audit);
+    else if(NOBI.SHEETS.admin_audit_logs.some(function(field){
+      return String(existing[field] == null ? '' : existing[field])!==String(audit[field] == null ? '' : audit[field]);
+    })) throw new Error('WALLET_AUDIT_CONFLICT');
+    repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{
+      step_state:'COMPLETED',attempts:Number(journal.attempts || 0)+1,last_error_code:'',updated_at:now
+    });
+    return {ok:true};
+  } catch(error) {
+    const saved=repositoryGetById_('wallet_recovery_journal',journal.journal_id);
+    if(saved && saved.step_state!=='COMPLETED') repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{
+      step_state:'RECOVERY_REQUIRED',attempts:Number(saved.attempts || 0)+1,
+      last_error_code:/^[A-Z0-9_:-]{1,100}$/.test(String(error.message || ''))?String(error.message):'WALLET_RECOVERY_FAILED',
+      updated_at:now
+    });
+    throw error;
+  }
 }
