@@ -115,13 +115,13 @@ test('Schema v6 initializes all Wallet tabs on a new isolated database', () => {
 
 test('Schema v5 to v6 upgrade appends only the two approved order columns and preserves rows', () => {
   const spreadsheet = makeSchemaV5Spreadsheet();
-  const oldOrder = spreadsheet.getSheetByName('orders').rows[1].slice();
+  const oldOrder = Array.from(spreadsheet.getSheetByName('orders').rows[1]);
   const { context } = loadBundle(apiPath, spreadsheet, { NOBI_SHEET_ID: spreadsheet.getId() });
   const result = context.__setup();
   assert.equal(result.schemaVersion, 6);
   const orders = spreadsheet.getSheetByName('orders');
-  assert.deepEqual(orders.rows[1].slice(0, oldOrder.length), oldOrder);
-  assert.deepEqual(orders.rows[0].slice(-2), ['payment_method','wallet_hold_id']);
+  assert.deepEqual(Array.from(orders.rows[1].slice(0, oldOrder.length)), oldOrder);
+  assert.deepEqual(Array.from(orders.rows[0].slice(-2)), ['payment_method','wallet_hold_id']);
   assert.equal(orders.rows[1][oldOrder.length], '');
   assert.equal(orders.rows[1][oldOrder.length + 1], '');
   assert.equal(spreadsheet.getSheetByName('system_metadata').rows[1][1], '6');
