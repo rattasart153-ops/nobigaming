@@ -78,6 +78,14 @@ test('All top-up write entry points enforce the single-writer gate', () => {
   }
 });
 
+test('Bonus grant start time with caller input must carry an explicit timezone offset', () => {
+  const start=source.indexOf('function adminCreateBonusGrant(');
+  const next=source.indexOf('\\nfunction ',start+10);
+  const body=source.slice(start,next<0?source.length:next);
+  assert.match(body,/WALLET_BONUS_START_OFFSET_REQUIRED/);
+  assert.match(body,/sourceId\.length>128/);
+});
+
 test('Schema v6 recovery journal carries idempotency, top-up and audit recovery payloads', () => {
   assert.match(source,/wallet_recovery_journal: \[[^\]]*'idempotency_key'[^\]]*'payload_hash'[^\]]*'topup_patch_json'[^\]]*'audit_patch_json'/);
   assert.match(source,/function walletPrepareCreditJournalLocked_\(input\)[\s\S]*?priorJournals=repositoryFindByField_\('wallet_recovery_journal','idempotency_key',idempotencyKey\)/);
