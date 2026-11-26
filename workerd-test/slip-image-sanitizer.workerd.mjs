@@ -1,0 +1,155 @@
+import { describe, expect, it } from "vitest";
+import { exports } from "cloudflare:workers";
+import { fixtureBytes, IMAGE_FIXTURES } from "./fixtures.mjs";
+
+function jpegWithExifMetadata() {
+  const jpeg = fixtureBytes("jpeg");
+  const description = new TextEncoder().encode("NOBI-PRIVATE-TEST-METADATA");
+  const tiff = new Uint8Array(26 + description.length + 1);
+  tiff[0] = 0x49; // II, little-endian TIFF
+  tiff[1] = 0x49;
+  const view = new DataView(tiff.buffer);
+  view.setUint16(2, 42, true);
+  view.setUint32(4, 8, true); // IFD0 offset
+  view.setUint16(8, 1, true); // one IFD entry
+  view.setUint16(10, 0x010e, true); // ImageDescription
+  view.setUint16(12, 2, true); // ASCII
+  view.setUint32(14, description.length + 1, true);
+  view.setUint32(18, 26, true); // description offset from TIFF header
+  view.setUint32(22, 0, true); // no next IFD
+  tiff.set(description, 26);
+
+  const payload = new Uint8Array(6 + tiff.length);
+  payload.set([0x45, 0x78, 0x69, 0x66, 0x00, 0x00], 0); // Exif NUL NUL
+  payload.set(tiff, 6);
+  const segmentLength = payload.length + 2;
+  const app1 = new Uint8Array(payload.length + 4);
+  app1.set([0xff, 0xe1, (segmentLength >> 8) & 0xff, segmentLength & 0xff], 0);
+  app1.set(payload, 4);
+
+  const app0Length = (jpeg[4] << 8) | jpeg[5];
+  const insertAt = 2 + 2 + app0Length;
+  const combined = new Uint8Array(jpeg.length + app1.length);
+  combined.set(jpeg.slice(0, insertAt), 0);
+  combined.set(app1, insertAt);
+  combined.set(jpeg.slice(insertAt), insertAt + app1.length);
+  return combined;
+}
+
+function postImage(bytes, mime) {
+  return exports.default.fetch(
+    new Request("https://nobi-staging.invalid/sanitize", {
+      method: "POST",
+      headers: { "content-type": mime },
+      body: bytes,
+    }),
+  );
+}
+
+async function expectSanitizedJpeg(response, originalFormat) {
+  expect(response.status).toBe(200);
+  expect(response.headers.get("content-type")).toBe("image/jpeg");
+  expect(response.headers.get("x-original-format")).toBe(originalFormat);
+
+  const width = Number(response.headers.get("x-output-width"));
+  const height = Number(response.headers.get("x-output-height"));
+  expect(width).toBeGreaterThan(0);
+  expect(height).toBeGreaterThan(0);
+  expect(width).toBeLessThanOrEqual(2048);
+  expect(height).toBeLessThanOrEqual(2048);
+
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  expect(bytes.length).toBeGreaterThan(4);
+  expect(bytes.length).toBeLessThanOrEqual(2_500_000);
+  expect(Array.from(bytes.slice(0, 3))).toEqual([0xff, 0xd8, 0xff]);
+  expect(Array.from(bytes.slice(-2))).toEqual([0xff, 0xd9]);
+  return bytes;
+}
+
+describe("real SIP decode/re-encode inside Cloudflare workerd", () => {
+  it.each(["jpeg", "png", "webp"])(
+    "decodes %s and emits a fresh bounded JPEG",
+    async (format) => {
+      const fixture = IMAGE_FIXTURES[format];
+      const response = await postImage(fixtureBytes(format), fixture.mime);
+      const output = await expectSanitizedJpeg(response, format);
+
+      // Decode the generated JPEG again through the real SIP decoder. This checks
+      // that the returned bytes are not merely JPEG-looking headers.
+      const secondPass = await postImage(output, "image/jpeg");
+      await expectSanitizedJpeg(secondPass, "jpeg");
+    },
+  );
+
+  it("removes EXIF metadata by decoding and re-encoding the original JPEG", async () => {
+    const response = await postImage(jpegWithExifMetadata(), "image/jpeg");
+    const output = await expectSanitizedJpeg(response, "jpeg");
+    const ascii = new TextDecoder("latin1").decode(output);
+    expect(ascii.includes("Exif" + String.fromCharCode(0, 0))).toBe(false);
+    expect(ascii.includes("NOBI-PRIVATE-TEST-METADATA")).toBe(false);
+    expect(ascii.includes("NOBI-CAMERA")).toBe(false);
+  });
+
+  it("rejects real APNG and animated WebP inputs before decoding", async () => {
+    const apng = await postImage(fixtureBytes("apng"), "image/png");
+    expect(apng.status).toBe(422);
+    expect(await apng.json()).toEqual({ error: "PROOF_IMAGE_ANIMATED" });
+
+    const animatedWebp = await postImage(fixtureBytes("animatedWebp"), "image/webp");
+    expect(animatedWebp.status).toBe(422);
+    expect(await animatedWebp.json()).toEqual({ error: "PROOF_IMAGE_ANIMATED" });
+  });
+
+  it("rejects a JPEG with an appended payload", async () => {
+    const original = fixtureBytes("jpeg");
+    const payload = new TextEncoder().encode("NOBI-POLYGLOT-PAYLOAD");
+    const combined = new Uint8Array(original.length + payload.length);
+    combined.set(original);
+    combined.set(payload, original.length);
+    const response = await postImage(combined, "image/jpeg");
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({ error: "PROOF_IMAGE_TRAILING_DATA" });
+  });
+
+  it("rejects a claimed MIME type that does not match the file signature", async () => {
+    const response = await postImage(fixtureBytes("jpeg"), "image/png");
+    expect(response.status).toBe(415);
+    expect(await response.json()).toEqual({
+      error: "PROOF_IMAGE_MIME_MISMATCH",
+    });
+  });
+
+  it("rejects dimensions above the pixel ceiling before invoking a decoder", async () => {
+    const bytes = fixtureBytes("jpeg");
+    let sof = -1;
+    for (let i = 0; i < bytes.length - 8; i += 1) {
+      if (bytes[i] === 0xff && [0xc0, 0xc1, 0xc2, 0xc3].includes(bytes[i + 1])) {
+        sof = i;
+        break;
+      }
+    }
+    expect(sof).toBeGreaterThanOrEqual(0);
+
+    // JPEG SOF: marker, segment length, precision, height, width.
+    // Both dimensions remain below 4096, but 2500 x 2000 exceeds 4 MP.
+    bytes[sof + 5] = 0x07;
+    bytes[sof + 6] = 0xd0; // 2000 px
+    bytes[sof + 7] = 0x09;
+    bytes[sof + 8] = 0xc4; // 2500 px
+
+    const response = await postImage(bytes, "image/jpeg");
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      error: "PROOF_IMAGE_DIMENSIONS_UNSAFE",
+    });
+  });
+
+  it("rejects a body larger than 3 MiB before decoding", async () => {
+    const bytes = new Uint8Array(3 * 1024 * 1024 + 1);
+    const response = await postImage(bytes, "image/jpeg");
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      error: "PROOF_IMAGE_TOO_LARGE",
+    });
+  });
+});
