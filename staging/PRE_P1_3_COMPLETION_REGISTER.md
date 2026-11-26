@@ -9,13 +9,17 @@
 
 ### 1. Server-side image decode/re-encode for top-up proof
 
-**Status: BLOCKED — implementation runtime not yet selected.**
+**Status: PROTOTYPE IMPLEMENTED; RELEASE BLOCKED pending real workerd validation and Drive-path integration.**
 
 The API-only Apps Script currently checks the declared MIME type, byte limit, and PNG/JPEG/WebP structure before storing the original bytes. These checks are useful validation, but they do not decode pixels and re-encode a fresh image. Re-wrapping bytes in a new Blob is not sanitization.
 
 Apps Script's built-in services do not provide a general-purpose image decoder/encoder. Do not claim that a browser Canvas conversion is a security boundary: a client can bypass it and call the API directly.
 
-A candidate for the already-planned Cloudflare Worker/Pages runtime is [\`@standardagents/sip\`](https://github.com/standardagents/sip): its published documentation describes a Cloudflare Workers-compatible WASM pipeline, JPEG/PNG/WebP input and JPEG output under an MIT license. Its documentation also notes that WebP currently uses full decode and therefore higher memory, so this is a candidate for a constrained prototype, not an approved production dependency. The implementation must inspect dimensions before decode and impose a strict pixel ceiling, especially for WebP. See the [upstream README](https://github.com/standardagents/sip#readme).
+The prototype is implemented in [the sanitizer module](../functions/_shared/slip-image-sanitizer.mjs), [the workerd SIP adapter](../functions/_shared/sip-adapter.ts), [synthetic tests](../test/staging-slip-image-sanitizer.test.js), and [the prototype guide](./CLOUDFLARE_IMAGE_SANITIZER.md). It pins @standardagents/sip 1.0.1 and accepts JPEG/PNG/static WebP; input is capped at 3 MiB, dimensions at 4,096 px and 4 megapixels, animated APNG/WebP and trailing payloads are rejected, and output must be a fresh JPEG no larger than 2,500,000 bytes. WebP's separate decoder WASM is loaded through the SIP adapter.
+
+The synthetic Node suite passed **208/208 tests** on commit `6da3a3f653baa3815ac3abae17e7ec5112f283d8` in [GitHub Actions run 45845521286](https://github.com/rattasart153-ops/nobigaming/actions/runs/45845521286) and [run 45845536042](https://github.com/rattasart153-ops/nobigaming/actions/runs/45845536042).
+
+**Not yet proven:** tests inject a fake SIP adapter. They do not execute the real WASM decoder under Cloudflare workerd, measure Worker memory/CPU, verify Pages WASM bundling, or verify that only sanitized bytes reach private Drive. No Pages proof-upload route exists yet; Apps Script remains unchanged and this prototype is inactive. The upstream documentation confirms WebP requires full-image decode and higher memory, so the pixel ceiling must remain enforced.
 
 Required before enabling proof uploads:
 1. Select an approved server-side image-processing runtime compatible with the free-first architecture (candidate: a Cloudflare Pages Function using a reviewed WebAssembly image codec).
