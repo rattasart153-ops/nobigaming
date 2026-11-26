@@ -15,6 +15,8 @@ The API-only Apps Script currently checks the declared MIME type, byte limit, an
 
 Apps Script's built-in services do not provide a general-purpose image decoder/encoder. Do not claim that a browser Canvas conversion is a security boundary: a client can bypass it and call the API directly.
 
+A candidate for the already-planned Cloudflare Worker/Pages runtime is [\`@standardagents/sip\`](https://github.com/standardagents/sip): its published documentation describes a Cloudflare Workers-compatible WASM pipeline, JPEG/PNG/WebP input and JPEG output under an MIT license. Its documentation also notes that WebP currently uses full decode and therefore higher memory, so this is a candidate for a constrained prototype, not an approved production dependency. The implementation must inspect dimensions before decode and impose a strict pixel ceiling, especially for WebP. See the [upstream README](https://github.com/standardagents/sip#readme).
+
 Required before enabling proof uploads:
 1. Select an approved server-side image-processing runtime compatible with the free-first architecture (candidate: a Cloudflare Pages Function using a reviewed WebAssembly image codec).
 2. Decode the uploaded image in that trusted runtime; enforce pixel/dimension limits and reject malformed or decompression-bomb inputs.
