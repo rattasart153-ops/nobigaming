@@ -90,7 +90,7 @@ function createRuntime() {
     SpreadsheetApp:{openById:()=>spreadsheet,create:()=>spreadsheet},
     LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
     Utilities:{
-      getUuid:()=> 'uuid-'+(++uuid),
+      getUuid:()=> '00000000-0000-4000-8000-'+String(++uuid).padStart(12,'0'),
       computeDigest:(alg,value)=>Array.from(crypto.createHash('sha256').update(String(value)).digest()),
       base64Decode:value=>Array.from(Buffer.from(value,'base64')),
       base64Encode:value=>Buffer.from(value).toString('base64'),
