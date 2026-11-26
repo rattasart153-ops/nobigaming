@@ -355,7 +355,11 @@ Suggested error codes:
 
 No phase is automatically authorized by this design document.
 
-## 10. Open decisions requiring owner confirmation before implementation
+## 10. Decision status
+
+The eight previously open decisions are now closed by the owner-requested [E-Budget Decision Register](./EBUDGET_DECISIONS.md). That register is authoritative if any earlier draft wording in this document differs. The resolved policies cover the two crediting paths, 24-hour proof-submission window, configurable finite Bonus expiry, refunds, disabled negative adjustments, Bonus holds at expiry, and API-only single-writer cutover.
+
+Implementation remains unauthorized until separately approved.
 
 1. **Top-up payment methods:** which exact methods should members choose from? The app should use an Admin-configured allowlist; no method is assumed here.
 2. **Top-up request expiry:** should an unsubmitted proof request expire, and after how long? No expiry is invented in this design.
