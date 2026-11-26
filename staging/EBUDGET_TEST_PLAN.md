@@ -127,7 +127,26 @@ E-Budget is not ready for staging deployment until all gates pass:
 12. Browser/mobile UI tests pass on the actual STAGING environment.
 13. No Production resource, deployment, credential or customer data was accessed.
 
-## 7. Not yet testable / owner decisions required
+## 7. Policy-closure test additions
+
+The policy decisions are closed by [E-Budget Decision Register](./EBUDGET_DECISIONS.md). Add and require these cases before release:
+
+| ID | Scenario | Expected result |
+|---|---|---|
+| EB-D-001 | Submit proof just before 24-hour AWAITING_PROOF deadline | Accepted if server time is before deadline; state becomes PENDING_REVIEW |
+| EB-D-002 | Submit proof at/after 24-hour deadline | Rejected; request is EXPIRED; no credit |
+| EB-D-003 | PENDING_REVIEW remains unreviewed past 24 hours | Remains PENDING_REVIEW; no automatic expiry or credit |
+| EB-D-004 | Create Bonus using duration | Absolute expiry is calculated once and persisted |
+| EB-D-005 | Create Bonus without expiry | Rejected |
+| EB-D-006 | Create Bonus with expiry <= start time | Rejected |
+| EB-D-007 | Full refund after capture | Original Paid/Bonus source amounts are restored as compensating entries |
+| EB-D-008 | Partial refund with fractional satang allocation | Largest-remainder allocation is deterministic and bounded by original source capture |
+| EB-D-009 | Refund after original Bonus grant expiry | Bonus is not converted to Paid; expired Bonus refund is immediately expired |
+| EB-D-010 | Attempt generic negative Admin adjustment | No endpoint/UI permission; request rejected |
+| EB-D-011 | Legacy HtmlService attempts financial write after cutover | Write denied; API-only remains sole writer |
+| EB-D-012 | API-only cutover while legacy writer is still active | Release gate fails; Wallet activation blocked |
+
+The Test Plan remains unexecuted until a separately approved implementation is available.
 
 The following cases need explicit policy confirmation before expected results can be finalized:
 - Allowed top-up payment methods.
