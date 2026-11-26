@@ -40,4 +40,4 @@ This folder contains the isolated HTTP-only Apps Script source for the Cloudflar
 
 ## Verification
 
-The repository test suite includes static API-boundary checks and Schema v6 tests for fresh initialization, additive v5 migration and fail-closed preflight. Passing Node tests does not replace a live Apps Script runtime test.
+The repository test suite includes static API-boundary checks, Schema v6 migration tests, and synthetic Sheets/Drive integration tests for top-up proof, Admin approval/rejection, expiry, Paid Credit and Bonus Grant workflows. Passing Node/VM tests does not replace a live Apps Script runtime test.
