@@ -23,7 +23,7 @@ const NOBI = {
     wallet_holds: ['hold_id','order_id','member_id','status','total_satang','paid_reserved_satang','bonus_reserved_satang','created_at','expires_at','captured_at','released_at'],
     wallet_hold_allocations: ['allocation_id','hold_id','credit_type','bonus_grant_id','amount_satang','allocation_order','created_at'],
     wallet_bonus_grants: ['bonus_grant_id','member_id','granted_satang','remaining_satang','source_type','source_id','reason','starts_at','expires_at','status','created_by_admin_id','created_at','updated_at'],
-    wallet_recovery_journal: ['journal_id','operation','transaction_id','member_id','hold_id','topup_id','step_state','ledger_payload_json','wallet_patch_json','bonus_patch_json','order_patch_json','attempts','last_error_code','created_at','updated_at'],
+    wallet_recovery_journal: ['journal_id','operation','transaction_id','member_id','hold_id','topup_id','step_state','ledger_payload_json','wallet_patch_json','bonus_patch_json','order_patch_json','topup_patch_json','audit_patch_json','attempts','last_error_code','created_at','updated_at'],
     orders: ['order_id','order_number','request_key','member_id','game_id','package_id','player_id','server_id','coupon_id','subtotal_satang','discount_satang','total_satang','slip_file_id','slip_mime_type','slip_size_bytes','slip_submitted_at','checkout_token_hash','status','status_reason','payment_expires_at','created_at','updated_at','completed_at','rejected_at','payment_method','wallet_hold_id'],
     idempotency_records: ['idempotency_id','scope','request_key','payload_hash','resource_id','state','created_at','expires_at'],
     order_recovery_journal: ['journal_id','order_id','operation','order_record_json','idempotency_record_json','redemption_record_json','order_patch_json','redemption_id','redemption_patch_json','state','attempts','last_error_code','created_at','updated_at'],
@@ -67,6 +67,9 @@ function dispatchGatewayAction_(action, args) {
     case 'memberRegister': return memberRegister(args.fullName, args.loginId, args.password);
     case 'memberLogin': return memberLogin(args.loginId, args.password, args.userAgent);
     case 'memberDashboard': return memberDashboard(args.token);
+    case 'memberCreateWalletTopup': return memberCreateWalletTopup(args.token,args);
+    case 'memberSubmitWalletTopupProof': return memberSubmitWalletTopupProof(args.token,args);
+    case 'memberWalletTopups': return memberWalletTopups(args.token,args.limit);
     case 'memberOrders': return memberOrders(args.token, args.limit);
     case 'memberMe':
       try { return memberMe(args.token); }
@@ -89,6 +92,11 @@ function dispatchGatewayAction_(action, args) {
       }
     case 'adminLogout': return adminLogout(args.token);
     case 'adminDashboard': return adminDashboard(args.token);
+    case 'adminWalletTopups': return adminWalletTopups(args.token,args.status,args.limit);
+    case 'adminApproveWalletTopup': return adminApproveWalletTopup(args.token,args);
+    case 'adminRejectWalletTopup': return adminRejectWalletTopup(args.token,args);
+    case 'adminGrantPaidCredit': return adminGrantPaidCredit(args.token,args);
+    case 'adminCreateBonusGrant': return adminCreateBonusGrant(args.token,args);
     case 'adminOrders': return adminOrders(args.token);
     case 'adminSlipData': return adminSlipData(args.token, args.orderId);
     case 'adminSetOrderStatus': return adminSetOrderStatus(args.token, args.orderId, args.status);
@@ -2836,6 +2844,14 @@ const NOBI_GATEWAY = {
     'adminSetMemberStatus',
     'adminStoreMedia',
     'publicMediaData',
+    'memberCreateWalletTopup',
+    'memberSubmitWalletTopupProof',
+    'memberWalletTopups',
+    'adminWalletTopups',
+    'adminApproveWalletTopup',
+    'adminRejectWalletTopup',
+    'adminGrantPaidCredit',
+    'adminCreateBonusGrant',
     'banners'
   ]
 };
@@ -3740,6 +3756,30 @@ function walletApplyCreditJournalLocked_(journal) {
       })) throw new Error('WALLET_BONUS_GRANT_CONFLICT');
     }
 
+    const topupPatch = journal.topup_patch_json ? JSON.parse(String(journal.topup_patch_json)) : null;
+    if (topupPatch) {
+      if (!topupPatch.topup_id || !topupPatch.expected_status || !topupPatch.patch ||
+          String(topupPatch.topup_id) !== String(journal.topup_id)) throw new Error('WALLET_JOURNAL_TOPUP_INVALID');
+      const topup = repositoryGetById_('wallet_topups',topupPatch.topup_id);
+      if (!topup) throw new Error('WALLET_TOPUP_NOT_FOUND');
+      if (String(topup.status) === String(topupPatch.expected_status)) {
+        repositoryUpdateLocked_('wallet_topups',topupPatch.topup_id,topupPatch.patch);
+      } else if (String(topup.status) !== String(topupPatch.patch.status)) {
+        throw new Error('WALLET_TOPUP_STATE_CONFLICT');
+      }
+    }
+
+    const auditPatch = journal.audit_patch_json ? JSON.parse(String(journal.audit_patch_json)) : null;
+    if (auditPatch) {
+      if (!auditPatch.audit_id || !auditPatch.admin_id || !auditPatch.action) throw new Error('WALLET_JOURNAL_AUDIT_INVALID');
+      const existingAudit = repositoryGetById_('admin_audit_logs',auditPatch.audit_id);
+      if (!existingAudit) repositoryInsertLocked_('admin_audit_logs',auditPatch);
+      else if (NOBI.SHEETS.admin_audit_logs.some(function(field) {
+        return String(existingAudit[field] == null ? '' : existingAudit[field]) !==
+          String(auditPatch[field] == null ? '' : auditPatch[field]);
+      })) throw new Error('WALLET_AUDIT_CONFLICT');
+    }
+
     walletAssertCacheMatchesLedgerLocked_(journal.member_id);
     repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{
       step_state:'COMPLETED',attempts:Number(journal.attempts || 0)+1,
@@ -3819,4 +3859,311 @@ function walletPrepareCreditJournalLocked_(input) {
   };
   repositoryInsertLocked_('wallet_recovery_journal',journal);
   return journal;
+}
+
+
+// ===== E-BUDGET P1.2: member top-up and admin credit workflows =====
+function walletRequestHash_(value) {
+  return sha256_(JSON.stringify(value));
+}
+
+function walletRequestKey_(value) {
+  const key=String(value || '').trim();
+  if (!/^[A-Za-z0-9._:-]{16,128}$/.test(key)) throw new Error('WALLET_REQUEST_KEY_INVALID');
+  return key;
+}
+
+function walletConfiguredTopupMethod_(method) {
+  const key=String(method || '').trim().toUpperCase();
+  if (key === 'PROMPTPAY' &&
+      String(PropertiesService.getScriptProperties().getProperty('NOBI_PROMPTPAY_ID') || '').trim()) {
+    return 'PROMPTPAY';
+  }
+  throw new Error('WALLET_PAYMENT_METHOD_NOT_CONFIGURED');
+}
+
+function walletPublicTopup_(row) {
+  return {
+    topupId:String(row.topup_id),amountSatang:Number(row.amount_satang),
+    status:String(row.status),paymentMethod:String(row.payment_method),
+    paymentReference:String(row.payment_reference || ''),
+    submittedAt:String(row.submitted_at || ''),
+    reviewedAt:String(row.reviewed_at || ''),
+    rejectionReason:String(row.rejection_reason || ''),
+    createdAt:String(row.created_at)
+  };
+}
+
+function memberCreateWalletTopup(token,args) {
+  args=args || {};
+  const key=walletRequestKey_(args.requestKey);
+  const amount=walletAssertSatang_(args.amountSatang,false);
+  if(amount<5000) throw new Error('WALLET_TOPUP_MINIMUM_50_THB');
+  const method=walletConfiguredTopupMethod_(args.paymentMethod);
+  const reference=String(args.paymentReference || '').trim().slice(0,100);
+  const payloadHash=walletRequestHash_({amountSatang:amount,paymentMethod:method,paymentReference:reference});
+  const lock=LockService.getScriptLock();lock.waitLock(15000);
+  try {
+    const member=requireMemberLocked_(token,Date.now());
+    const existing=repositoryFindByField_('wallet_topups','idempotency_key',key);
+    if(existing.length){
+      if(String(existing[0].member_id)!==String(member.member_id) ||
+         String(existing[0].payload_hash)!==payloadHash) throw new Error('IDEMPOTENCY_CONFLICT');
+      return {ok:true,topup:walletPublicTopup_(existing[0]),replayed:true};
+    }
+    if(reference && repositoryRows_('wallet_topups').some(function(t){
+      return String(t.payment_reference || '').toLowerCase()===reference.toLowerCase() &&
+        ['PENDING_REVIEW','APPROVED'].includes(String(t.status));
+    })) throw new Error('WALLET_PAYMENT_REFERENCE_DUPLICATE');
+    const now=new Date().toISOString();
+    const row={
+      topup_id:Utilities.getUuid(),member_id:member.member_id,amount_satang:amount,
+      status:'AWAITING_PROOF',payment_method:method,payment_reference:reference,
+      slip_file_id:'',slip_mime_type:'',slip_size_bytes:0,submitted_at:'',
+      reviewed_by_admin_id:'',reviewed_at:'',rejection_reason:'',
+      idempotency_key:key,payload_hash:payloadHash,created_at:now,updated_at:now
+    };
+    repositoryInsertLocked_('wallet_topups',row);
+    return {ok:true,topup:walletPublicTopup_(row),replayed:false};
+  } finally {lock.releaseLock();}
+}
+
+function memberSubmitWalletTopupProof(token,args) {
+  args=args || {};
+  const topupId=String(args.topupId || '').trim();
+  const slip=args.slip || {};
+  const mime=String(slip.mimeType || '');
+  if(!topupId || !slip.base64 || !/^image\/(png|jpeg|webp)$/.test(mime)) throw new Error('WALLET_TOPUP_PROOF_INVALID');
+  const bytes=Utilities.base64Decode(String(slip.base64).replace(/^data:[^,]+,/, ''));
+  if(!bytes.length || bytes.length>NOBI.MAX_SLIP_BYTES || !validImageSignature_(bytes,mime)) throw new Error('WALLET_TOPUP_PROOF_INVALID');
+  const lock=LockService.getScriptLock();lock.waitLock(20000);
+  let file=null;
+  try {
+    const member=requireMemberLocked_(token,Date.now());
+    const topup=repositoryGetById_('wallet_topups',topupId);
+    if(!topup || String(topup.member_id)!==String(member.member_id)) throw new Error('WALLET_TOPUP_NOT_FOUND');
+    if(topup.status!=='AWAITING_PROOF') {
+      if(topup.status==='PENDING_REVIEW' && topup.slip_file_id) return {ok:true,alreadySubmitted:true,status:topup.status};
+      throw new Error('WALLET_TOPUP_NOT_ACCEPTING_PROOF');
+    }
+    const created=Date.parse(topup.created_at);
+    if(!Number.isFinite(created) || Date.now()>=created+24*60*60*1000) {
+      repositoryUpdateLocked_('wallet_topups',topupId,{status:'EXPIRED',updated_at:new Date().toISOString()});
+      throw new Error('WALLET_TOPUP_EXPIRED');
+    }
+    const folderId=String(PropertiesService.getScriptProperties().getProperty('NOBI_PRIVATE_DRIVE_FOLDER_ID') || '').trim();
+    if(!folderId) throw new Error('DRIVE_FOLDER_NOT_CONFIGURED');
+    const folder=DriveApp.getFolderById(folderId);assertDriveFolderPrivate_(folder);
+    const ext=mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg';
+    file=folder.createFile(Utilities.newBlob(bytes,mime,'wallet-topup-'+topupId+'.'+ext));
+    file.setSharing(DriveApp.Access.PRIVATE,DriveApp.Permission.VIEW);
+    assertDriveFileInPrivateFolder_(file,folderId);
+    const now=new Date().toISOString();
+    repositoryUpdateLocked_('wallet_topups',topupId,{
+      status:'PENDING_REVIEW',slip_file_id:file.getId(),slip_mime_type:mime,
+      slip_size_bytes:bytes.length,submitted_at:now,updated_at:now
+    });
+    return {ok:true,status:'PENDING_REVIEW',submittedAt:now};
+  } catch(error) {
+    if(file) {
+      let linked=false;
+      try {const row=repositoryGetById_('wallet_topups',topupId);linked=Boolean(row && String(row.slip_file_id)===String(file.getId()));}catch(ignored){}
+      if(!linked) try{file.setTrashed(true);}catch(ignored){}
+    }
+    throw error;
+  } finally {lock.releaseLock();}
+}
+
+function memberWalletTopups(token,limit) {
+  const member=requireMember_(token);
+  const max=Math.min(50,Math.max(1,Number.isSafeInteger(Number(limit))?Number(limit):20));
+  return repositoryRows_('wallet_topups').filter(function(row){
+    return String(row.member_id)===String(member.member_id);
+  }).sort(function(a,b){return String(b.created_at).localeCompare(String(a.created_at));})
+    .slice(0,max).map(walletPublicTopup_);
+}
+
+function adminWalletTopups(token,status,limit) {
+  requireAdmin_(token);
+  const allowed=['AWAITING_PROOF','PENDING_REVIEW','APPROVED','REJECTED','EXPIRED','CANCELLED'];
+  const filter=String(status || 'PENDING_REVIEW');
+  if(!allowed.includes(filter)) throw new Error('WALLET_TOPUP_STATUS_INVALID');
+  const max=Math.min(100,Math.max(1,Number.isSafeInteger(Number(limit))?Number(limit):50));
+  const members={};
+  repositoryRows_('members').forEach(function(m){members[String(m.member_id)]=m;});
+  return repositoryRows_('wallet_topups').filter(function(row){return String(row.status)===filter;})
+    .sort(function(a,b){return String(b.created_at).localeCompare(String(a.created_at));})
+    .slice(0,max).map(function(row){
+      const member=members[String(row.member_id)] || {};
+      return {topupId:String(row.topup_id),memberId:String(row.member_id),
+        memberName:String(member.full_name || ''),loginId:String(member.login_id_display || ''),
+        amountSatang:Number(row.amount_satang),status:String(row.status),
+        paymentMethod:String(row.payment_method),paymentReference:String(row.payment_reference || ''),
+        submittedAt:String(row.submitted_at || ''),proofAvailable:Boolean(row.slip_file_id),
+        createdAt:String(row.created_at)};
+    });
+}
+
+function adminApproveWalletTopup(token,args) {
+  args=args || {};
+  const requestKey=walletRequestKey_(args.requestKey);
+  if(args.confirmation!==true) throw new Error('WALLET_APPROVAL_CONFIRMATION_REQUIRED');
+  const reason=String(args.reason || 'Payment evidence verified').trim();
+  if(!reason || reason.length>500) throw new Error('WALLET_REASON_REQUIRED');
+  const lock=LockService.getScriptLock();lock.waitLock(20000);
+  try {
+    walletAssertWriteGateLocked_();
+    const admin=requireAdminLocked_(token,Date.now());
+    const topup=repositoryGetById_('wallet_topups',String(args.topupId || ''));
+    if(!topup) throw new Error('WALLET_TOPUP_NOT_FOUND');
+    if(topup.status==='APPROVED') {
+      const linked=repositoryFindByField_('wallet_ledger','reference_id',topup.topup_id)
+        .filter(function(l){return l.entry_type==='TOPUP_APPROVAL';});
+      if(linked.length===1) return {ok:true,alreadyApproved:true,topupId:topup.topup_id};
+      throw new Error('WALLET_TOPUP_RECONCILIATION_REQUIRED');
+    }
+    if(topup.status!=='PENDING_REVIEW' || !topup.slip_file_id) throw new Error('WALLET_TOPUP_NOT_PENDING_REVIEW');
+    const duplicate=repositoryFindByField_('wallet_ledger','idempotency_key','TOPUP:'+topup.topup_id);
+    if(duplicate.length) throw new Error('WALLET_TOPUP_RECONCILIATION_REQUIRED');
+    const journal=walletPrepareCreditJournalLocked_({
+      member_id:topup.member_id,credit_type:'PAID',amount_satang:Number(topup.amount_satang),
+      idempotency_key:'TOPUP:'+topup.topup_id,entry_type:'TOPUP_APPROVAL',
+      reference_type:'TOPUP',reference_id:topup.topup_id,actor_type:'ADMIN',
+      actor_id:admin.admin_id,reason:reason,topup_id:topup.topup_id
+    });
+    journal.topup_patch_json=JSON.stringify({topup_id:topup.topup_id,expected_status:'PENDING_REVIEW',
+      patch:{status:'APPROVED',reviewed_by_admin_id:admin.admin_id,reviewed_at:new Date().toISOString(),updated_at:new Date().toISOString()}});
+    journal.audit_patch_json=JSON.stringify({
+      audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_TOPUP_APPROVED',
+      target_type:'wallet_topup',target_id:topup.topup_id,request_id:requestKey,ip_address:'',
+      details_json:JSON.stringify({amount_satang:Number(topup.amount_satang),reason:reason}),created_at:new Date().toISOString()
+    });
+    repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{
+      topup_patch_json:journal.topup_patch_json,audit_patch_json:journal.audit_patch_json
+    });
+    const ready=repositoryGetById_('wallet_recovery_journal',journal.journal_id);
+    walletApplyCreditJournalLocked_(ready);
+    return {ok:true,topupId:topup.topup_id,status:'APPROVED',amountSatang:Number(topup.amount_satang)};
+  } finally {lock.releaseLock();}
+}
+
+function adminRejectWalletTopup(token,args) {
+  args=args || {};
+  const requestKey=walletRequestKey_(args.requestKey);
+  const reason=String(args.reason || '').trim();
+  if(!reason || reason.length>500) throw new Error('WALLET_REJECTION_REASON_REQUIRED');
+  const lock=LockService.getScriptLock();lock.waitLock(15000);
+  try {
+    const admin=requireAdminLocked_(token,Date.now());
+    const topup=repositoryGetById_('wallet_topups',String(args.topupId || ''));
+    if(!topup) throw new Error('WALLET_TOPUP_NOT_FOUND');
+    if(topup.status==='REJECTED') return {ok:true,unchanged:true,status:'REJECTED'};
+    if(topup.status!=='PENDING_REVIEW') throw new Error('WALLET_TOPUP_NOT_PENDING_REVIEW');
+    const now=new Date().toISOString();
+    repositoryUpdateLocked_('wallet_topups',topup.topup_id,{
+      status:'REJECTED',reviewed_by_admin_id:admin.admin_id,reviewed_at:now,
+      rejection_reason:reason,updated_at:now
+    });
+    appendAdminAuditLogLocked_({
+      audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_TOPUP_REJECTED',
+      target_type:'wallet_topup',target_id:topup.topup_id,request_id:requestKey,ip_address:'',
+      details_json:JSON.stringify({reason:reason}),created_at:now
+    });
+    return {ok:true,topupId:topup.topup_id,status:'REJECTED'};
+  } finally {lock.releaseLock();}
+}
+
+function adminGrantPaidCredit(token,args) {
+  args=args || {};
+  const key=walletRequestKey_(args.requestKey);
+  const amount=walletAssertSatang_(args.amountSatang,false);
+  const reason=String(args.reason || '').trim();
+  if(!reason || reason.length>500) throw new Error('WALLET_REASON_REQUIRED');
+  const lock=LockService.getScriptLock();lock.waitLock(20000);
+  try {
+    walletAssertWriteGateLocked_();
+    const admin=requireAdminLocked_(token,Date.now());
+    const memberId=String(args.memberId || '').trim();
+    if(!repositoryGetById_('members',memberId)) throw new Error('WALLET_MEMBER_NOT_FOUND');
+    const idem='ADMIN_CREDIT:'+key;
+    const existing=repositoryFindByField_('wallet_ledger','idempotency_key',idem);
+    if(existing.length) return {ok:true,replayed:true,transactionId:existing[0].transaction_id};
+    const journal=walletPrepareCreditJournalLocked_({
+      member_id:memberId,credit_type:'PAID',amount_satang:amount,idempotency_key:idem,
+      entry_type:'ADMIN_CREDIT',reference_type:'ADMIN_CREDIT',reference_id:key,
+      actor_type:'ADMIN',actor_id:admin.admin_id,reason:reason
+    });
+    journal.audit_patch_json=JSON.stringify({
+      audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_PAID_CREDIT_GRANTED',
+      target_type:'member',target_id:memberId,request_id:key,ip_address:'',
+      details_json:JSON.stringify({amount_satang:amount,reason:reason}),created_at:new Date().toISOString()
+    });
+    repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{audit_patch_json:journal.audit_patch_json});
+    walletApplyCreditJournalLocked_(repositoryGetById_('wallet_recovery_journal',journal.journal_id));
+    return {ok:true,memberId:memberId,amountSatang:amount};
+  } finally {lock.releaseLock();}
+}
+
+function walletResolveBonusExpiry_(args,nowMs) {
+  const now=Number(nowMs) || Date.now();
+  const duration=args.durationDays;
+  const explicit=String(args.expiresAt || '').trim();
+  if(duration!==undefined && duration!==null && duration!=='' && explicit) throw new Error('WALLET_BONUS_EXPIRY_AMBIGUOUS');
+  let expiry;
+  if(duration!==undefined && duration!==null && duration!=='') {
+    if(!Number.isSafeInteger(duration) || duration<1 || duration>3650) throw new Error('WALLET_BONUS_DURATION_INVALID');
+    expiry=now+duration*24*60*60*1000;
+  } else {
+    if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:\+07:00|Z)$/.test(explicit)) throw new Error('WALLET_BONUS_EXPIRY_OFFSET_REQUIRED');
+    expiry=Date.parse(explicit);
+  }
+  if(!Number.isFinite(expiry) || expiry<=now) throw new Error('WALLET_BONUS_EXPIRY_INVALID');
+  return new Date(expiry).toISOString();
+}
+
+function adminCreateBonusGrant(token,args) {
+  args=args || {};
+  const key=walletRequestKey_(args.requestKey);
+  const amount=walletAssertSatang_(args.amountSatang,false);
+  const reason=String(args.reason || '').trim();
+  const sourceType=String(args.sourceType || '').trim().toUpperCase();
+  const sourceId=String(args.sourceId || '').trim();
+  if(!reason || reason.length>500 || !['PROMOTION','CAMPAIGN','ADMIN_COMPENSATION','OTHER'].includes(sourceType)) {
+    throw new Error('WALLET_BONUS_INPUT_INVALID');
+  }
+  const lock=LockService.getScriptLock();lock.waitLock(20000);
+  try {
+    walletAssertWriteGateLocked_();
+    const admin=requireAdminLocked_(token,Date.now());
+    const memberId=String(args.memberId || '').trim();
+    if(!repositoryGetById_('members',memberId)) throw new Error('WALLET_MEMBER_NOT_FOUND');
+    const idem='BONUS_GRANT:'+key;
+    const existing=repositoryFindByField_('wallet_ledger','idempotency_key',idem);
+    if(existing.length) return {ok:true,replayed:true,transactionId:existing[0].transaction_id};
+    const now=new Date();
+    const startsAt=String(args.startsAt || now.toISOString());
+    const startsMs=Date.parse(startsAt);
+    if(!Number.isFinite(startsMs) || startsMs>now.getTime()) throw new Error('WALLET_BONUS_START_INVALID');
+    const expiresAt=walletResolveBonusExpiry_(args,now.getTime());
+    const grant={
+      bonus_grant_id:Utilities.getUuid(),member_id:memberId,granted_satang:amount,
+      remaining_satang:amount,source_type:sourceType,source_id:sourceId,reason:reason,
+      starts_at:new Date(startsMs).toISOString(),expires_at:expiresAt,status:'ACTIVE',
+      created_by_admin_id:admin.admin_id,created_at:now.toISOString(),updated_at:now.toISOString()
+    };
+    const journal=walletPrepareCreditJournalLocked_({
+      member_id:memberId,credit_type:'BONUS',amount_satang:amount,idempotency_key:idem,
+      entry_type:'BONUS_GRANT',reference_type:'BONUS_GRANT',reference_id:grant.bonus_grant_id,
+      actor_type:'ADMIN',actor_id:admin.admin_id,reason:reason,bonus_grant:grant
+    });
+    journal.audit_patch_json=JSON.stringify({
+      audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_BONUS_GRANTED',
+      target_type:'member',target_id:memberId,request_id:key,ip_address:'',
+      details_json:JSON.stringify({amount_satang:amount,source_type:sourceType,source_id:sourceId,
+        starts_at:grant.starts_at,expires_at:grant.expires_at,reason:reason}),created_at:now.toISOString()
+    });
+    repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{audit_patch_json:journal.audit_patch_json});
+    walletApplyCreditJournalLocked_(repositoryGetById_('wallet_recovery_journal',journal.journal_id));
+    return {ok:true,memberId:memberId,amountSatang:amount,expiresAt:grant.expires_at};
+  } finally {lock.releaseLock();}
 }
