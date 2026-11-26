@@ -231,6 +231,7 @@ test('Admin direct Paid Credit and finite Bonus grants are separately ledgered a
     amountSatang:2500,reason:'Synthetic promotion reward',
     sourceType:'PROMOTION',sourceId:'promo-test-1',durationDays:3
   });
+  assert.equal(context.__get('wallets','member-001').paid_balance_satang,1200,'Bonus must not overwrite Paid Credit');
   assert.equal(context.__get('wallets','member-001').bonus_balance_satang,2500);
   const grants=context.__rows('wallet_bonus_grants');
   assert.equal(grants.length,1);
