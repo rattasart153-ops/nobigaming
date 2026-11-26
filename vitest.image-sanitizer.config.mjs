@@ -10,7 +10,7 @@ export default defineConfig({
     }),
   ],
   test: {
-    include: ["workerd-test/**/*.test.mjs"],
+    include: ["workerd-test/**/*.workerd.mjs"],
     testTimeout: 60_000,
     hookTimeout: 60_000,
     maxWorkers: 1,
