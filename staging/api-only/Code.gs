@@ -4038,8 +4038,6 @@ function adminApproveWalletTopup(token,args) {
       throw new Error('WALLET_TOPUP_RECONCILIATION_REQUIRED');
     }
     if(topup.status!=='PENDING_REVIEW' || !topup.slip_file_id) throw new Error('WALLET_TOPUP_NOT_PENDING_REVIEW');
-    const duplicate=repositoryFindByField_('wallet_ledger','idempotency_key','TOPUP:'+topup.topup_id);
-    if(duplicate.length) throw new Error('WALLET_TOPUP_RECONCILIATION_REQUIRED');
     const journal=walletPrepareCreditJournalLocked_({
       member_id:topup.member_id,credit_type:'PAID',amount_satang:Number(topup.amount_satang),
       idempotency_key:'TOPUP:'+topup.topup_id,entry_type:'TOPUP_APPROVAL',
@@ -4100,13 +4098,20 @@ function adminGrantPaidCredit(token,args) {
     const memberId=String(args.memberId || '').trim();
     if(!repositoryGetById_('members',memberId)) throw new Error('WALLET_MEMBER_NOT_FOUND');
     const idem='ADMIN_CREDIT:'+key;
+    const payloadHash=walletRequestHash_({memberId:memberId,amountSatang:amount,reason:reason});
+    const prior=repositoryFindByField_('wallet_recovery_journal','idempotency_key',idem);
+    if(prior.length) {
+      if(String(prior[0].payload_hash)!==payloadHash) throw new Error('WALLET_IDEMPOTENCY_CONFLICT');
+      walletApplyCreditJournalLocked_(prior[0]);
+      return {ok:true,replayed:true,transactionId:prior[0].transaction_id};
+    }
     const existing=repositoryFindByField_('wallet_ledger','idempotency_key',idem);
     if(existing.length) return {ok:true,replayed:true,transactionId:existing[0].transaction_id};
     const journal=walletPrepareCreditJournalLocked_({
       member_id:memberId,credit_type:'PAID',amount_satang:amount,idempotency_key:idem,
       entry_type:'ADMIN_CREDIT',reference_type:'ADMIN_CREDIT',reference_id:key,
       actor_type:'ADMIN',actor_id:admin.admin_id,reason:reason,
-      payload_hash:walletRequestHash_({memberId:memberId,amountSatang:amount,reason:reason}),
+      payload_hash:payloadHash,
       audit_patch:{
         audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_PAID_CREDIT_GRANTED',
         target_type:'member',target_id:memberId,request_id:key,ip_address:'',
@@ -4152,6 +4157,16 @@ function adminCreateBonusGrant(token,args) {
     const memberId=String(args.memberId || '').trim();
     if(!repositoryGetById_('members',memberId)) throw new Error('WALLET_MEMBER_NOT_FOUND');
     const idem='BONUS_GRANT:'+key;
+    const requestPayloadHash=walletRequestHash_({memberId:memberId,amountSatang:amount,reason:reason,
+      sourceType:sourceType,sourceId:sourceId,startsAt:String(args.startsAt || ''),
+      durationDays:args.durationDays===undefined?'':args.durationDays,expiresAt:String(args.expiresAt || '')});
+    const prior=repositoryFindByField_('wallet_recovery_journal','idempotency_key',idem);
+    if(prior.length) {
+      if(String(prior[0].payload_hash)!==requestPayloadHash) throw new Error('WALLET_IDEMPOTENCY_CONFLICT');
+      walletApplyCreditJournalLocked_(prior[0]);
+      const savedGrant=prior[0].bonus_patch_json?JSON.parse(prior[0].bonus_patch_json).record:null;
+      return {ok:true,replayed:true,memberId:memberId,amountSatang:amount,expiresAt:savedGrant?savedGrant.expires_at:''};
+    }
     const existing=repositoryFindByField_('wallet_ledger','idempotency_key',idem);
     if(existing.length) return {ok:true,replayed:true,transactionId:existing[0].transaction_id};
     const now=new Date();
@@ -4169,8 +4184,7 @@ function adminCreateBonusGrant(token,args) {
       member_id:memberId,credit_type:'BONUS',amount_satang:amount,idempotency_key:idem,
       entry_type:'BONUS_GRANT',reference_type:'BONUS_GRANT',reference_id:grant.bonus_grant_id,
       actor_type:'ADMIN',actor_id:admin.admin_id,reason:reason,bonus_grant:grant,
-      payload_hash:walletRequestHash_({memberId:memberId,amountSatang:amount,reason:reason,
-        sourceType:sourceType,sourceId:sourceId,startsAt:grant.starts_at,expiresAt:grant.expires_at}),
+      payload_hash:requestPayloadHash,
       audit_patch:{
         audit_id:Utilities.getUuid(),admin_id:admin.admin_id,action:'WALLET_BONUS_GRANTED',
         target_type:'member',target_id:memberId,request_id:key,ip_address:'',
