@@ -3577,3 +3577,187 @@ function nobiGetPublicMedia(fileId) {
   if (typeof fileId !== 'string' || fileId.length > 200) throw new Error('รหัสรูปภาพไม่ถูกต้อง');
   return nobiFacadeCall_('publicMediaData', {fileId:fileId});
 }
+
+
+// ===== E-BUDGET P1.1: guarded Wallet ledger primitives =====
+/**
+ * P1.1 establishes fail-closed Wallet mutation primitives only.
+ * No public Wallet action is enabled in this increment.
+ * Mutations require an explicit operational cutover gate; never set these
+ * properties until the legacy financial writer is demonstrably disabled.
+ */
+function walletAssertWriteGateLocked_() {
+  const props = PropertiesService.getScriptProperties();
+  if (String(props.getProperty('NOBI_WALLET_WRITES_ENABLED') || '') !== 'true' ||
+      String(props.getProperty('NOBI_FINANCIAL_WRITER_MODE') || '') !== 'API_ONLY' ||
+      String(props.getProperty('NOBI_LEGACY_WRITER_DISABLED') || '') !== 'true') {
+    throw new Error('WALLET_WRITES_BLOCKED: single-writer cutover gate is not satisfied');
+  }
+}
+
+function walletAssertSatang_(value, allowZero) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) ||
+      value < (allowZero ? 0 : 1)) {
+    throw new Error('WALLET_INVALID_AMOUNT');
+  }
+  return value;
+}
+
+function walletFindOrCreateLocked_(memberId, nowIso) {
+  const id = String(memberId || '').trim();
+  if (!id || !repositoryGetById_('members', id)) throw new Error('WALLET_MEMBER_NOT_FOUND');
+  const existing = repositoryGetById_('wallets', id);
+  if (existing) {
+    const paid = Number(existing.paid_balance_satang);
+    const bonus = Number(existing.bonus_balance_satang);
+    const version = Number(existing.wallet_version);
+    if (!Number.isSafeInteger(paid) || paid < 0 ||
+        !Number.isSafeInteger(bonus) || bonus < 0 ||
+        !Number.isSafeInteger(version) || version < 0) {
+      throw new Error('WALLET_CACHE_INVALID');
+    }
+    return existing;
+  }
+  const now = nowIso || new Date().toISOString();
+  return repositoryInsertLocked_('wallets', {
+    member_id:id,paid_balance_satang:0,bonus_balance_satang:0,
+    wallet_version:0,created_at:now,updated_at:now
+  });
+}
+
+/** Recompute posted balances from immutable ledger entries; holds are reported separately. */
+function walletLedgerBalancesLocked_(memberId) {
+  const id = String(memberId || '');
+  const totals = {PAID:0,BONUS:0};
+  repositoryRows_('wallet_ledger').filter(function(row) {
+    return String(row.member_id) === id;
+  }).forEach(function(row) {
+    const type = String(row.credit_type || '');
+    const delta = Number(row.delta_satang);
+    if (!Object.prototype.hasOwnProperty.call(totals,type) ||
+        !Number.isSafeInteger(delta) || delta === 0) {
+      throw new Error('WALLET_LEDGER_INVALID');
+    }
+    const next = totals[type] + delta;
+    if (!Number.isSafeInteger(next) || next < 0) throw new Error('WALLET_LEDGER_NEGATIVE_BALANCE');
+    totals[type] = next;
+  });
+  return {paid_balance_satang:totals.PAID,bonus_balance_satang:totals.BONUS};
+}
+
+function walletAssertCacheMatchesLedgerLocked_(memberId) {
+  const wallet = repositoryGetById_('wallets', String(memberId || ''));
+  const ledger = walletLedgerBalancesLocked_(memberId);
+  if (!wallet ||
+      Number(wallet.paid_balance_satang) !== ledger.paid_balance_satang ||
+      Number(wallet.bonus_balance_satang) !== ledger.bonus_balance_satang) {
+    throw new Error('WALLET_RECONCILIATION_REQUIRED');
+  }
+  return {ok:true,paid_balance_satang:ledger.paid_balance_satang,
+    bonus_balance_satang:ledger.bonus_balance_satang};
+}
+
+/**
+ * Apply a prepared credit journal idempotently. The journal contains exact target
+ * balances, so retries after any completed Sheet write never add a second delta.
+ * Caller must hold ScriptLock and pass a journal already persisted as PREPARED.
+ */
+function walletApplyCreditJournalLocked_(journal) {
+  if (!journal || !journal.journal_id || !journal.transaction_id ||
+      journal.step_state === 'COMPLETED') return {ok:true,already_completed:true};
+  const now = new Date().toISOString();
+  try {
+    const ledger = JSON.parse(String(journal.ledger_payload_json || '{}'));
+    const walletPatch = JSON.parse(String(journal.wallet_patch_json || '{}'));
+    const bonusPatch = journal.bonus_patch_json ? JSON.parse(String(journal.bonus_patch_json)) : null;
+    const requiredLedger = NOBI.SHEETS.wallet_ledger;
+    if (!ledger.ledger_id || requiredLedger.some(function(field) {
+      return !Object.prototype.hasOwnProperty.call(ledger,field);
+    }) || String(ledger.transaction_id) !== String(journal.transaction_id) ||
+        String(ledger.member_id) !== String(journal.member_id) ||
+        !['PAID','BONUS'].includes(String(ledger.credit_type)) ||
+        !Number.isSafeInteger(Number(ledger.delta_satang)) || Number(ledger.delta_satang) <= 0 ||
+        !Number.isSafeInteger(Number(ledger.balance_after_satang)) ||
+        Number(ledger.balance_after_satang) <= 0 ||
+        !ledger.idempotency_key || !/^[A-Za-z0-9._:-]{16,128}$/.test(String(ledger.idempotency_key))) {
+      throw new Error('WALLET_JOURNAL_LEDGER_INVALID');
+    }
+    const requiredWallet = NOBI.SHEETS.wallets;
+    if (requiredWallet.some(function(field) {
+      return !Object.prototype.hasOwnProperty.call(walletPatch,field);
+    }) || String(walletPatch.member_id) !== String(journal.member_id) ||
+        !Number.isSafeInteger(Number(walletPatch.paid_balance_satang)) ||
+        !Number.isSafeInteger(Number(walletPatch.bonus_balance_satang)) ||
+        Number(walletPatch.paid_balance_satang) < 0 ||
+        Number(walletPatch.bonus_balance_satang) < 0 ||
+        !Number.isSafeInteger(Number(walletPatch.wallet_version)) ||
+        Number(walletPatch.wallet_version) < 1) {
+      throw new Error('WALLET_JOURNAL_CACHE_INVALID');
+    }
+
+    const existingLedger = repositoryFindByField_('wallet_ledger','transaction_id',ledger.transaction_id);
+    if (existingLedger.length > 1) throw new Error('WALLET_DUPLICATE_TRANSACTION');
+    if (existingLedger.length) {
+      const saved = existingLedger[0];
+      if (NOBI.SHEETS.wallet_ledger.some(function(field) {
+        return String(saved[field] == null ? '' : saved[field]) !==
+          String(ledger[field] == null ? '' : ledger[field]);
+      })) throw new Error('WALLET_TRANSACTION_CONFLICT');
+    } else {
+      repositoryInsertLocked_('wallet_ledger',ledger);
+    }
+
+    const wallet = repositoryGetById_('wallets',String(journal.member_id));
+    if (!wallet) {
+      repositoryInsertLocked_('wallets',walletPatch);
+    } else {
+      const patch = {};
+      ['paid_balance_satang','bonus_balance_satang','wallet_version','updated_at'].forEach(function(field) {
+        patch[field] = walletPatch[field];
+      });
+      if (Number(wallet.wallet_version) > Number(walletPatch.wallet_version)) {
+        throw new Error('WALLET_VERSION_CONFLICT');
+      }
+      if (Number(wallet.wallet_version) < Number(walletPatch.wallet_version) ||
+          Number(wallet.paid_balance_satang) !== Number(walletPatch.paid_balance_satang) ||
+          Number(wallet.bonus_balance_satang) !== Number(walletPatch.bonus_balance_satang)) {
+        repositoryUpdateLocked_('wallets',String(journal.member_id),patch);
+      }
+    }
+
+    if (bonusPatch) {
+      if (bonusPatch.operation !== 'INSERT' || !bonusPatch.record ||
+          !bonusPatch.record.bonus_grant_id ||
+          String(bonusPatch.record.member_id) !== String(journal.member_id)) {
+        throw new Error('WALLET_JOURNAL_BONUS_INVALID');
+      }
+      const existingGrant = repositoryGetById_('wallet_bonus_grants',bonusPatch.record.bonus_grant_id);
+      if (!existingGrant) repositoryInsertLocked_('wallet_bonus_grants',bonusPatch.record);
+      else if (NOBI.SHEETS.wallet_bonus_grants.some(function(field) {
+        return String(existingGrant[field] == null ? '' : existingGrant[field]) !==
+          String(bonusPatch.record[field] == null ? '' : bonusPatch.record[field]);
+      })) throw new Error('WALLET_BONUS_GRANT_CONFLICT');
+    }
+
+    walletAssertCacheMatchesLedgerLocked_(journal.member_id);
+    repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{
+      step_state:'COMPLETED',attempts:Number(journal.attempts || 0)+1,
+      last_error_code:'',updated_at:now
+    });
+    return {ok:true,transaction_id:journal.transaction_id};
+  } catch (error) {
+    try {
+      const savedJournal = repositoryGetById_('wallet_recovery_journal',journal.journal_id);
+      if (savedJournal && savedJournal.step_state !== 'COMPLETED') {
+        repositoryUpdateLocked_('wallet_recovery_journal',journal.journal_id,{
+          step_state:'RECOVERY_REQUIRED',
+          attempts:Number(savedJournal.attempts || 0)+1,
+          last_error_code:/^[A-Z0-9_:-]{1,100}$/.test(String(error && error.message || ''))
+            ? String(error.message) : 'WALLET_RECOVERY_FAILED',
+          updated_at:now
+        });
+      }
+    } catch (ignored) {}
+    throw error;
+  }
+}
