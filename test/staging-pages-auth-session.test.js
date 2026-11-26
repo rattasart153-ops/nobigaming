@@ -334,8 +334,16 @@ test("logout revokes the backend token, deletes D1 session and clears only that 
   const runtime = env();
   const store = createSessionStore(runtime, { now: () => NOW });
   const created = await store.createSession("member", "logout-token", new Date(NOW + 8 * 60 * 60 * 1000).toISOString());
-  const request = authRequest("/api/auth/member/logout", {}, ORIGIN);
-  const cookieRequest = new Request(request, { headers: { ...Object.fromEntries(request.headers), cookie: created.cookieHeader.split(";")[0] } });
+  const cookieRequest = new Request(ORIGIN + "/api/auth/member/logout", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: ORIGIN,
+      "sec-fetch-site": "same-origin",
+      cookie: created.cookieHeader.split(";")[0],
+    },
+    body: "{}",
+  });
   let observed;
   const response = await handleMemberLogout(cookieRequest, runtime, {
     store,
